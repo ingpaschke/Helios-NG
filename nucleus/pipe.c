@@ -222,6 +222,13 @@ static void do_create(ServInfo *servinfo)
 	}
 
 	p = NewPipe(d,objname(pathname));
+
+	if( p == NULL )
+	{
+		ErrorMsg(m,EC_Error|EG_NoMemory|EO_Pipe);
+		Free(r);
+		return;
+	}
 	
 	/* give creator full access rights */
 	
@@ -268,9 +275,12 @@ static void do_open(ServInfo *servinfo)
 	{
 		p = NewPipe(d,objname(pathname));
 		/* transfer lock to new pipe */
-		Wait( &p->ObjNode.Lock );
-		Signal( &servinfo->Target->Lock );
-		servinfo->Target = &p->ObjNode;
+		if( p != NULL )
+		{
+			Wait( &p->ObjNode.Lock );
+			Signal( &servinfo->Target->Lock );
+			servinfo->Target = &p->ObjNode;
+		}
 	}
 	
 	if( p == NULL )
