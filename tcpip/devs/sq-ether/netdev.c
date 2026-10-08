@@ -125,20 +125,20 @@ typedef struct
 	} sq_gl;
 	struct {
 		/* areas */
-		int *reg_etn_ffs;
-		int *reg_dma_win_base;
-		int *reg_tct_write_addr;
-		int *reg_tct_read_addr;
+		volatile int *reg_etn_ffs;	/* hcc patch: device register */
+		volatile int *reg_dma_win_base;	/* hcc patch: device register */
+		volatile int *reg_tct_write_addr;	/* hcc patch: device register */
+		volatile int *reg_tct_read_addr;	/* hcc patch: device register */
 		/*registers */
-		int *reg_command;
-		int *reg_status;
-		int *reg_conf_1;
-		int *reg_conf_2;
-		int *reg_rea;
-		int *reg_buf_win;
-		int *reg_rp;
-		int *reg_tp;
-		int *reg_dma_ad;
+		volatile int *reg_command;	/* hcc patch: device register */
+		volatile int *reg_status;	/* hcc patch: device register */
+		volatile int *reg_conf_1;	/* hcc patch: device register */
+		volatile int *reg_conf_2;	/* hcc patch: device register */
+		volatile int *reg_rea;	/* hcc patch: device register */
+		volatile int *reg_buf_win;	/* hcc patch: device register */
+		volatile int *reg_rp;	/* hcc patch: device register */
+		volatile int *reg_tp;	/* hcc patch: device register */
+		volatile int *reg_dma_ad;	/* hcc patch: device register */
 	} sq_reg;
 } ETN_DCB;
 
