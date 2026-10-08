@@ -60,7 +60,7 @@ int main(int argc, char **argv)	/* Host port: int, was void */
 	fprintf(outf, " */\n");
 	fprintf(outf, "{\n");
 
-	fprintf(outf, "\tBYTE\t\ts[10];\n");
+	fprintf(outf, "\tBYTE\t\ts[11];\n");
 	fprintf(outf, "\tWORD\t\tn;\n");
 	fprintf(outf, "\tINT16\t\ti16;\n");
 

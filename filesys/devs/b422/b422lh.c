@@ -388,7 +388,7 @@ WORD squirt(BYTE *filename, WORD link)
  *	giving it's board size.
  */
 {
-	BYTE		data[MAX_SCSI_MESSAGE_SIZE], s[10];
+	BYTE		data[MAX_SCSI_MESSAGE_SIZE], s[11];
 	Stream		*fid;
 	WORD		n;
 	INT16		i16;
