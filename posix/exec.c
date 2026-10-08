@@ -48,6 +48,7 @@ STATIC int number_of_exit_functions;
 STATIC Environ MyEnv;
 
 static void waiter(PCB *pcb);
+static void startfail(char *why, word e);
 static void int2hex(int n, char *s);
 static int hex2int(char *s);
 
@@ -68,6 +69,8 @@ extern char **_posix_init( void )
 	WaitPort = NewPort();
 	
 	childvec     = (PCB *)Malloc(childvecinc*sizeof(PCB));
+	if( WaitPort == NullPort || childvec == NULL )
+		startfail("no memory",EC_Error|SS_SysLib|EG_NoMemory|EO_Task);
 	childvecsize = childvecinc;
 	memset(childvec,0,childvecinc*sizeof(PCB));
 	
@@ -78,7 +81,10 @@ extern char **_posix_init( void )
 	childvec[0].pgrp = 42;	
 	
 	TaskData(TD_Port, &myport);	
-	GetEnv(myport, &MyEnv);
+	{
+		word e = GetEnv(myport, &MyEnv);
+		if( e < Err_Null ) startfail("no environment",e);
+	}
 	
 	argv = MyEnv.Argv;
 	environ = MyEnv.Envv;
@@ -102,6 +108,21 @@ extern char **_posix_init( void )
 	if( getenv("CDL") != NULL ) pflagword |= PE_RemExecute;
 
 	return argv;	
+}
+
+/* The task cannot set up the Posix world (no memory for its tables or	*/
+/* its environment): say so on the debug channel and terminate with	*/
+/* the code exit(EXIT_FAILURE) gives, instead of running on with NULL	*/
+/* tables or an empty Environ.  Exit ends the task, so a parent that	*/
+/* waits for it sees the failure.					*/
+static void startfail(char *why, word e)
+{
+	char name[33];
+
+	ModuleName_(name, MyTask->Program);
+	name[32] = '\0';
+	IOdebug("%s: cannot start, %s (%E)", name, why, e);
+	Exit((word)1 << 8);
 }
 
 static int hex2int(char *s)
@@ -179,6 +200,7 @@ static int vfork_start(void)
 	childvec[pcb].starttime = (int)_cputime();
 	childvec[pcb].prog      = NULL;	
 	childvec[pcb].stream    = NULL;
+	childvec[pcb].spare     = 0;	/* set by waiter for a lost child */
 	
 	return 0;
 }
@@ -427,7 +449,22 @@ extern int execve(char *name, char **argv, char **envv)
 	{
 		childvec[inchild].prog = prog;	
 		childvec[inchild].stream = stream;
-		Fork(WaiterStack, waiter,4,&(childvec[inchild]));
+		childvec[inchild].spare = 0;
+		unless( Fork(WaiterStack, waiter,4,&(childvec[inchild])) )
+		{
+			/* No memory for the waiter, so nothing would ever	*/
+			/* report the end of this child and waitpid would	*/
+			/* wait for it forever: stop the program and fail	*/
+			/* the exec instead.					*/
+			IOdebug("posix: exec %s: no memory to wait for it",name);
+			SendSignal(stream, SIGKILL);
+			Close(prog);
+			Close(stream);
+			childvec[inchild].prog = NULL;
+			childvec[inchild].stream = NULL;
+			errno = ENOMEM;
+			return -1;
+		}
 		_exit((int)MinInt);
 	}
 
@@ -446,15 +483,38 @@ fail:
 	return -1;
 }
 
+/* The waiter receives the child's termination into a status vector of	*/
+/* the size InitProgramInfo returns.  The process managers (procman and	*/
+/* the TFM) declare one word and send the code in the message header,	*/
+/* so a small vector here covers them without an allocation; a larger	*/
+/* size is allocated.  If InitProgramInfo fails (no termination message	*/
+/* will come) or a vector cannot be had, the child is marked lost	*/
+/* (spare) with an error code in status, and waitpid returns -1 for it	*/
+/* instead of waiting for ever.						*/
+#define WaiterVec	4
+#define WaiterVecMax	256
+
 static void waiter(PCB *pcb)
 {
 	extern void inner_raise(int sig, bool async, bool propagate);
+	word svbuf[WaiterVec];
 	word svsize = InitProgramInfo(pcb->stream,PS_Terminate);
-	word *sv    = (word *)Malloc(svsize * sizeof(word));
+	word *sv    = svbuf;
 	word status;
 	
+	if( svsize > WaiterVec && svsize <= WaiterVecMax )
+		sv = (word *)Malloc(svsize * sizeof(word));
 _Trace(0xAAAA000a,MyTask,pcb->pid);	
-	status = GetProgramInfo(pcb->stream,sv,-1);
+	if( svsize <= 0 || svsize > WaiterVecMax || sv == NULL )
+	{
+		status = svsize < 0 ? svsize :
+			 svsize == 0 ? Result2(pcb->stream) :
+			 EC_Error|SS_SysLib|EG_NoMemory|EO_Task;
+		if( status >= 0 ) status = EC_Error|SS_SysLib|EG_Broken|EO_Task;
+		IOdebug("posix: cannot wait for child %d (%E)",pcb->pid,status);
+		pcb->spare = 1;
+	}
+	else status = GetProgramInfo(pcb->stream,sv,-1);
 _Trace(0xAAAA000b,MyTask,status);	
 	Wait( &forklock );
 _Trace(0xAAAA000c,MyTask,status);	
@@ -465,7 +525,7 @@ _Trace(0xAAAA000d,MyTask,status);
 	Signal( &forklock );
 
 	inner_raise(SIGCHLD,TRUE,FALSE);
-	Free(sv);
+	if( sv != svbuf && sv != NULL ) Free(sv);
 _Trace(0xAAAA000e,MyTask,status);
 }
 
@@ -552,6 +612,16 @@ _Trace(0xAAAA0004,MyTask,e);
 	childtimes += (int)(_cputime() - childvec[ pcb ].starttime);
 
 	childvec[pcb].pid = 0;
+
+	/* the waiter could not wait for this child (see waiter): its end	*/
+	/* is unknown, so report the error rather than an exit status	*/
+	if( childvec[pcb].spare )
+	{
+		childvec[pcb].spare = 0;
+		errno = posix_error(status);
+		pid = -1;
+		goto done;
+	}
 		
 	if( stat != NULL ) *stat = status;
 
