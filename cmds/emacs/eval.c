@@ -442,7 +442,7 @@ char *token;		/* token to evaluate */
 	register int status;	/* error return */
 	register BUFFER *bp;	/* temp buffer pointer */
 	register int blen;	/* length of buffer argument */
-	char buf[NSTRING];	/* string buffer for some returns */
+	static char buf[NSTRING];	/* hcc patch: static, it is returned */
 
 	switch (gettyp(token)) {
 		case TKNUL:	return("");
