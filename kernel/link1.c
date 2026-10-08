@@ -996,7 +996,11 @@ void SendRecon(LinkInfo *link)
 word _Configure(LinkConf newconf,bool sendrecon)
 {
 	RootStruct *root = GetRoot();
-	LinkInfo *link = (root->Links)[newconf.Id];
+	LinkInfo *link;
+
+	/* Id is a byte: only the upper bound needs checking */
+	if( newconf.Id >= GetConfig()->NLinks ) return Err_BadRoute;
+	link = (root->Links)[newconf.Id];
 
 	newconf.Flags &= Link_Flags_user;
 
@@ -1119,14 +1123,16 @@ struct BootInfo {
 {
 	RootStruct *root = GetRoot();
 
-	LinkInfo *link = root->Links[info->linkid];
+	LinkInfo *link;
 	void *bootstrap;
 	word bootsize;
 	word state = 0;
 	Id l;
 
-	if( info->linkid < 0 || info->linkid > GetConfig()->NLinks || 
-		link->Mode != Link_Mode_Intelligent ) return Err_BadRoute;
+	if( info->linkid < 0 || info->linkid >= GetConfig()->NLinks )
+		return Err_BadRoute;
+	link = root->Links[info->linkid];
+	if( link->Mode != Link_Mode_Intelligent ) return Err_BadRoute;
 
 	if( info->image == NULL ) info->image = (RPTR *)GetSysBase();
 
@@ -1357,11 +1363,12 @@ Code SoftReset(word linkid)
 Code AllocLink(word linkid)
 {
 	RootStruct *root = GetRoot();
-	LinkInfo *link = root->Links[linkid];
+	LinkInfo *link;
 	Id id;
 	
-	if( 	linkid < 0 || linkid > GetConfig()->NLinks || 
-		link->Mode != Link_Mode_Dumb ||
+	if( linkid < 0 || linkid >= GetConfig()->NLinks ) return Err_BadRoute;
+	link = root->Links[linkid];
+	if( 	link->Mode != Link_Mode_Dumb ||
 		link->State == Link_State_Running ) return Err_BadRoute;
 		
 	_WaitLink(link, &id);
@@ -1376,10 +1383,11 @@ Code AllocLink(word linkid)
 Code FreeLink(word linkid)
 {
 	RootStruct *root = GetRoot();
-	LinkInfo *link = root->Links[linkid];
+	LinkInfo *link;
 	
-	if( 	linkid < 0 || linkid > GetConfig()->NLinks || 
-		link->Mode != Link_Mode_Dumb ||
+	if( linkid < 0 || linkid >= GetConfig()->NLinks ) return Err_BadRoute;
+	link = root->Links[linkid];
+	if( 	link->Mode != Link_Mode_Dumb ||
 		link->State != Link_State_Running ) return Err_BadRoute;
 	
 	_SignalLink(link);
