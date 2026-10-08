@@ -1051,7 +1051,7 @@ int doareyousure(void)
 
 void dodisk(char *disc)
 {
-	if(doareyousure)
+	if(doareyousure())
 	{
 		strcpy(drivename, disc);
 		if(msdos)
