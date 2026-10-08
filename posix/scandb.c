@@ -224,17 +224,24 @@ static long rd_inet()
 	return addr;
 }
 
+/* Read a field into s, which is in dbinfo->strbuf.  Stops at the	*/
+/* terminator or at end of file; what does not fit in strbuf is	*/
+/* dropped.  The result never points past the last byte of strbuf:	*/
+/* once it is full every further field is the empty string there.	*/
 static char *rdstr(char *s, int term)
 {
+	char *end = &dbinfo->strbuf[sizeof(dbinfo->strbuf)-1];
 	int c = nextch();
 	bool defterm = (term==' '||term==0);
 
-	while( defterm?(c!=' ' && c!='\t' && c!='\n'):(c!=term) )
+	while( c != -1 && (defterm?(c!=' ' && c!='\t' && c!='\n'):(c!=term)) )
 	{
-		*s++ = c;
+		if( s < end ) *s++ = c;
 		c = rdch();
 	}
-	*s++ = 0;
+	if( s > end ) s = end;
+	*s = 0;
+	if( s < end ) s++;
 
 	unrdch(c);
 	return s;
@@ -345,12 +352,15 @@ extern int scandb(char *format, ... )
 					{
 						char ***ava = va_arg(a,char ***);
 						char **av = dbinfo->list;
+						/* last slot is for the final 0 */
+						char **avend = &dbinfo->list[31];
 						*ava = av;
 
 						for(;;)
 						{
 							t = rdstr(s,f[1]);
-							if( t == s+1 ) break;
+							/* empty field, or strbuf full */
+							if( t <= s+1 ) break;
 
 							if( matchstr!=NULL && 
 							    !matched   &&
@@ -359,7 +369,7 @@ extern int scandb(char *format, ... )
 								matched = TRUE;
 								*matchstr = realname;
 							}
-							*av++ = s;
+							if( av < avend ) *av++ = s;
 							s = t;
 						}
 						*av = 0;
