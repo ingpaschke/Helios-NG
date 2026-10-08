@@ -627,7 +627,7 @@ PASCAL NEAR nextup(	/* scroll the next window up (back) a page */
 {
 	nextwind(FALSE, 1);
 	backpage(f, n);
-	prevwind(FALSE, 1);
+	return(prevwind(FALSE, 1));
 }
 
 PASCAL NEAR nextdown(	/* scroll the next window down (forward) a page */
@@ -638,7 +638,7 @@ PASCAL NEAR nextdown(	/* scroll the next window down (forward) a page */
 {
 	nextwind(FALSE, 1);
 	forwpage(f, n);
-	prevwind(FALSE, 1);
+	return(prevwind(FALSE, 1));
 }
 
 PASCAL NEAR savewnd(	/* save ptr to current window */

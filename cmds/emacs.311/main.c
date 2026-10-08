@@ -879,6 +879,7 @@ PASCAL NEAR nullproc(	/* user function that does NOTHING */
 int f,	/* yes, these are default and never used.. but MUST be here */
 int n )
 {
+	return(TRUE);
 }
 
 PASCAL NEAR meta(int f, int n)	/* set META prefixing pending */
@@ -901,6 +902,7 @@ PASCAL NEAR cex( int f, int n)	/* set ^X prefixing pending */
 
 PASCAL NEAR unarg()	/* dummy function for binding to universal-argument */
 {
+	return(TRUE);
 }
 
 /*	bytecopy:	copy a string...with length restrictions

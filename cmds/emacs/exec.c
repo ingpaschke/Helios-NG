@@ -743,241 +743,241 @@ int bufnum;	/* number of buffer to execute */
 cbuf1(f, n)
 int f ,n;
 {
-	cbuf(f, n, 1);
+	return(cbuf(f, n, 1));
 }
 
 cbuf2(f, n)
 int f,n;
 {
-	cbuf(f, n, 2);
+	return(cbuf(f, n, 2));
 }
 
 cbuf3(f, n)
 int f,n;
 {
-	cbuf(f, n, 3);
+	return(cbuf(f, n, 3));
 }
 
 cbuf4(f, n)
 int f,n;
 {
-	cbuf(f, n, 4);
+	return(cbuf(f, n, 4));
 }
 
 cbuf5(f, n)
 int f,n;
 {
-	cbuf(f, n, 5);
+	return(cbuf(f, n, 5));
 }
 
 cbuf6(f, n)
 int f,n;
 {
-	cbuf(f, n, 6);
+	return(cbuf(f, n, 6));
 }
 
 cbuf7(f, n)
 int f,n;
 {
-	cbuf(f, n, 7);
+	return(cbuf(f, n, 7));
 }
 
 cbuf8(f, n)
 int f,n;
 {
-	cbuf(f, n, 8);
+	return(cbuf(f, n, 8));
 }
 
 cbuf9(f, n)
 int f,n;
 {
-	cbuf(f, n, 9);
+	return(cbuf(f, n, 9));
 }
 
 cbuf10(f, n)
 int f,n;
 {
-	cbuf(f, n, 10);
+	return(cbuf(f, n, 10));
 }
 
 cbuf11(f, n)
 int f,n;
 {
-	cbuf(f, n, 11);
+	return(cbuf(f, n, 11));
 }
 
 cbuf12(f, n)
 int f,n;
 {
-	cbuf(f, n, 12);
+	return(cbuf(f, n, 12));
 }
 
 cbuf13(f, n)
 int f,n;
 {
-	cbuf(f, n, 13);
+	return(cbuf(f, n, 13));
 }
 
 cbuf14(f, n)
 int f,n;
 {
-	cbuf(f, n, 14);
+	return(cbuf(f, n, 14));
 }
 
 cbuf15(f, n)
 int f,n;
 {
-	cbuf(f, n, 15);
+	return(cbuf(f, n, 15));
 }
 
 cbuf16(f, n)
 int f,n;
 {
-	cbuf(f, n, 16);
+	return(cbuf(f, n, 16));
 }
 
 cbuf17(f, n)
 int f,n;
 {
-	cbuf(f, n, 17);
+	return(cbuf(f, n, 17));
 }
 
 cbuf18(f, n)
 int f,n;
 {
-	cbuf(f, n, 18);
+	return(cbuf(f, n, 18));
 }
 
 cbuf19(f, n)
 int f,n;
 {
-	cbuf(f, n, 19);
+	return(cbuf(f, n, 19));
 }
 
 cbuf20(f, n)
 int f,n;
 {
-	cbuf(f, n, 20);
+	return(cbuf(f, n, 20));
 }
 
 cbuf21(f, n)
 int f,n;
 {
-	cbuf(f, n, 21);
+	return(cbuf(f, n, 21));
 }
 
 cbuf22(f, n)
 int f,n;
 {
-	cbuf(f, n, 22);
+	return(cbuf(f, n, 22));
 }
 
 cbuf23(f, n)
 int f,n;
 {
-	cbuf(f, n, 23);
+	return(cbuf(f, n, 23));
 }
 
 cbuf24(f, n)
 int f,n;
 {
-	cbuf(f, n, 24);
+	return(cbuf(f, n, 24));
 }
 
 cbuf25(f, n)
 int f,n;
 {
-	cbuf(f, n, 25);
+	return(cbuf(f, n, 25));
 }
 
 cbuf26(f, n)
 int f,n;
 {
-	cbuf(f, n, 26);
+	return(cbuf(f, n, 26));
 }
 
 cbuf27(f, n)
 int f,n;
 {
-	cbuf(f, n, 27);
+	return(cbuf(f, n, 27));
 }
 
 cbuf28(f, n)
 int f,n;
 {
-	cbuf(f, n, 28);
+	return(cbuf(f, n, 28));
 }
 
 cbuf29(f, n)
 int f,n;
 {
-	cbuf(f, n, 29);
+	return(cbuf(f, n, 29));
 }
 
 cbuf30(f, n)
 int f,n;
 {
-	cbuf(f, n, 30);
+	return(cbuf(f, n, 30));
 }
 
 cbuf31(f, n)
 int f,n;
 {
-	cbuf(f, n, 31);
+	return(cbuf(f, n, 31));
 }
 
 cbuf32(f, n)
 int f,n;
 {
-	cbuf(f, n, 32);
+	return(cbuf(f, n, 32));
 }
 
 cbuf33(f, n)
 int f,n;
 {
-	cbuf(f, n, 33);
+	return(cbuf(f, n, 33));
 }
 
 cbuf34(f, n)
 int f,n;
 {
-	cbuf(f, n, 34);
+	return(cbuf(f, n, 34));
 }
 
 cbuf35(f, n)
 int f,n;
 {
-	cbuf(f, n, 35);
+	return(cbuf(f, n, 35));
 }
 
 cbuf36(f, n)
 int f,n;
 {
-	cbuf(f, n, 36);
+	return(cbuf(f, n, 36));
 }
 
 cbuf37(f, n)
 int f,n;
 {
-	cbuf(f, n, 37);
+	return(cbuf(f, n, 37));
 }
 
 cbuf38(f, n)
 int f,n;
 {
-	cbuf(f, n, 38);
+	return(cbuf(f, n, 38));
 }
 
 cbuf39(f, n)
 int f,n;
 {
-	cbuf(f, n, 39);
+	return(cbuf(f, n, 39));
 }
 
 cbuf40(f, n)
 int f,n;
 {
-	cbuf(f, n, 40);
+	return(cbuf(f, n, 40));
 }
 
 
