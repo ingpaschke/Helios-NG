@@ -1357,7 +1357,7 @@ bool InPool(void *addr, Pool *pool)
 --							--
 --------------------------------------------------------*/
 
-void EndWorker(void);
+void EndWorker(word first);
 
 bool NewWorker(VoidFnPtr fn, ... )
 {
@@ -1421,7 +1421,7 @@ bool NewWorker(VoidFnPtr fn, ... )
 }
 /*}}}*/
 /*{{{  EndWorker */
-void EndWorker(void)
+void EndWorker(word first)
 {
 #ifdef __TRAN
 	/* EndWorker is entered with the stack pointing to the end of	*/
@@ -1430,8 +1430,8 @@ void EndWorker(void)
 	/* Note that this code is a bit dodgy, we return from FreeBuf	*/
 	/* using a stack which is now in free memory. But since we are	*/
 	/* running at high priority, noone can get in to allocate it.	*/
-	struct { word ret, stack, arg1, arg2; } frame;
-	FreeBuf((Buffer *)frame.stack);
+	word *entry = &first - 2;	/* hcc patch: Wptr on entry */
+	FreeBuf((Buffer *)entry[-3]);	/* NewWorker frame entry[-4..-1] */
 
 #else
 	/* To get hold of the stack base (currently masquerading as the */
