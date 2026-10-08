@@ -5,7 +5,7 @@
 /*                                                              */
 /* Author: NHG 13-May-87                                        */
 /****************************************************************/
-/* $Id: gencode.c,v 1.6 1994/08/09 16:43:25 al Exp $ */
+/* $Id: gencode.c,v 1.4 1991/03/28 15:08:54 nick Exp $ */
 
 #include "asm.h"
 
@@ -16,20 +16,13 @@ PUBLIC WORD codepos;
 PRIVATE WORD curpc;
 PRIVATE WORD setsize;
 
-#ifdef __DOS386
-
-PRIVATE WORD guesssize(WORD vtype, WORD valuearg);
-PUBLIC WORD asize(WORD value);
-
-#else /* !__DOS386 */
-
 PRIVATE WORD guesssize(ellipsis);
-PUBLIC WORD asize(ellipsis);
-
-#endif /* __DOS386 */
 
 PRIVATE VMRef lastinit;
 
+PUBLIC WORD asize(ellipsis);
+
+/* Host port: the Values below start as valzero() (see asm.h) */
 
 /* the following macro duplicates the newcode function in mem.c for	*/
 /* speed. Make sure it is kept in step!!!!				*/
@@ -85,7 +78,7 @@ WORD value;
         if( vtype == s_number ) encode((WORD)op,value,genbyte);
         else {
 		WORD size;
-		Value vv; vv.w = value;
+		Value vv = valzero(); vv.w = value;
 		if( setsize != -1 )
 		{
 			size = setsize;
@@ -101,7 +94,7 @@ WORD value;
 
 PUBLIC void copycode()
 {
-	Value vv;
+	Value vv = valzero();
         if( codepos == 0 ) return;
         if( codepos <= 4 ) 
 	{
@@ -140,7 +133,7 @@ VMRef label;
 	}
 	if( preasm )
 	{
-		Value vv; vv.v = label;
+		Value vv = valzero(); vv.v = label;
         	copycode();
         	newcode((WORD)s_global,0l,(WORD)s_label,curpc,vv);
 	}
@@ -157,7 +150,7 @@ VMRef label;
 	}
 	if( preasm )
 	{
-		Value vv; vv.v = label;
+		Value vv = valzero(); vv.v = label;
         	copycode();
         	newcode((WORD)s_ref,0l,(WORD)s_label,curpc,vv);
 	}
@@ -170,7 +163,7 @@ VMRef label;
         trace("LABDEF %s",l->name);
 	if( preasm )
 	{
-		Value vv; vv.v = label;
+		Value vv = valzero(); vv.v = label;
         	copycode();
         	newcode((WORD)s_labdef,0l,0l,curpc,vv);
 	}
@@ -181,13 +174,13 @@ VMRef label;
 WORD size;
 {
 	Symbol *l = VMAddr(Symbol,label);
-	Value vv; vv.v = label;
-        trace("DATA %s %ld",l->name,size);
+	Value vv = valzero(); vv.v = label;
+        trace("DATA %s %d",l->name,size);
 	l->def.w = size;
 	VMDirty(label);
 	if( defopt == TRUE )
 	{
-		fprintf(deffd,"\tdata %s %ld\n",l->name,size);
+		fprintf(deffd,"\tdata %s %d\n",l->name,size);
 	}
         copycode();
         newcode((WORD)s_data,0l,(WORD)s_datasymb,curpc,vv);
@@ -198,13 +191,13 @@ VMRef label;
 WORD size;
 {
 	Symbol *l = VMAddr(Symbol,label);
-	Value vv; vv.v = label;
-        trace("COMMON %s %ld",l->name,size);
+	Value vv = valzero(); vv.v = label;
+        trace("COMMON %s %d",l->name,size);
 	l->def.w = max(l->def.w,size);
 	VMDirty(label);
 	if( defopt == TRUE )
 	{
-		fprintf(deffd,"\tcommon %s %ld\n",l->name,size);
+		fprintf(deffd,"\tcommon %s %d\n",l->name,size);
 	}
         copycode();
         newcode((WORD)s_common,0l,(WORD)s_commsymb,curpc,vv);
@@ -213,12 +206,12 @@ WORD size;
 PUBLIC void geninit()
 {
         VMRef ct;
-        Value vv; vv.v = NullVMRef;
+        Value vv = valzero(); vv.v = NullVMRef;
         copycode();
         ct = codeptr();
         newcode((WORD)s_init,4l,0l,curpc,vv);
         curpc += 4;     
-        trace("INIT: %x %x",ct,lastinit);
+        trace("INIT: %x %x",VMWord(ct),VMWord(lastinit));
         if( !NullRef(lastinit) ) 
         { 
         	Code *c = VMAddr(Code,lastinit);
@@ -233,7 +226,7 @@ extern int filemod;
 PUBLIC void genmodule(mod)
 WORD mod;
 {
-	Value v;
+	Value v = valzero();
 	
 	trace("MODULE %d",mod);
 	
@@ -257,7 +250,7 @@ WORD mod;
 PUBLIC void gensize(size)
 int size;
 {
-	Value vv; vv.w = size;
+	Value vv = valzero(); vv.w = size;
 	setsize = size;
 	if( preasm ) newcode((WORD)s_size,0l,(WORD)s_number,curpc,vv);
 }
@@ -265,7 +258,7 @@ int size;
 PUBLIC void newfile()
 {
 	char *fname = (char *)alloc((WORD)(strlen(infile)+1));
-	Value vv; vv.c = fname;
+	Value vv = valzero(); vv.c = fname;
 	strcpy(fname,infile);
 	curfile = fname;
 	copycode();
@@ -279,7 +272,7 @@ PUBLIC void newfile()
 PUBLIC void genalign()
 {
         WORD size;
-        Value vv; vv.w = 0;
+        Value vv = valzero(); vv.w = 0;
         copycode();
         size = asize(curpc);
         newcode((WORD)s_align,size,0l,curpc,vv);
@@ -298,7 +291,7 @@ WORD value;
                 for( i = 0 ; i < 32 ; i+=8 ) genbyte(value>>i);
         }
         else {
-        	Value vv; vv.w = value;
+        	Value vv = valzero(); vv.w = value;
                 copycode();
                 newcode((WORD)s_word,4l,vtype,curpc,vv);
                 curpc += 4;
@@ -316,7 +309,7 @@ PUBLIC void genblkb(type,size)
 WORD type,size;
 {
         WORD bsize;
-        Value vv; vv.w = 0;
+        Value vv = valzero(); vv.w = 0;
         if( type != s_number ) recover("Illegal expression in BLKB directive");
         copycode();
         while( size > 0 )
@@ -331,7 +324,7 @@ WORD type,size;
 PUBLIC void genend()
 {
 	asm_Module *m;
-	Value vv; vv.w = 0;
+	Value vv = valzero(); vv.w = 0;
 	genalign();	/* this will call copycode() */
 	m = VMAddr(asm_Module,curmod);
         m->end = codeptr();

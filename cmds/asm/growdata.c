@@ -11,13 +11,13 @@
 /*                                                                      */
 /* Copyright (c) 1987, Perihelion Software Ltd. All Rights Reserved.    */
 /************************************************************************/
-/* $Id: growdata.c,v 1.4 1991/06/07 07:30:14 nickc Exp $ */
+/* $Id: growdata.c,v 1.3 1990/09/28 13:15:05 nick Exp $ */
 
 #include "asm.h"
 
 #define trace if(traceflags&db_growcode)_trace
 
-PRIVATE dataoffset;
+PRIVATE int dataoffset;	/* Host port: was implicit int */
 
 /****************************************************************/
 /* Procedure: growdata                                          */
@@ -77,7 +77,7 @@ PUBLIC void growdata()
                 
                 m = VMAddr(asm_Module,curmod);
 
-		if( m->id < 0 ) error("Invalid module 1: %x %x %x %d",curmod,m,m->next,m->id);
+		if( m->id < 0 ) error("Invalid module 1: %x %p %x %d",VMWord(curmod),(void *)m,VMWord(m->next),m->id);
 		curblock = m->start;
 		VMlock(curblock);
 		code = VMAddr(Code,curblock);
@@ -144,7 +144,8 @@ PUBLIC void growdata()
 		break;
 
 	    case s_newfile:
-		strcpy(infile,(char *)c->value.w);
+		infile = c->value.c;	/* Host port: was (char *)value.w */
+					/* Fix: was a strcpy into infile[128] */
 		trace("new file %s",infile);
 		break;
 

@@ -94,18 +94,18 @@ SOURCES		= $(SOURCES.c) $(SOURCES.a) \
 # C source files
 SOURCES.c	= asm.c gencode.c genimage.c gencsc.c growcode.c \
                    keyform.c objed.c lex.c mem.c module.c preasm.c \
-                   sym.c syn.c encode.c vm.c growdata.c objdump.c
+                   sym.c syn.c encode.c vm.c growdata.c objdump.c getargs.c
 #  keytab.c is automatically generated
 
 OBJECTS		= asm.o gencode.o genimage.o growdata.o growcode.o keytab.o \
 		objed.o lex.o encode.o mem.o module.o preasm.o sym.o syn.o \
-		vm.o
+		vm.o getargs.o
 
 # AMPP source files
 SOURCES.a	= 
 
 # C header files
-HEADERS.c	= asm.h vm.h
+HEADERS.c	= asm.h vm.h ttypes.h module.h getargs.h
 
 # AMPP macro files
 HEADERS.m	=
@@ -130,8 +130,11 @@ endif
 LIBDEFS	:=
 
 # must change to compile on any other host system!!!
+# keyform (host program) includes asm.h and ttypes.h of this directory
+# and the host's C library headers only: no Helios include directory, which
+# would come before the host's own headers.
 ifeq ($(HHOST),SUN4)
- HOSTCFLAGS  := $(HOSTCFLAGS) -w -I/usr/include -I. -I.. -I../../support -I$(INCLUDE) -DVM -DSUN4
+ HOSTCFLAGS  := $(HOSTCFLAGS) -w -I. -I.. -DVM -DSUN4
  HOSTCC = gcc
 
 # AxM: changed cc to gcc
@@ -144,13 +147,13 @@ else
 endif
 endif
 
-$(OBJECTS) : asm.h vm.h
+$(OBJECTS) : asm.h vm.h ttypes.h
 
 #-----------------------------------------------------------------------------
 # Generic targets and their dependencies:
 
 keytab.c : keyform
-	keyform
+	./keyform
 
 keyform : keyform.c
 	$(HOSTCC) $< $(HOSTCFLAGS) -o keyform

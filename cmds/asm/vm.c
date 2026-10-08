@@ -1,4 +1,4 @@
-/* $Id: vm.c,v 1.12 1994/08/09 16:43:25 al Exp $ */
+/* $Id: vm.c,v 1.9 1991/12/02 15:09:40 martyn Exp $ */
 
 #ifdef __HELIOS
 #include <helios.h>
@@ -11,72 +11,52 @@
 /*#include "asm.h"*/
 #else
 #include "ttypes.h"
-#ifdef __DOS386
-#include <fcntl.h>
-#include <stdarg.h>
+/* Host port: the C library headers instead of <strings.h> + bcopy	*/
 #include <string.h>
 #include <stdlib.h>
-#else /* !__DOS386 */
-#include <strings.h>
-#include <sys/file.h>
-#endif /* __DOS386 */
-#endif
-
-#ifndef O_BINARY
-#define O_BINARY	0
+#include <unistd.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <stdarg.h>
 #endif
 
 #include <stdio.h>
 #include <sys/types.h>
+#include <stdarg.h>	/* Host port: VMerror (also on Helios) */
 
 #ifdef __HELIOS
 # define ellipsis ...
-#else /* !__HELIOS */
+#else
 # define ellipsis
 # define byte		UBYTE
 # define word		WORD
 static int oserr;
-# define wordlen(s) (((s)+3)&~3)
-#ifndef __DOS386
-extern int errno;
-# define SEEK_SET	0
-# define memcpy(s,d,z) bcopy(d,s,z)
-# define memset(d,v,z) bzero(d,z)
-#endif /* __DOS386 */
-#endif /* __HELIOS */
+#endif
 
 #include "vm.h"
 
-#ifdef __DOS386
+/* Host port: VMalloc rounds sizes with VMwordlen (vm.h) rather than	*/
+/* to 4 bytes, so that the structures kept in VM pages stay aligned on	*/
+/* a host with 8-byte pointers.						*/
+#undef wordlen
+#define wordlen(s) VMwordlen(s)
 
-extern void 	error(BYTE *str, ...);
-extern void 	warn(BYTE *str, ...);
-extern void 	report(BYTE *str, ...);
-extern void 	_trace(BYTE *str, ...);
-extern void 	recover(BYTE *str, ...);
-
-#else /* !__DOS386 */
-
-extern void error(ellipsis);
-extern void report(ellipsis);
-extern void _trace(ellipsis);
-
-#endif /* __DOS386 */
-
+/* Host port: real prototypes for the variadic message functions	*/
+#ifdef __GNUC__
+#define PRINTFLIKE(f,a)	__attribute__((format(printf,f,a)))
+#else
+#define PRINTFLIKE(f,a)
+#endif
+extern void error(BYTE *str, ...) PRINTFLIKE(1,2);
+extern void report(BYTE *str, ...) PRINTFLIKE(1,2);
+extern void _trace(BYTE *str, ...) PRINTFLIKE(1,2);
 
 extern FILE *verfd;
 
 #define VMTabInc 64
 
 VMpage *VMTable = NULL;
-
-#ifdef __DOS386
-char _VMfilename[128];
-char *VMfilename = _VMfilename;
-#else /* !__DOS386 */
 char *VMfilename = "/helios/tmp/vmfile";
-#endif /* __DOS386 */
-
 VMRef NullVMRef;
 int VMTabUpb = 1;
 int VMPageSize = 8*1024;
@@ -95,11 +75,7 @@ extern VMRef VMPage(void);
 extern APTR VMswap(VMRef v);
 static APTR VMfindblock(void);
 extern VMRef VMalloc(int size, VMRef v);
-#ifdef __DOS386
-static void VMerror(BYTE *str, ...);
-#else /* !__DOS386 */
-static void VMerror(ellipsis);
-#endif /* __DOS386 */
+static void VMerror(BYTE *str, ...) PRINTFLIKE(1,2);
 #else
 extern VMRef VMPage();
 extern APTR VMswap();
@@ -112,45 +88,22 @@ extern int VMInit(vmfile,pagesize)
 char *vmfile;
 int pagesize;
 {
-	*(int *)&NullVMRef = 0;
+	MakeVMRef(NullVMRef,0,0);	/* Host port: was *(int *)& */
 	VMPageSize = pagesize;
 #ifdef __HELIOS
 	VMmaxpages = 30000;
 #else
-	VMmaxpages = 256;
+	/* Fix: every page stays resident on a Unix host (ASM-REVIEW H5,	*/
+	/* H6, H7, M10). asm swapped out pages beyond 256 (2 MB) to the	*/
+	/* fixed file /helios/tmp/vmfile, which does not exist on Linux,	*/
+	/* is shared by parallel runs, and whose victim choice could evict	*/
+	/* the new, empty page. A NetHack link needs about 15 MB. The page	*/
+	/* number is 16 bits, so the limit is 65535 pages (512 MB). -m	*/
+	/* (swap file name) is accepted and has no effect.			*/
+	VMmaxpages = 0x7fffffff;
 #endif
 
-#ifdef __DOS386
-	/* Get a temporary file name */
-	if (vmfile == NULL) {
-		char *tmp;
-		char *ch;
-
-		/* Get location for temporary file */
-		tmp = getenv((const char *)"TEMP");
-		if (tmp == NULL) {
-			tmp = getenv((const char *)"TMP");
-			if (tmp == NULL) tmp = "\\";
-		}
-
-		/* Create the temporary file name string */
-		strcpy(VMfilename, tmp);
-		ch = &VMfilename[strlen(VMfilename)-1];
-		if ((*ch != '\\') && (*ch != '/')) {
-			/* Add directory seperator */
-			ch++;
-			*ch = '\\';
-		}
-		ch++;
-
-		/* Patch VM file on the end */
-		strcpy(ch, "VMFILE.ASM");
-	} else {
-		VMfilename = vmfile;
-	}
-#else
 	if( vmfile != NULL ) VMfilename = vmfile;
-#endif
 		
 	VMTable = (VMpage *)malloc(sizeof(VMpage)*VMTabSize);
 	
@@ -179,9 +132,9 @@ extern void VMTidy()
 
 extern void VMStats()
 {
-report("VM Statistics:   Pages Used     %8ld File Pages     %8ld",VMTabUpb-1,fileupb);
-report("                 Resident       %8ld Page size      %8ld",resident,VMPageSize);
-report("                 Swaps in       %8ld Swaps out      %8ld",swapins,swapouts);
+report("VM Statistics:   Pages Used     %8d File Pages     %8d",VMTabUpb-1,fileupb);
+report("                 Resident       %8d Page size      %8d",resident,VMPageSize);
+report("                 Swaps in       %8d Swaps out      %8d",swapins,swapouts);
 }
 
 /* get a whole new page from VM system */
@@ -194,6 +147,9 @@ extern VMRef VMPage()
 	VMLRU();
 
 	page = VMTabUpb++;
+
+	/* Fix: a VMRef holds a 16-bit page number */
+	if( page > 0xffff ) VMerror("Too many VM pages (%d): input too large",page);
 
 	if( page == VMTabSize ) 
 	{
@@ -233,7 +189,8 @@ extern VMRef VMPage()
 		}		
 #else
 		block = (APTR)malloc(VMPageSize);
-		if( block == NULL ) VMmaxpages = 0;
+		/* Fix: no swapping on a Unix host (see VMInit) */
+		if( block == NULL ) VMerror("Out of memory at VM page %d",page);
 #endif
 	}
 	
@@ -264,14 +221,14 @@ VMRef v;
 	APTR block;
 	int filepage;
 	int rsize, pos;
-	if( 	(*(int *)&v <= 0)	|| 
+	if( 	((int)VMWord(v) <= 0)	|| 	/* Host port: was *(int *)& */
 		(page_(v) == 0)		|| 
 		(page_(v) > VMTabUpb)	|| 
 		(offset_(v) > VMPageSize) 
 	  ) 
 	{
 		char *name = "VMSwap";
-#if !defined(SUN4) && !defined(RS6000) && !defined(__DOS386)
+#ifndef SUN4
 		word *p = (word *)&v;
 		Proc *proc;
 		p = (word *)(p[-2]);
@@ -280,7 +237,7 @@ VMRef v;
 		proc = (Proc *)p;
 		name = proc->Name;
 #endif
-		VMerror("invalid VMRef %x in %s",v,name);
+		VMerror("invalid VMRef %x in %s",VMWord(v),name);
 	}
 
 	if( (page->status&VMswapped) == 0 )
@@ -293,7 +250,7 @@ VMRef v;
 	
 	filepage = page->filepage;
 
-	if( filepage == -1 ) VMerror("trying to swap in page %x without filepage",v);
+	if( filepage == -1 ) VMerror("trying to swap in page %x without filepage",VMWord(v));
 	
 	block = VMfindblock();
 
@@ -305,13 +262,13 @@ VMRef v;
 	if( (pos = lseek(VMfile,filepage*VMPageSize,SEEK_SET)) != filepage*VMPageSize)
 	{
 		VMerror("swap in seek failure for page %d filepage %d oserr %x",
-				page-VMTable,filepage,oserr);
+				(int)(page-VMTable),filepage,oserr);
 	}
 	
 	if( ( rsize = read(VMfile,block,VMPageSize) ) != VMPageSize )
 	{
 		VMerror("read failure for page %d res %d oserr %x",
-				page-VMTable,rsize,oserr);
+				(int)(page-VMTable),rsize,oserr);
 	}
 
 	page->status = 0;
@@ -352,7 +309,7 @@ static APTR VMfindblock()
 
 	block = page->addr;
 	
-	if( block == NULL ) VMerror("NULL block for page %d",page-VMTable);
+	if( block == NULL ) VMerror("NULL block for page %d",(int)(page-VMTable));
 		
 	/* Now find a file page to evict it to.				*/
 	/* If the page has a shadow, and it has not been dirtied, we can*/
@@ -407,19 +364,19 @@ static APTR VMfindblock()
 	page->swapsout++;
 	
 	if( VMfile == -1 )
-		if( (VMfile = open(VMfilename,O_BINARY|O_RDWR|O_CREAT,0666) ) == -1 )
+		if( (VMfile = open(VMfilename,O_RDWR|O_CREAT,0666) ) == -1 )
 			VMerror("Cannot open VM file %s %d %x",VMfilename,errno,oserr);
 
 	if( (pos = lseek(VMfile,filepage*VMPageSize,SEEK_SET)) != filepage*VMPageSize)
 	{
 		VMerror("swap out seek failure for page %d filepage %d oserr %x",
-				page-VMTable,filepage,oserr);
+				(int)(page-VMTable),filepage,oserr);
 	}
 
 	if( ( wsize = write(VMfile,block,VMPageSize) ) != VMPageSize )
 	{
 		VMerror("write failure for page %d result %d oserr %x",
-				page-VMTable,wsize,oserr);
+				(int)(page-VMTable),wsize,oserr);
 	}
 
 	page->status = VMswapped;
@@ -438,7 +395,7 @@ VMRef v;
 
 	if( page->status & VMswapped ) (void)VMswap(v);
 
-	if( offset_(v) != 0 ) VMerror("VMalloc not called on base ref: %x",v);
+	if( offset_(v) != 0 ) VMerror("VMalloc not called on base ref: %x",VMWord(v));
 	
 	size = wordlen(size);
 	
@@ -462,7 +419,7 @@ VMRef v;
 	VMRef res;
 	VMpage *page = &VMTable[page_(v)];
 
-	if( offset_(v) != 0 ) VMerror("VMnext not called on base ref: %x",v);
+	if( offset_(v) != 0 ) VMerror("VMnext not called on base ref: %x",VMWord(v));
 	
 	MakeVMRef(res,page_(v),VMPageSize-page->left);
 
@@ -474,7 +431,7 @@ VMRef v;
 {
 	VMpage *page = &VMTable[page_(v)];
 
-	if( offset_(v) != 0 ) VMerror("VMleft not called on base ref: %x",v);
+	if( offset_(v) != 0 ) VMerror("VMleft not called on base ref: %x",VMWord(v));
 	
 	return page->left;	
 }
@@ -519,24 +476,21 @@ extern void showvm()
 		char *s = (p->status&VMswapped)?"s":"-";
 		char *d = (p->status&VMdirty)?"d":"-";
 		char *t = (p->status&VMtouched)?"t":"-";
-		report("%4d %s%s%s  %8x %4d  %4x  %4d %08x %3d %3d",
-			i,s,d,t,p->addr,p->filepage,p->left,p->locks,p->age,
+		report("%4d %s%s%s  %8p %4d  %4x  %4d %08x %3d %3d",
+			i,s,d,t,(void *)p->addr,p->filepage,p->left,p->locks,p->age,
 			p->swapsin,p->swapsout);
 	}
 }
 
-#ifdef __DOS386
-
 static void VMerror(BYTE *str, ...)
 {
-	extern char infile[];
-	va_list	argptr;
-
+	extern char *infile;	/* Fix: was a char [128] array */
+	va_list ap;
         fprintf(verfd,"VM Error: %s :",infile);
 
-	va_start(argptr, str);
-        vfprintf(verfd,str,argptr);
-	va_end(argptr);
+	va_start(ap,str);
+        vfprintf(verfd,str,ap);
+	va_end(ap);
         putc('\n',verfd);
 #if 0 || defined(SUN4)
 	{
@@ -550,29 +504,4 @@ static void VMerror(BYTE *str, ...)
 	showvm();
  	exit(20);
 }
-
-#else /* !__DOS386 */
-
-static void VMerror(str,a,b,c,d,e,f )
-BYTE *str;
-INT a,b,c,d,e,f;
-{
-	extern char infile[];
-        fprintf(verfd,"VM Error: %s :",infile);
-
-        fprintf(verfd,str,a,b,c,d,e,f);
-        putc('\n',verfd);
-#if 0 || defined(SUN4)
-	{
-		float x = 0.0;
-		float y = 0.0;
-		float z;
-
-		z = x/y;		/* force fpe to get core dump	*/
-	}
-#endif
-	showvm();
- 	exit(20);
-}
-
-#endif /* __DOS386 */
+	

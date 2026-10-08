@@ -4,7 +4,7 @@
 /* Assembler syntax analyser                                    */
 /*                                                              */
 /****************************************************************/
-/* $Id: syn.c,v 1.6 1994/08/09 16:43:25 al Exp $ */
+/* $Id: syn.c,v 1.4 1991/06/07 07:30:14 nickc Exp nickc $ */
 
 #include "asm.h"
 
@@ -12,19 +12,6 @@
 
 PUBLIC WORD lineno;
 PUBLIC WORD etype;
-
-#ifdef __DOS386
-
-
-PRIVATE WORD exp(void);
-PRIVATE WORD exp1(void);
-PRIVATE WORD term(void);
-PRIVATE WORD tertiary(void);
-PRIVATE WORD secondary(void);
-PRIVATE WORD primary(void);
-PRIVATE WORD combine(WORD op, WORD ltype, WORD rtype, WORD lexp, WORD rexp);
-
-#else /* !__DOS386 */
 
 PRIVATE WORD exp(ellipsis);
 PRIVATE WORD exp1(ellipsis);
@@ -34,7 +21,9 @@ PRIVATE WORD secondary(ellipsis);
 PRIVATE WORD primary(ellipsis);
 PRIVATE WORD combine(ellipsis);
 
-#endif /* __DOS386 */
+/* Fix: a symbol type that a DATA or COMMON directive redefines: a	*/
+/* code label, data or common (A4)					*/
+#define dupsym(t) ((t) == s_codesymb || (t) == s_datasymb || (t) == s_commsymb)
 
 /********************************************************/
 /* assemble                                             */
@@ -68,6 +57,12 @@ PUBLIC void assemble()
 	
 	newfile();
 
+	/* Fix: a file named *.s is text from its first byte (A10) */
+	{
+		size_t l = strlen(infile);
+		textinput = l >= 2 && strcmp(infile + l - 2, ".s") == 0;
+	}
+
         nextsym();
 
 	memcpy(oldreclev,error_level,sizeof(jmp_buf));
@@ -89,6 +84,10 @@ PUBLIC void assemble()
 			case s_code:
 			case s_bss:
 			case s_labdef:
+			/* Fix: stop at the end of the file; an error in	*/
+			/* the last statement made asm loop for ever		*/
+			/* (ASM-REVIEW M2).					*/
+			case s_eof:
  				recovering = FALSE;
 #ifdef NEVER
 			case s_datasymb:
@@ -107,7 +106,7 @@ PUBLIC void assemble()
 
         while( symb != s_eof )
         {
-                trace("Main loop symbol = %2lx %lx",symb,tokval.w);
+                trace("Main loop symbol = %2x %x",symb,tokval.w);
                 switch( (int)symb )
                 {
                 case s_direct:
@@ -122,22 +121,39 @@ PUBLIC void assemble()
                 case s_oper2:
                 case s_oper3:
                 case s_oper4:
-                        gencode(&tokval.w,symb&15L);
+                        gencode((UBYTE *)&tokval.w,symb&15L);
                         nextsym();
                         break;
 
 
                 case s_datasymb:
                 case s_commsymb:
-			warn("Code symbol re-defined as data symbol '%s' - ignored",token);
+			/* Fix: an error outside a library unless -wd (H8) */
+			if( inlib || (warnflags & warn_dup) )
+				warn("Code symbol re-defined as data symbol '%s' - ignored",token);
+			else
+				linkerror("Data symbol '%s' re-defined as a code label",token);
 			nextsym();		
+			/* Fix: skip the label's colon, now that an		*/
+			/* unexpected ':' is an error (A1)			*/
+			if( symb == s_colon ) nextsym();
                         break;
 
                 case s_codesymb:
                 case s_unbound:
-                        if( tokval.w != NULL )
+                        if( tokval.w != 0 )	/* Host port: was NULL */
                         {
-			    if( !inlib ) warn("Duplicate label definition '%s' - ignored",token);
+			    /* Fix: an error outside a library unless -wd: the	*/
+			    /* second module's own references went to the first	*/
+			    /* module's label (ASM-REVIEW H8). In a library the	*/
+			    /* first definition silently wins, as before.	*/
+			    if( !inlib )
+			    {
+				if( warnflags & warn_dup )
+					warn("Duplicate label definition '%s' - ignored",token);
+				else
+					linkerror("Duplicate label definition '%s'",token);
+			    }
                         }
                         else {
                             toksym->def.v = deflabel();
@@ -202,18 +218,20 @@ PUBLIC void assemble()
                                     {
 					    Value expr;
                                             expr.w = exp();
+                                            /* Fix: errors, see asmerror() (were warnings, the	*/
+                                            /* item was dropped or truncated, exit 0)		*/
                                             if( etype != s_number )
-                                                warn("Only numeric expressions or strings allowed in BYTE directive");
+                                                asmerror("Only numeric expressions or strings allowed in BYTE directive");
                                             else {
                                                 if( expr.w > 255 || expr.w < -128 )
-                                                   warn("Value #%lx out of range for BYTE directive",expr.w);
+                                                   asmerror("Value #%x out of range for BYTE directive",expr.w);
                                                 genbyte(expr.w);
                                             }
                                     }
                                     else
                                     {
-                                            if( symb == s_string ) gencode(token,toksize);
-                                            else warn("Invalid item '%s' in BYTE directive - ignored",token);
+                                            if( symb == s_string ) gencode((UBYTE *)token,toksize);
+                                            else asmerror("Invalid item '%s' in BYTE directive",token);	/* Fix: was a warning */
                                             nextsym();
                                     }
                             } while ( symb == s_comma );
@@ -231,25 +249,37 @@ PUBLIC void assemble()
 			    WORD n;
 			    Value e; e.w = exp1();
                             n = e.w;
+                            /* Fix: a negative size gave an empty block	*/
+                            /* (A9)						*/
+                            if( etype == s_number && n < 0 )
+                                asmerror("Negative size %d in BLKB directive",n);
                             while ( symb == s_comma && n > 0 )
                             {
                                     nextsym();
                                     if( symb == s_number )
                                     {
                                             expr.w = exp();
+                                            /* Fix: errors, see asmerror() (were warnings, the	*/
+                                            /* item was dropped or truncated, exit 0)		*/
                                             if( etype != s_number )
-                                                warn("Only numeric expressions or strings allowed in BYTE directive");
+                                                asmerror("Only numeric expressions or strings allowed in BYTE directive");
                                             else {
                                                 if( expr.w > 255 || expr.w < -128 )
-                                                   warn("Value #%lx out of range for BYTE directive",expr.w);
+                                                   asmerror("Value #%x out of range for BYTE directive",expr.w);
                                                 genbyte(expr.w);
                                                 n--;
                                             }
                                     }
                                     else
                                     {
-                                            if( symb == s_string ) gencode(token,min(n,toksize));
-                                            else warn("Invalid item '%s' in BYTE directive - ignored",token);
+                                            /* Fix: a string longer than the rest	*/
+                                            /* of the block was cut short, silently	*/
+                                            /* (A9); an excess number item was	*/
+                                            /* already an error (A1)		*/
+                                            if( symb == s_string && toksize > n )
+                                                asmerror("String '%s' longer than the rest of the BLKB block (%d)",token,n);
+                                            if( symb == s_string ) gencode((UBYTE *)token,min(n,toksize));
+                                            else asmerror("Invalid item '%s' in BYTE directive",token);	/* Fix: was a warning */
                                             n -= toksize;
                                             nextsym();
                                     }
@@ -263,6 +293,8 @@ PUBLIC void assemble()
 			    WORD n;
 			    Value e; e.w = exp1();
                             n = e.w;
+                            if( etype == s_number && n < 0 )	/* Fix: A9 */
+                                asmerror("Negative size %d in BLKW directive",n);
                             while( symb == s_comma && n > 0)
                             {
                                     expr.w = exp1();
@@ -319,7 +351,11 @@ PUBLIC void assemble()
                                 else { 
 					if( toksym->type == s_datasymb )
 					{
-					     if( !inlib ) 
+					     /* Fix: recover() is an error now; -wd	*/
+					     /* makes it a warning again (H8)		*/
+					     if( !inlib && (warnflags & warn_dup) )
+					      recoverwarn("Duplicate definition of symbol '%s' - ignored",token);
+					     else if( !inlib ) 
 					      recover("Duplicate definition of symbol '%s'",token);
 					     else
 					     {
@@ -332,6 +368,14 @@ PUBLIC void assemble()
 		                                VMDirty(toksymref);
 					     }
 					}
+					/* Fix: a code label or common of this name	*/
+					/* (ASM-REVIEW-FIXES A4) is a duplicate	*/
+					/* definition like the others: a warning in	*/
+					/* a library or with -wd (as 1.3 reported	*/
+					/* it), else an error. -wd did not cover a	*/
+					/* label followed by data of the same name.	*/
+					else if( dupsym(toksym->type) && (inlib || (warnflags & warn_dup)) )
+					    recoverwarn("Illegal symbol in DATA directive: '%s' - ignored",token);
 					else recover("Illegal symbol in DATA directive: '%s'",token);
 				}
                             sym = toksymref;
@@ -362,7 +406,12 @@ PUBLIC void assemble()
 					VMDirty(toksymref);
 				}
                                 else { 
-					if( toksym->type != s_commsymb )
+					/* Fix: as for DATA (A4) */
+					if( toksym->type == s_commsymb )
+						;
+					else if( dupsym(toksym->type) && (inlib || (warnflags & warn_dup)) )
+						recoverwarn("illegal symbol in COMMON directive: '%s' - ignored",token);
+					else
 						recover("illegal symbol in COMMON directive: '%s'",token);
 				}
                             sym = toksymref;
@@ -384,6 +433,12 @@ PUBLIC void assemble()
 			expr.w = exp1();
                         if( etype != s_number )
 	                       recover("Numerical expressions only allowed in SIZE directive");
+                        /* Fix: the size is stored in a byte: size 300	*/
+                        /* became 44, size -1 was ignored and size -2	*/
+                        /* became 254, silently; size 0 failed only at	*/
+                        /* link time (ASM-REVIEW-FIXES A9).		*/
+                        if( expr.w < 1 || expr.w > 255 )
+                               asmerror("SIZE %d out of range 1..255",expr.w);
                         gensize(expr.w);
                         break;
                         
@@ -405,12 +460,20 @@ PUBLIC void assemble()
 			genref(toksymref);
 			nextsym();			
 			break;
+
+		    /* Fix: an unknown directive code (only possible from	*/
+		    /* a byte in a .p file) did not advance: endless loop	*/
+		    default:
+			recover("Unknown directive #%02x",(int)tokval.w);
                 }
                         break;
                 default:
-                        warn("Unexpected symbol: '%s' (%02x) - ignored",token,symb);
-                        nextsym();
-                        break;
+                        /* Fix: an error (ASM-REVIEW-FIXES A1). It was a	*/
+                        /* warning, and the token was dropped: "ldc 0x10"	*/
+                        /* assembled as "ldc 0" (x10 ignored), "ldc 1.5" as	*/
+                        /* "ldc 1", a misspelt instruction vanished, exit 0.	*/
+                        /* recover() skips to the next statement.		*/
+                        recover("Unexpected symbol: '%s' (%02x)",token,symb);
 
                 }
         }
@@ -584,13 +647,27 @@ PRIVATE WORD primary()
 
         case s_minus:
         case s_not:
-                res.w = exp1();
+        {
+                /* Fix: the number in -N must be at most 0x80000000;	*/
+                /* -2147483649 became 2147483647 and -4294967295 1,	*/
+                /* silently (ASM-REVIEW-FIXES A8). Checked when the	*/
+                /* operand is the number alone: an expression such as	*/
+                /* -(#ffffffff+2) is 32-bit arithmetic as before.	*/
+                WORD n, v;
+                bool big;
+                nextsym();
+                n = tokcount; v = tokval.w;
+                big = op == s_minus && symb == s_number && toknegovf;
+                res.w = exp();
+                if( big && tokcount == n + 1 )
+                        asmerror("Number -%u does not fit in 32 bits",(unsigned)v);
                 if( etype == s_number ) res.w = domonadic(op,res.w);
                 else {
                         res.v = unary( op, etype, res.w );
                         etype = s_monadic;
                 }
                 break;
+        }
 
         default:
                 recover("Unexpected symbol '%s' in expression",token);
