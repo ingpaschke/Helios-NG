@@ -73,7 +73,7 @@ int main(void)
   char		*my_name;
   char		*its_name;
   char		*link_modes;
-  int		memory_limit;
+  int		memory_limit = 0;	/* hcc patch: also without the optional args */
   int		config_size;
   Config	*config;
   void		*image;
