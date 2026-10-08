@@ -648,6 +648,7 @@ extern int dup2(int fd,int fd2)
 		
 		fd2 = _dup(fd,fd2);
 	}
+	elif( checkfd(fd) == NULL ) fd2 = -1;	/* errno is EBADF */
 
 	CHECKSIGS();
 	return fd2;
