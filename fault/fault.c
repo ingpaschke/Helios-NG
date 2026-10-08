@@ -303,7 +303,7 @@ static int strtonum(char *s)
 		
 		if( '0' <= c && c <= '9' ) digit = c - '0';
 		elif( radix == 16 && ('a' <= c && c <= 'f') ) digit = c - 'a' + 10;
-		elif( radix == 16 && ('F' <= c && c <= 'F') ) digit = c - 'A' + 10;
+		elif( radix == 16 && ('A' <= c && c <= 'F') ) digit = c - 'A' + 10;
 
 		val = val * radix + digit;
 	}
