@@ -251,7 +251,7 @@ if (Target->Type & Type_Directory)
 
 if (dbug) fprintf(stderr,"Delete %s\n",Target->Name);
 
-if (Delete(Target,NULL) == 0);
+if (Delete(Target,NULL) == 0)	/* hcc patch: was a stray ; */
 	{
 	Close(Target);	/* close these objects as recursion may be deep */
 	return(TRUE);
