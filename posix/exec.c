@@ -563,10 +563,20 @@ _Trace(0xAAAA0003,MyTask,pid|(errno<<16));
 	return pid;
 }
 
+/* path has room for PATH_MAX bytes, the terminator included (the	*/
+/* callers' buffers are PATH_MAX+1 or IOCDataMax bytes).  A name that	*/
+/* cannot fit gives an empty path, so the exec fails with ENOENT.	*/
 extern void find_file(char *path, char *file )
 {
 	char *env;
 	char *f = file;
+	int flen = strlen(file);
+
+	if( flen >= PATH_MAX )
+	{
+		path[0] = '\0';
+		return;
+	}
 	
 	while( *f ) 
 		if( *f++ == '/' ) 
@@ -583,16 +593,21 @@ extern void find_file(char *path, char *file )
 		{
 			Object *o;
 			char *p = path;
-			char *f = file;
-			while( *env != ':' && *env != '\0' ) *p++ = *env++;
-			*p++ = '/';
+			char *dir = env;
+			while( *env != ':' && *env != '\0' ) env++;
 
-			while( (*p++ = *f++) != '\0' );
-
-			if( (o=Locate(cdobj(),path)) != NULL )
+			/* skip a PATH entry that would not fit */
+			if( (env - dir) + 1 + flen < PATH_MAX )
 			{
-				Close(o);
-				return;
+				while( dir < env ) *p++ = *dir++;
+				*p++ = '/';
+				strcpy(p,file);
+
+				if( (o=Locate(cdobj(),path)) != NULL )
+				{
+					Close(o);
+					return;
+				}
 			}
 			if( *env == ':' ) env++;
 		}
