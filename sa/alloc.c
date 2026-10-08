@@ -320,6 +320,7 @@ static void *_realloc(void *addr, int size)
 			return new;
 		}
 	}
+	return NULL;	/* warnings patch: addr not found */
 }
 
 /* external procedures */
