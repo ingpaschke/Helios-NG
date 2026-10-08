@@ -84,7 +84,7 @@ int main(int argc, char **argv)
       }
 
      if ((argv[i][0] ne '/') && (strchr(argv[i], '/') ne NULL))
-      { fprintf(stderr, "kill: illegal task name %s\n", stderr);
+      { fprintf(stderr, "kill: illegal task name %s\n", argv[i]);
 	rc = EXIT_FAILURE;
  	continue;
       }
@@ -607,7 +607,7 @@ static	bool	send_signal(int sig)
      Close(s);
      if (rc < Err_Null)
       { fprintf(stderr, "kill: failed to send signal to program %s/%s, fault 0x%08lx\n",
-   		node->Parent, node->Name, rc);
+   		node->Parent->Name, node->Name, rc);
 	result = FALSE;
         continue;
       }
