@@ -23,15 +23,18 @@ extern struct passwd *getpwuid(uid_t uid)
 	/* from there if it exists.					*/
 	tdbi = mydbinfo, mydbinfo = dbinfo, dbinfo = tdbi;
 	errno = opendb(PWFILE,0);
-	if( errno ) return NULL;
+	if( errno ) goto fail;
 	p = &dbinfo->p;
 	p->pw_uid = uid;
 	errno = scandb("%s:%s:!d:%d:%s:%s:%s",&p->pw_name,&p->pw_passwd,
 		uid,&p->pw_gid,&p->pw_gecos,&p->pw_dir,&p->pw_shell);
-	if( errno ) return NULL;
+	if( errno ) { closedb(1); goto fail; }
 	closedb(1);
 	tdbi = mydbinfo, mydbinfo = dbinfo, dbinfo = tdbi;
 	return p;
+fail:
+	tdbi = mydbinfo, mydbinfo = dbinfo, dbinfo = tdbi;
+	return NULL;
 }
 
 extern struct passwd *getpwnam(char *name)
@@ -43,15 +46,18 @@ extern struct passwd *getpwnam(char *name)
 	/* from there if it exists.					*/
 	tdbi = mydbinfo, mydbinfo = dbinfo, dbinfo = tdbi;
 	errno = opendb(PWFILE,0);
-	if( errno ) return NULL;
+	if( errno ) goto fail;
 	p = &dbinfo->p;
 	p->pw_name = name;
 	errno = scandb("!s:%s:%d:%d:%s:%s:%s",&p->pw_name,&p->pw_passwd,
 		&p->pw_uid,&p->pw_gid,&p->pw_gecos,&p->pw_dir,&p->pw_shell);
-	if( errno ) return NULL;
+	if( errno ) { closedb(1); goto fail; }
 	closedb(1);
 	tdbi = mydbinfo, mydbinfo = dbinfo, dbinfo = tdbi;
 	return p;
+fail:
+	tdbi = mydbinfo, mydbinfo = dbinfo, dbinfo = tdbi;
+	return NULL;
 }
 
 extern struct passwd *getpwent(void) { return NULL; }
