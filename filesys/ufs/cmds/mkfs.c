@@ -419,7 +419,7 @@ mkfs(pp, fsys, fi, fo)
 	}
 	sblock.fs_fpg = (sblock.fs_cpg * sblock.fs_spc) / NSPF(&sblock);
 	if ((sblock.fs_cpg * sblock.fs_spc) % NSPB(&sblock) != 0) {
-		printf("panic (fs_cpg * fs_spc) % NSPF != 0");
+		printf("panic (fs_cpg * fs_spc) %% NSPF != 0");
 		exit(24);
 	}
 	if (sblock.fs_cpg < mincpg) {
