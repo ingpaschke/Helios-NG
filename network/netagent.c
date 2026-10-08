@@ -1085,7 +1085,7 @@ static	int	transputer_check_link(int link)
 **/
 #define Reset_Address	0x000000C0
 static void Parsytec_Reset(int link)
-{ uword *reg = (uword *) Reset_Address;
+{ volatile uword *reg = (volatile uword *) Reset_Address; /* hcc patch: reset register */
   *reg = 0;
   *reg = 1;
   *reg = 2;
