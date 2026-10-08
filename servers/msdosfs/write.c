@@ -274,7 +274,7 @@ WORD flop_write(WORD pos, WORD size, char *buf)
    {
   	offset = sector - first_sector;
   	to_change = Sector_size;
-  	if( sector == last_sector )
+  	if( sector == last_sector && (size + begin)%Sector_size != 0 )
     		to_change = (size + begin)%Sector_size;
 
   	if( sector == first_sector )
