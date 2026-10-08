@@ -806,7 +806,7 @@ char *fgets(char *s, int n, FILE *stream)
     do { int ch = getc(stream);
          if (ch == EOF)                       /* error or EOF       */
          {   if (s == a) return NULL;         /* no chars -> leave  */
-             if (ferror(stdin)) a = NULL;
+             if (ferror(stream)) a = NULL;
              break; /* add NULL even if ferror(), spec says 'indeterminate' */
          }
          if ((*s++ = ch) == '\n') break;
