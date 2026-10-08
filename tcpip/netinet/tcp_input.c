@@ -189,8 +189,10 @@ tcp_dooptions(
 		if (opt == TCPOPT_NOP)
 			optlen = 1;
 		else {
+			if (cnt < 2)
+				break;
 			optlen = cp[1];
-			if (optlen <= 0)
+			if (optlen < 2 || optlen > cnt)
 				break;
 		}
 		switch (opt) {
@@ -203,8 +205,12 @@ tcp_dooptions(
 				continue;
 			if (!(ti->ti_flags & TH_SYN))
 				continue;
-			tp->t_maxseg = *(u_short *)(cp + 2);
-			tp->t_maxseg = ntohs((u_short)tp->t_maxseg);
+			{
+				u_short mss;	/* cp + 2 need not be aligned */
+				bcopy((caddr_t)(cp + 2), (caddr_t)&mss,
+				    sizeof(mss));
+				tp->t_maxseg = ntohs(mss);
+			}
 			tp->t_maxseg = MIN(tp->t_maxseg, tcp_mss(tp));
 			break;
 		}
