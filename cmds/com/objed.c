@@ -3,7 +3,7 @@ static char *rcsid = "$Header: /hsrc/cmds/com/RCS/objed.c,v 1.15 1993/08/27 14:1
 #endif
 
 #include <stdio.h>
-#include <module.h>
+#include <module.h>	/* Host port: on the host tools/hosttools/include/module.h, 32-bit fields */
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
@@ -30,17 +30,19 @@ swapword( word it )
 {
   if (!swapopt)	return (it);
     {
+      /* Host port: memcpy, was a store and load through (word *) casts */
       byte	from[4];
       byte	to[4];
 
-      *((word *)from) = it;
+      memcpy( from, &it, 4 );
 
       to[0] = from[3];
       to[1] = from[2];
       to[2] = from[1];
       to[3] = from[0];
       
-      return(*((word *)to));
+      memcpy( &it, to, 4 );
+      return(it);
     }
 }
 
@@ -52,9 +54,20 @@ putmodules( void )
   Module *	m;
   int		rsize;
   word		mtype;
+  word		offset = 0;
 
   
-  v  = (word *)malloc( (int)isize );
+  /* Host port: a header size below 0 made malloc() fail and -m printed	*/
+  /* nothing; the module chain was walked without bounds (a module of	*/
+  /* size 0 looped for ever, a chain without its terminating 0 word or	*/
+  /* a bad size read past the image). The image is followed by zeroed	*/
+  /* room for one Module, every step is checked against the size.	*/
+  if ( isize < 0 )
+   { fprintf(stderr, "Invalid image size in header: %d\n", isize );
+     exit(1);
+   }
+  
+  v  = (word *)calloc( 1, (size_t)isize + sizeof (Module) );
   
   if ( v == NULL )
     return;
@@ -70,7 +83,16 @@ putmodules( void )
   
   m = (Module *)v;
   
-  while ((mtype = swapword( m->Type )) != 0 )
+  for (;;)
+    {
+      if ( offset > isize - 4 )
+       { fprintf(stderr, "Module chain not terminated by 0 within the image\n" );
+         exit(1);
+       }
+      
+      if ((mtype = swapword( m->Type )) == 0 )
+        break;
+      
     {
       word	msize    = swapword( m->Size    );
       word	mslot    = swapword( m->Id      );
@@ -79,29 +101,38 @@ putmodules( void )
       char *	mname    = m->Name;
 
       
+      if ( msize <= 0 || msize > isize - offset )
+       { fprintf(stderr, "Bad module size %d at offset %d\n", msize, offset );
+         exit(1);
+       }
+
+      
       switch ( mtype )
 	{		
 	case T_Program:
-	  printf( "Program : %10s slot %3ld version %4ld size %5ld datasize %4ld\n",
+	  /* Host port: %d for the 32-bit words, was %ld (in all printfs) */
+	  printf( "Program : %10.32s slot %3d version %4d size %5d datasize %4d\n",
 		 mname, mslot, mversion, msize, mdsize );
 	  break;
 	  
 	case T_Module:
-	  printf( "Module  : %10s slot %3ld version %4ld size %5ld datasize %4ld\n",
+	  printf( "Module  : %10.32s slot %3d version %4d size %5d datasize %4d\n",
 		 mname, mslot, mversion, msize, mdsize );
 	  break;
 	  
 	case T_ResRef:
-	  printf( "ResRef  : %10s slot %3ld version %4ld\n",
+	  printf( "ResRef  : %10.32s slot %3d version %4d\n",
 		 mname, mslot, mversion );
 	  break;
 	  
 	default:
-	  fprintf( stderr, "Unknown module type: %lx\n", mtype );
+	  fprintf( stderr, "Unknown module type: %x\n", mtype );
 	  exit(1);
 	}
       
       m = (Module *)((char *)m + msize);
+      offset += msize;
+    }
     }
   
   free( v );
@@ -110,9 +141,21 @@ putmodules( void )
   
 } /* putmodules */
 
+/* Host port: atol() of the i386 reference, whose long is 32 bits:	*/
+/* out-of-range values saturate at the 32-bit limits			*/
+static long
+atol32( char * arg )
+{
+  long	v = atol( arg );
+
+  if (v > 0x7fffffffL)		return 0x7fffffffL;
+  if (v < -0x7fffffffL - 1)	return -0x7fffffffL - 1;
+  return v;
+}
+
 typedef struct Image_Magics
   {
-    unsigned long	Magic;
+    UWORD		Magic;	/* Host port: 32 bits, was unsigned long */
     char *		Type;	  
   }
 Image_Magics;
@@ -126,7 +169,7 @@ main(
   long 		info      = false;
   int		size;
   long		changed   = false;
-  long		progtype;
+  WORD		progtype;	/* Host port: 32 bits, was long */
   char *	file      = NULL;
   char *	type 	  = NULL;
   char *	name	  = 0;
@@ -134,6 +177,14 @@ main(
   long		heapsize  = -1;
   long		modules	  = false;
 
+  
+#ifndef __HELIOS
+  if ( !HostIsLittleEndian() )	/* Host port: see ttypes.h */
+    {
+      fprintf( stderr, "objed: big-endian hosts are not supported\n" );
+      exit(1);
+    }
+#endif
   
   argv++;
   
@@ -152,12 +203,12 @@ main(
 	      
 	    case 's':
 	      _ARG_;
-	      stacksize = (long)atol( arg );
+	      stacksize = atol32( arg );	/* Host port: was (long)atol( arg ) */
 	      break;
 	      
 	    case 'h':
 	      _ARG_;
-	      heapsize = (long)atol( arg );
+	      heapsize = atol32( arg );	/* Host port: was (long)atol( arg ) */
 	      break;			
 	      
 	    case 'i':
@@ -229,7 +280,7 @@ main(
 	  { TaskForce_Magic,	"Task Force Binary\n" },
 	  { RmLib_Magic,	"Resource Management Library Binary\n" }
 	};
-      unsigned long	value = swapword( hdr.Magic );
+      UWORD		value = swapword( hdr.Magic );	/* Host port: was unsigned long */
       int		i;
 
 
@@ -237,7 +288,7 @@ main(
 	{
 	  if (value == Values[ i ].Magic)
 	    {
-	      printf( Values[ i ].Type );
+	      printf( "%s", Values[ i ].Type );	/* Host port: not as a format */
 	      break;	      
 	    }
 	}
@@ -255,7 +306,7 @@ main(
     }
   
   if ( info )
-    printf( "Image size = %ld bytes\n", swapword( hdr.Size ) );
+    printf( "Image size = %d bytes\n", swapword( hdr.Size ) );
 
   size = fread( &prog, 1, sizeof (Program), fd );
   
@@ -271,7 +322,7 @@ main(
   elif ( progtype == T_ResRef  ) type = "ResRef"; 
   
   if ( type == NULL )
-   { fprintf(stderr, "Invalid Module type: %lx\n",progtype );
+   { fprintf(stderr, "Invalid Module type: %x\n",progtype );
      exit(1);
    }
   
@@ -279,7 +330,7 @@ main(
     {
       printf( "Object type is %s\n",type );
   
-      printf( "Name is '%s' ",prog.Module.Name );
+      printf( "Name is '%.32s' ",prog.Module.Name );	/* Host port: %.32s, the name need not end in a NUL */
     }
   
   if ( name != 0 )
@@ -304,7 +355,7 @@ main(
   if ( swapword( prog.Module.Type ) == T_Program )
     {
       if ( info )
-	printf( "Stacksize = %ld ", swapword( prog.Stacksize ) );
+	printf( "Stacksize = %d ", swapword( prog.Stacksize ) );
       
       if ( stacksize != -1 )
 	{
@@ -317,7 +368,7 @@ main(
 	}
       
       if ( info )
-	printf( "\nHeapsize = %ld ", swapword( prog.Heapsize ) );
+	printf( "\nHeapsize = %d ", swapword( prog.Heapsize ) );
       
       if ( heapsize != -1 )
 	{

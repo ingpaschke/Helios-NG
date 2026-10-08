@@ -6,9 +6,18 @@ static char *rcsid = "$Header: /dsl/HeliosRoot/Helios/cmds/com/RCS/sysbuild.c,v 
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <sys/types.h>	/* Host port: fstat() */
+#include <sys/stat.h>
 #include "getargs.h" /* AM */
+/* Host port: format checking with gcc and clang; Helios C (Norcroft) */
+/* has no __attribute__ */
+#ifndef __GNUC__
+#define __attribute__(x)
+#endif
 
-#ifndef WORD
+/* Host port: WORD is ttypes.h's 32-bit word (via the host module.h),	*/
+/* not a long: the image header and the offset table are 32-bit words */
+#if !defined(WORD) && !defined(__helios_h)
 typedef long WORD;
 typedef char *STRING;
 typedef unsigned char UBYTE;
@@ -68,6 +77,9 @@ tidyup(WORD rc )
 	exit( (int) rc);
 }
 
+/* Host port: the printf format of every call is checked */
+void error( STRING str, ... ) __attribute__((format(printf, 1, 2)));
+
 void
 error(
       STRING str,
@@ -93,6 +105,14 @@ STRING *argv )
 	WORD 		sz;
 	STRING		dstname;
 	ArgStack	*argstack = NULL;
+
+#ifndef __HELIOS
+	if( !HostIsLittleEndian() )	/* Host port: see ttypes.h */
+	{
+		fprintf(stderr, "sysbuild: big-endian hosts are not supported\n");
+		exit(20);
+	}
+#endif
 
 	argc -= 2;
 	argv++;
@@ -150,7 +170,9 @@ STRING *argv )
 #if defined (IBMPC) || defined (MWC)
 	image = lmalloc(MEMSIZE);
 #else
-	image = (UBYTE *)malloc((int) MEMSIZE);
+	/* Host port: calloc(), the alignment padding of each part was	*/
+	/* never written (zero only because glibc maps a fresh block)	*/
+	image = (UBYTE *)calloc(1, (size_t) MEMSIZE);
 #endif
 
 	if( image == 0 ) error("Cannot allocate memory");
@@ -159,6 +181,9 @@ STRING *argv )
 	printf("Helios System Builder V1.7 21/6/90\n");
 	printf("(C) 1990-1993 Copyright Perihelion Distributed Software");
 	printf(" All Rights Reserved.\n");
+
+	/* Host port: the offset table must fit too */
+	if( ptabsize > (MEMSIZE - 8) / 4 ) error("Image size too large\n");
 
 	iptr = image + (8 + ptabsize*4);
 	iwd  = (WORD *)image;
@@ -171,6 +196,8 @@ STRING *argv )
 	{
 		WORD hdr[3];
 		WORD fsize;
+		WORD frest;
+		struct stat st;
 		int s;
 
 #if 0
@@ -214,7 +241,7 @@ STRING *argv )
 			error("Cannot open %s for input",nptr);
 
 		if((s=fread(hdr,1,12,infd)) != 12 )
-			error("Cannot read image file header: %s %ld",nptr,s);
+			error("Cannot read image file header: %s %d",nptr,s);	/* Host port: %d, was %ld */
 
 		/* Extract final part of name */
 		nptr = nptr + strlen(nptr);
@@ -237,6 +264,23 @@ STRING *argv )
 		if (((isize + fsize + 3) & ~3) > MEMSIZE)
 			error("Image size too large\n");
 
+		/* Host port: the size in the header was trusted. A negative	*/
+		/* size, or one near 2^31 (isize + fsize + 3 wraps and passes	*/
+		/* the test above), made fread() write the rest of the file	*/
+		/* past the image buffer. Check it against the bytes the file	*/
+		/* has after its header: where the read used to come up short	*/
+		/* the message is the same ("Bad header", bytes there, size),	*/
+		/* and a size that does not fit in the buffer is too large.	*/
+		if( fstat(fileno(infd), &st) == 0 && S_ISREG(st.st_mode) )
+		{
+			off_t rest = st.st_size - 12;
+			frest = rest > 0x7fffffff ? 0x7fffffff : (WORD)rest;
+			if( fsize < 0 || fsize > frest )
+				error("Bad header in file %s %d %d",argv[pp],frest,fsize);
+		}
+		if( fsize < 0 || fsize > MEMSIZE - isize )
+			error("Image size too large\n");
+
 #if defined (IBMPC) || defined (MWC)
 	{
 		WORD s = fsize;
@@ -252,9 +296,9 @@ STRING *argv )
 	}
 #else
 		if((sz=fread(iptr,1,(int)fsize,infd)) != fsize)
-			error("Bad header in file %s %ld %ld",argv[pp],sz,fsize);
+			error("Bad header in file %s %d %d",argv[pp],sz,fsize);	/* Host port: %d, was %ld */
 #endif
-		printf("%20s: offset %#8lx size %#8lx\n", nptr, isize, fsize );
+		printf("%20s: offset %#8x size %#8x\n", nptr, isize, fsize );	/* Host port: %x, was %lx */
 
 		/* align to next word boundary */
 		fsize = (fsize+3) & (~3);
@@ -313,7 +357,7 @@ STRING *argv )
 
 	fclose(outfd); outfd = NULL;
 	
-	printf("System size = %#lx (%ld)\n",isize, isize);
+	printf("System size = %#x (%d)\n",isize, isize);	/* Host port: %x %d, was %lx %ld */
 
 	tidyup(0L);
 	freeargs();
