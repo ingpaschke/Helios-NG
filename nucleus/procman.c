@@ -734,7 +734,9 @@ static void RunInit(void)
 	/* ROM system startup support - only definite fs server available at boot */
 	o = Locate(NULL,"/rom/sys/helios/lib/init");
 #else
-	o = Locate(NULL,"/helios/lib/init");
+	{ int t; /* hcc patch: retry, the first Search may race the I/O Server handshake */
+	  for( t = 0; (o = Locate(NULL,"/helios/lib/init")) == NULL && t < 20; t++ )
+		Delay(OneSec/4); }
 #endif
 
 	if( o == NULL ) { IOdebug("Cannot find init"); return; }
