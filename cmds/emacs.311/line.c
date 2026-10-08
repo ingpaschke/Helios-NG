@@ -1009,7 +1009,7 @@ char *PASCAL NEAR getctext()
 	register int size;	/* length of line to return */
 	register char *sp;	/* string pointer into line */
 	register char *dp;	/* string pointer into returned line */
-	char rline[NSTRING];	/* line to return */
+	static char rline[NSTRING];	/* hcc patch: static, it is returned */
 
 	/* find the contents of the current line and its length */
 	lp = curwp->w_dotp;

@@ -156,19 +156,19 @@ MC		tapcm[NPAT];		/* the reversed magic pattern	*/
 /* initialized global external declarations */
 
 extern  int     fillcol;                /* Fill column                  */
-extern  short   kbdm[1];                /* Holds kayboard macro data    */
-extern  char    pat[1];                 /* Search pattern               */
-extern	char	rpat[1];		/* Replacement pattern		*/
+extern  short   kbdm[];                /* Holds kayboard macro data    */
+extern  char    pat[];                 /* Search pattern               */
+extern	char	rpat[];		/* Replacement pattern		*/
 extern	char	*execstr;		/* pointer to string to execute	*/
-extern	char	golabel[1];		/* current line to go to	*/
+extern	char	golabel[];		/* current line to go to	*/
 extern	int	execlevel;		/* execution IF level		*/
 extern	int	eolexist;		/* does clear to EOL exist?	*/
 extern	int	revexist;		/* does reverse video exist?	*/
 extern	int	flickcode;		/* do flicker supression?	*/
-extern	char 	*modename[1];		/* text names of modes		*/
-extern	char	modecode[1];		/* letters to represent modes	*/
-extern	KEYTAB 	keytab[1];		/* key bind to functions table	*/
-extern	NBIND 	names[1];		/* name to function table	*/
+extern	char 	*modename[];		/* text names of modes		*/
+extern	char	modecode[];		/* letters to represent modes	*/
+extern	KEYTAB 	keytab[];		/* key bind to functions table	*/
+extern	NBIND 	names[];		/* name to function table	*/
 extern	int	gmode;			/* global editor mode		*/
 extern	int	gfcolor;		/* global forgrnd color (white)	*/
 extern	int	gbcolor;		/* global backgrnd color (black)*/
@@ -194,7 +194,7 @@ extern	int	reptc;			/* current universal repeat char */
 extern	int	abortc;			/* current abort command char	*/
 
 extern	int	quotec;			/* quote char during mlreply() */
-extern	char	*cname[1];		/* names of colors		*/
+extern	char	*cname[];		/* names of colors		*/
 extern KILL *kbufp;			/* current kill buffer chunk pointer */
 extern KILL *kbufh;			/* kill buffer header pointer	*/
 extern  WINDOW  *wheadp;                /* Head of list of windows      */
@@ -211,11 +211,11 @@ extern	int lastkey;			/* last keystoke		*/
 extern	int seed;			/* random number seed		*/
 extern	long envram;		/* # of bytes current in use by malloc */
 extern	int	macbug;			/* macro debuging flag		*/
-extern	char	errorm[1];		/* error literal		*/
-extern	char	truem[1];		/* true literal			*/
-extern	char	falsem[1];		/* false litereal		*/
+extern	char	errorm[];		/* error literal		*/
+extern	char	truem[];		/* true literal			*/
+extern	char	falsem[];		/* false litereal		*/
 extern	int	cmdstatus;		/* last command status		*/
-extern	char	palstr[1];		/* palette string		*/
+extern	char	palstr[];		/* palette string		*/
 
 /* uninitialized global external declarations */
 
@@ -232,9 +232,9 @@ extern  BUFFER  *bfind();               /* Lookup a buffer by name      */
 extern  WINDOW  *wpopup();              /* Pop up window creation       */
 extern  LINE    *lalloc();              /* Allocate a line              */
 extern	char	sres[NBUFN];		/* current screen resolution	*/
-extern	char    pat[1];                 /* Search pattern		*/
-extern	char	tap[1];			/* Reversed pattern array.	*/
-extern	char	rpat[1];		/* replacement pattern		*/
+extern	char    pat[];                 /* Search pattern		*/
+extern	char	tap[];			/* Reversed pattern array.	*/
+extern	char	rpat[];		/* replacement pattern		*/
 
 #if	FIXSG & REVSTA
 extern	int	SG;			/* number of standout glitches	*/
@@ -249,8 +249,8 @@ extern	int	matchoff;		/* offset to the found string	*/
 #if	MAGIC
 
 extern	short		magical;	/* meta-characters in pattern?	*/
-extern	MC		mcpat[1];	/* the magic pattern		*/
-extern	MC		tapcm[1];	/* the reversed magic pattern	*/
+extern	MC		mcpat[];	/* the magic pattern		*/
+extern	MC		tapcm[];	/* the reversed magic pattern	*/
 
 #endif
 
