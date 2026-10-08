@@ -574,7 +574,7 @@ static	int	uninitialised_pointer_aux1(void)
 }
 
 static void	uninitialised_pointer_aux2(void)
-{ word	*pointer;
+{ word	* volatile pointer;	/* hcc patch: keep the wild store */
   *pointer = rand();
 }
 
