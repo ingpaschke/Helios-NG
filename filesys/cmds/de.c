@@ -651,7 +651,6 @@ void putfile(void *buf, int offset)
 	if( nblocks )
 	{
 		printf("Double indirect: %d\n",de->de_inode.i_ib[1]);
-		printf("Triple indirect: %d\n",de->de_inode.i_ib[2]);
 	}
 	
 	free(ibuf);
@@ -835,7 +834,6 @@ int killblock(int blk)
 	cgnr = btocg(blk);
 	cgib = cgtoib(cgnr);
 	cgblk = btocgb(blk);
-	cgsum = ib->cgx.cg_s;
 	
 	if( !readblock(blockbuf,cgib) )
 	{
