@@ -122,7 +122,7 @@ clnttcp_create(raddr, prog, vers, sockp, sendsz, recvsz)
 	u_int recvsz;
 {
 	CLIENT *h;
-	register struct ct_data *ct;
+	register struct ct_data *ct = NULL;	/* hcc patch: freed at fooy */
 	struct timeval now;
 	struct rpc_msg call_msg;
 
@@ -220,8 +220,10 @@ fooy:
 	/*
 	 * Something goofed, free stuff and barf
 	 */
-	mem_free((caddr_t)ct, sizeof(struct ct_data));
-	mem_free((caddr_t)h, sizeof(CLIENT));
+	if (ct)	/* hcc patch: only what was allocated */
+		mem_free((caddr_t)ct, sizeof(struct ct_data));
+	if (h)
+		mem_free((caddr_t)h, sizeof(CLIENT));
 	return ((CLIENT *)NULL);
 }
 
