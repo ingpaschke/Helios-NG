@@ -9,6 +9,7 @@ static char *RcsId = "$Id: builtin.c,v 1.10 1994/03/08 13:05:34 nickc Exp $ Copy
 #endif
   
 #include "ampp.h"
+#include <signal.h>	/* Host port: raise() */
 #include <string.h>
   
 #define trace if(traceflags&db_builtin)_trace
@@ -215,7 +216,8 @@ PRIVATE void define(INT isdefq )
 
         getdef(&(macro->def));			/* get the following item */
 
-        adddef((WORD)s_macro,sym,(INT)macro); 	/* add it to the definition stack for sym */
+        adddef((WORD)s_macro,sym,(intptr_t)macro); 	/* add it to the definition stack for sym */
+						/* Host port: was (INT)macro */
 }
 
 PRIVATE void def() { define(FALSE); }
@@ -392,13 +394,58 @@ static WORD nextchar(defpos *x)
 /*                                                      */
 /********************************************************/
 
+/*
+ * Host port: the text of a def as one malloc'd string.  A def is a stack
+ * of Charbufs of charbuf_max (256) bytes, the newest at the head; include
+ * and _report used the head buffer only and wrote the NUL one byte past
+ * it when it was full.  For a text of fewer than 256 bytes the string is
+ * the same.
+ */
+PRIVATE char *defstring(struct List *def)
+{
+        struct Charbuf *buf;
+        size_t len = 0;
+        char *str, *p;
+
+        for( buf = (struct Charbuf *)(def->Tail); buf->node.Prev != NULL;
+             buf = (struct Charbuf *)(buf->node.Prev) )
+                len += buf->size;
+
+        p = str = alloc((INT)len + 1);
+
+        for( buf = (struct Charbuf *)(def->Tail); buf->node.Prev != NULL;
+             buf = (struct Charbuf *)(buf->node.Prev) )
+        {
+                memcpy(p, buf->text, (size_t)buf->size);
+                p += buf->size;
+        }
+        *p = '\0';
+        return str;
+}
+
+/*
+ * Host port: incdir + "/" + name in a malloc'd string, was a char[128]
+ * (an include directory and name of 127 characters or more overflowed
+ * it).  The '/' is always added, as before: the old test
+ * path[strlen(path)] != '/' looked at the NUL.
+ */
+PUBLIC char *incpath(char *dir, char *name)
+{
+        char *path = alloc((INT)(strlen(dir) + strlen(name) + 2));
+
+        strcpy(path, dir);
+        strcat(path, "/");
+        strcat(path, name);
+        return path;
+}
+
 PRIVATE void include()
 {
         jmp_buf errlev;
         jmp_buf oldreclev;
 
         struct List		filebuf;
-        struct Charbuf *	fname;
+        char *			fname;	/* Host port: defstring(), was the head Charbuf */
         FILE *			oldin   = infd;
 	INT			oldline = in_line;
 	char *			oldfile = infile;
@@ -406,12 +453,11 @@ PRIVATE void include()
 	memcpy(oldreclev, reclev, sizeof(jmp_buf));
 
         getdef1(&filebuf);
-        fname = (struct Charbuf *)(filebuf.Head);
-        fname->text[fname->size] = '\0';
+        fname = defstring(&filebuf);
 
-	file_trace("Include: %s",fname->text);
+	file_trace("Include: %s",fname);
 
-        infd = fopen(fname->text,"r");
+        infd = fopen(fname,"r");
 	
 	if( infd == NULL)
 	{
@@ -419,26 +465,26 @@ PRIVATE void include()
 	  
 	  for (i = MAX_INCLUDE_PATHS; i--;)
 	    {
-	      char path[128];
+	      char *path;
 
 	      if (incpaths[ i ] == NULL)
 		continue;
 	      
-	      strcpy(path,incpaths[i]);
-	      if( path[strlen(path)] != '/' ) strcat(path,"/");
-	      strcat(path,fname->text);
+	      path = incpath(incpaths[i], fname);
 	      file_trace("FAILED trying: %s", path);
 	      infd = fopen(path, "r");
+	      free(path);
 
 	      if (infd != NULL)
 		break;
 	    }
 	}
 
-        if ( infd == NULL ) error( "Cannot open %s for input", fname->text );
+        if ( infd == NULL ) error( "Cannot open %s for input", fname );
         else
 	  {
-	    BYTE *	pbsave = NULL;
+	    /* Host port: volatile, it is live across the longjmp to errlev */
+	    BYTE * volatile	pbsave = NULL;
 
 	    
 	    file_trace( "Succeded" );
@@ -447,7 +493,7 @@ PRIVATE void include()
 	      {
 		WORD nesting = 0;
 
-		infile  = fname->text;
+		infile  = fname;
 		in_line = 1;
 		pbsave  = savepb();
 		
@@ -470,6 +516,7 @@ PRIVATE void include()
 	infile  = oldfile;
 	in_line = oldline;
         symb    = 0;
+	free(fname);
 }
 
 PRIVATE void file()
@@ -534,7 +581,6 @@ PRIVATE void evaluate()
 PRIVATE void rep()
 {
         struct List textbuf;
-        struct Charbuf *text;
 
         getdef1(&textbuf);
 
@@ -544,11 +590,10 @@ PRIVATE void rep()
 	  }
 	else
 	  {
-	    text = (struct Charbuf *)(textbuf.Head);
+	    char *text = defstring(&textbuf);	/* Host port: was the head Charbuf */
 
-	    text->text[text->size] = '\0';
-
-	    report(text->text);
+	    report("%s", text);	/* Host port: "%s", the text was the format */
+	    free(text);
 	  }
 	
         freebuf(&textbuf);
@@ -641,6 +686,13 @@ PRIVATE void arith(int op )			/* note: this is a native integer */
         left  = evalexp(); ltype = symb;
         right = evalexp(); rtype = symb;
 
+	/* Host port: x86 (the i386 reference) traps on a division by	*/
+	/* zero and on MinInt / -1, AArch64 does not: raise the signal	*/
+	/* on every host							*/
+	if( (op == s_div || op == s_mod) &&
+	    (right == 0 || (right == -1 && left == (INT)MinInt)) )
+		raise(SIGFPE);
+
         switch( op )
         {
         case s_plus : result = left + right; break;
@@ -706,10 +758,16 @@ PRIVATE void strsize()
 {
         struct List textbuf;
         struct Charbuf *text;
+        INT size = 0;
 	
         getdef1(&textbuf);
-        text = (struct Charbuf *)(textbuf.Head);
-	pbnum(text->size);
+        /* Host port: the size of every Charbuf, was the head one's only  */
+        /* (a longer text gave the size of its last 256-byte piece), 0 for */
+        /* an empty text, where the list header was read as a Charbuf     */
+        for( text = (struct Charbuf *)(textbuf.Tail); text->node.Prev != NULL;
+             text = (struct Charbuf *)(text->node.Prev) )
+                size += text->size;
+	pbnum(size);
 
         freebuf(&textbuf);
 }
@@ -793,56 +851,58 @@ PRIVATE void cdr() { carcdr(FALSE); }
 
 PUBLIC void initbuiltin()
 {
+	/* Host port: the builtin functions are passed as (intptr_t), not	*/
+	/* (INT), which is too narrow for a pointer on LP64			*/
 	/* Macro definition and evaluation */
-        adddef((WORD)s_builtin,insert("_def"),  (INT) def);
-        adddef((WORD)s_builtin,insert("_defq"), (INT) defq);
-        adddef((WORD)s_builtin,insert("_undef"),(INT) undefine);
-        adddef((WORD)s_builtin,insert("_eval"), (INT) evaluate);
-        adddef((WORD)s_builtin,insert("_set"),  (INT) set);
+        adddef((WORD)s_builtin,insert("_def"),  (intptr_t) def);
+        adddef((WORD)s_builtin,insert("_defq"), (intptr_t) defq);
+        adddef((WORD)s_builtin,insert("_undef"),(intptr_t) undefine);
+        adddef((WORD)s_builtin,insert("_eval"), (intptr_t) evaluate);
+        adddef((WORD)s_builtin,insert("_set"),  (intptr_t) set);
 
 	/* conditionals */
-        adddef((WORD)s_builtin,insert("_if"),  (INT) ifthen);
-        adddef((WORD)s_builtin,insert("_test"),(INT) test);
-        adddef((WORD)s_builtin,insert("_defp"),(INT) defp);
-        adddef((WORD)s_builtin,insert("_compare"), (INT) compare);
+        adddef((WORD)s_builtin,insert("_if"),  (intptr_t) ifthen);
+        adddef((WORD)s_builtin,insert("_test"),(intptr_t) test);
+        adddef((WORD)s_builtin,insert("_defp"),(intptr_t) defp);
+        adddef((WORD)s_builtin,insert("_compare"), (intptr_t) compare);
 	
 	/* file inclusion */
-        adddef((WORD)s_builtin,insert("_include"),(INT) include);
-	adddef((WORD)s_builtin,insert("_file"),(INT) file);
+        adddef((WORD)s_builtin,insert("_include"),(intptr_t) include);
+	adddef((WORD)s_builtin,insert("_file"),(intptr_t) file);
 
 	/* arithmetic */
-        adddef((WORD)s_builtin,insert("_add"),(INT) add);
-        adddef((WORD)s_builtin,insert("_sub"),(INT) sub);
-        adddef((WORD)s_builtin,insert("_mul"),(INT) mul);
-        adddef((WORD)s_builtin,insert("_div"),(INT) div2);
-        adddef((WORD)s_builtin,insert("_mod"),(INT) mod);
+        adddef((WORD)s_builtin,insert("_add"),(intptr_t) add);
+        adddef((WORD)s_builtin,insert("_sub"),(intptr_t) sub);
+        adddef((WORD)s_builtin,insert("_mul"),(intptr_t) mul);
+        adddef((WORD)s_builtin,insert("_div"),(intptr_t) div2);
+        adddef((WORD)s_builtin,insert("_mod"),(intptr_t) mod);
         
        	/* radix conversion */
-        adddef((WORD)s_builtin,insert("_hex"),(INT) hex);
+        adddef((WORD)s_builtin,insert("_hex"),(intptr_t) hex);
 
        	/* string processing */
-        adddef((WORD)s_builtin,insert("_strsize"),(INT) strsize);
+        adddef((WORD)s_builtin,insert("_strsize"),(intptr_t) strsize);
 
 	/* relationals */
-	adddef((WORD)s_builtin,insert("_gt"),(INT) gt);
-	adddef((WORD)s_builtin,insert("_lt"),(INT) lt);
-	adddef((WORD)s_builtin,insert("_ge"),(INT) ge);
-	adddef((WORD)s_builtin,insert("_le"),(INT) le);
-	adddef((WORD)s_builtin,insert("_eq"),(INT) eq);
-	adddef((WORD)s_builtin,insert("_ne"),(INT) ne);
+	adddef((WORD)s_builtin,insert("_gt"),(intptr_t) gt);
+	adddef((WORD)s_builtin,insert("_lt"),(intptr_t) lt);
+	adddef((WORD)s_builtin,insert("_ge"),(intptr_t) ge);
+	adddef((WORD)s_builtin,insert("_le"),(intptr_t) le);
+	adddef((WORD)s_builtin,insert("_eq"),(intptr_t) eq);
+	adddef((WORD)s_builtin,insert("_ne"),(intptr_t) ne);
 
 	/* booleans */
-        adddef((WORD)s_builtin,insert("_not"),(INT) not);
-	adddef((WORD)s_builtin,insert("_and"),(INT) and);
-	adddef((WORD)s_builtin,insert("_or"), (INT) or);
+        adddef((WORD)s_builtin,insert("_not"),(intptr_t) not);
+	adddef((WORD)s_builtin,insert("_and"),(intptr_t) and);
+	adddef((WORD)s_builtin,insert("_or"), (intptr_t) or);
 	
 	/* list manipulation */
-	adddef((WORD)s_builtin,insert("_car"),(INT) car);
-	adddef((WORD)s_builtin,insert("_cdr"),(INT) cdr);
+	adddef((WORD)s_builtin,insert("_car"),(intptr_t) car);
+	adddef((WORD)s_builtin,insert("_cdr"),(intptr_t) cdr);
 	
 	/* debugging aids */
-	adddef((WORD)s_builtin,insert("_report"),(INT) rep);
-	adddef((WORD)s_builtin,insert("_repdef"),(INT) repdef);
+	adddef((WORD)s_builtin,insert("_report"),(intptr_t) rep);
+	adddef((WORD)s_builtin,insert("_repdef"),(intptr_t) repdef);
 
 	/* standard tokens */
         truesym = insert(TRUESTRING);

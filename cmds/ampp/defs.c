@@ -23,7 +23,7 @@ static struct Def *freedefs = NULL;
 PUBLIC void adddef(
 		   INT type,
 		   struct Symbol *sym,
-		   INT value )
+		   intptr_t value )	/* Host port: was INT */
 {
         struct Def *def = freedefs;
         
@@ -33,7 +33,11 @@ PUBLIC void adddef(
         def->type = type;
         def->sym = sym;
         def->prev = sym->definition;
-        def->Value.value = value;
+        /* Host port: store a pointer in the pointer member of the	*/
+        /* union, where it is read back (was def->Value.value = value)	*/
+        if( type == s_macro ) def->Value.macro = (struct Macro *)value;
+        else if( type == s_builtin ) def->Value.builtin = (void (*)())value;
+        else def->Value.value = (INT)value;
 
         sym->definition = def;
 }

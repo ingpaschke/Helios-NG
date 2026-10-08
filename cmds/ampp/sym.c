@@ -46,10 +46,10 @@ PUBLIC struct Symbol *lookup(BYTE *name)
         struct Symbol *sym = (struct Symbol *)(Symtab[hash(name)].Head);
 
 	trace("Lookup %s %d",name,hash(name));
-	trace("Queue = %x",&Symtab[hash(name)]);
+	trace("Queue = %p",&Symtab[hash(name)]);	/* Host port: %p, was %x */
         while ( sym->node.Next != NULL )
         {
-		trace("Sym = %x %x %x %s",sym,sym->node.Next,sym->node.Prev,sym->name);
+		trace("Sym = %p %p %p %s",sym,sym->node.Next,sym->node.Prev,sym->name);	/* Host port: %p, was %x */
                 if( strncmp(name,sym->name,31)==0 )
                 {
                         trace("Symbol '%s' found in table",name);
@@ -78,9 +78,9 @@ PUBLIC struct Symbol *insert(BYTE *name)
         cps(name,sym->name);
         sym->definition = NULL;
 
-        trace("Adding '%s' to table at offset %d sym = %8x",name,hash(name),sym);
+        trace("Adding '%s' to table at offset %d sym = %8p",name,hash(name),sym);	/* Host port: %p, was %x */
         AddTail(&(Symtab[hash(name)]),(Node *)sym);
-	trace("Sym = %x %x %x %s",sym,sym->node.Next,sym->node.Prev,sym->name);
+	trace("Sym = %p %p %p %s",sym,sym->node.Next,sym->node.Prev,sym->name);	/* Host port: %p, was %x */
 
         return sym;
 }
@@ -115,7 +115,7 @@ PRIVATE void cps(
 INT hash(char *s)
 {
         char *p;
-        unsigned long h = 0, g;
+        UWORD h = 0, g;		/* Host port: 32 bits, was unsigned long */
         for( p = s ; *p != 0 ; p++ )
         {
                 h = (h << 4) + *p;

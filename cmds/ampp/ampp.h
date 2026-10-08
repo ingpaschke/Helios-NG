@@ -3,11 +3,18 @@
 #ifdef __HELIOS
 # include <helios.h>
 # include <queue.h>
+/* Host port: Helios has no <stdint.h>; a long holds a pointer there */
+typedef long		intptr_t;
 #else
 # include "ttypes.h"
 # include "queue.h"
 #endif
 #include <setjmp.h>
+/* Host port: format checking with gcc and clang; Helios C (Norcroft) */
+/* has no __attribute__ */
+#ifndef __GNUC__
+#define __attribute__(x)
+#endif
 #ifdef __STDC__
 # include <stdlib.h>
 # include <stdarg.h>
@@ -61,7 +68,9 @@ extern WORD traceflags;
 struct Symbol {
    struct Node    node;
    struct Def     *definition;
-   char           name[32];
+   /* Host port: cps() in sym.c stores up to 32 characters and a NUL;	*/
+   /* the 1990 buffer had no room for the NUL (was name[32]).		*/
+   char           name[33];
 };
 
 
@@ -157,7 +166,7 @@ extern BYTE *		infile;
 extern BYTE *		outfile;
 extern INT		traceflags;
 extern INT		symb;
-extern BYTE		token[ 128 ];
+extern BYTE *		token;	/* Host port: grows, was [ 128 ] */
 extern struct Def *	tokdef;
 extern struct Symbol *	toksym;
 extern INT		toksize;
@@ -170,11 +179,12 @@ extern BYTE *		pbspos;
 extern BYTE *		pbsbase;
 
 #ifdef __STDC__
-extern void 		error(BYTE *, ...);
-extern void		report(BYTE  *,  ...);
-extern void		warn(BYTE *,  ...);
-extern void		_trace(char *, ...);
-extern void		recover(BYTE *str,...);
+/* Host port: the printf format of every call is checked */
+extern void 		error(BYTE *, ...) __attribute__((format(printf, 1, 2)));
+extern void		report(BYTE  *,  ...) __attribute__((format(printf, 1, 2)));
+extern void		warn(BYTE *,  ...) __attribute__((format(printf, 1, 2)));
+extern void		_trace(char *, ...) __attribute__((format(printf, 1, 2)));
+extern void		recover(BYTE *str,...) __attribute__((format(printf, 1, 2)));
 #else
 extern 			error();
 extern			warn();
@@ -190,9 +200,10 @@ extern INT		get_char();
 #endif
 
 /* @@@ the following prototypes should also be converted to STDC */
-extern			main( int, char ** );
+extern int		main( int, char ** );	/* Host port: was implicit int */
 extern INT		max( INT, INT );
 extern char *		alloc( INT );
+extern char *		incpath( char *, char * );	/* Host port */
 extern void		initbuiltin( void );
 extern void		builtin( void );
 extern void		getdef( struct List * );
@@ -200,7 +211,10 @@ extern void 		initcs( void );
 extern void		addch( struct List *, BYTE );
 extern INT		popch( struct List * );
 extern void		freebuf( struct List * );
-extern void		adddef( INT, struct Symbol *, INT );
+/* Host port: the value is a variable's value, a struct Macro * or a	*/
+/* builtin function, so it is passed as an intptr_t (an INT is 32 bits	*/
+/* on every host now, too narrow for a pointer on LP64)			*/
+extern void		adddef( INT, struct Symbol *, intptr_t );
 extern void		unwind( struct Symbol * );
 extern void		nextsym( void );
 extern void		skipspaces( void );
