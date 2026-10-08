@@ -40,6 +40,9 @@ DIR *opendir( char * pathname )
 	CHECKSIGS();
 	if( path == NULL )
 	{ e = ENOMEM; goto done; }
+
+	if( length > PATH_MAX )
+	{ e = ENAMETOOLONG; goto done; }
 		
 	strcpy(path, pathname);
 	if ((length > 1) && (path[length - 1] == '/')) path[length - 1] = '\0';
