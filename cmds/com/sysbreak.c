@@ -125,14 +125,15 @@ int main(int argc,STRING *argv)
 	  exit (EXIT_FAILURE);
       }
             
-      for (i = 0; i < n_words; i++)
+      for (i = 1; i < n_words; i++)	/* hhead patch: word 0 (size) is in */
       {
 	  if (fread ((char *)(&w), 1, 4, nucleus_source) != 4)
 	  {
 	      fprintf (stderr, "Failed to read word %d.  I give up!\n", i);
 	      fclose (nucleus_source);
+	      exit (EXIT_FAILURE);	/* hhead patch */
 	  }
-	  image[i * sizeof (long)] = swap_(w);
+	  ((long *)image)[i] = swap_(w);	/* hhead patch: a word, not a byte */
       }
   }
 #endif  
