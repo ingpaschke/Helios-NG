@@ -509,7 +509,7 @@ static void	last_page(void)
 { int	skipped = 0;
 
   first_processor = number_processors - 1;
-  while ((first_processor > 0) && !(is_processor_visible))
+  while ((first_processor > 0) && !is_processor_visible(first_processor))
    first_processor--;
   current_processor = first_processor;
 
