@@ -33,7 +33,7 @@
 static char *skipname(char *p);
 static char *skipspace(char *p);
 static int strtonum(char *s);
-static void rdline(FDB *fdb, char *buf);
+static void rdline(FDB *fdb, char *buf, int size);
 static int rdch(FDB *fdb);
 static void addhex(char *text, word val);
 static word addint(char *s, word i);
@@ -119,9 +119,11 @@ extern int fdbfind(FDB *fdb, char *Class, word code, char *text, word tsize)
 	bool foundclass = FALSE;
 	int codeval, Classbits = 0;
 
+	if( line == NULL ) return strlen(text);
+
 	forever
 	{
-		rdline(fdb,line);
+		rdline(fdb,line,100);
 
 		switch( line[0] )
 		{
@@ -337,8 +339,10 @@ static void addhex(char *text, word val)
 	*text = 0;
 }
 
-static void rdline(FDB *fdb, char *buf)
+/* read a line into buf[size]; the rest of a longer line is skipped */
+static void rdline(FDB *fdb, char *buf, int size)
 {
+	char *end = buf + size - 1;
 	forever
 	{
 		int c = rdch(fdb);
@@ -347,7 +351,7 @@ static void rdline(FDB *fdb, char *buf)
 			break;
 		}
 		if( c == '\r' ) continue;
-		*buf++ = c;
+		if( buf < end ) *buf++ = c;
 		if( c == '\n' ) break;	
 	}
 	*buf = 0;
