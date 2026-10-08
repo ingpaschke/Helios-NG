@@ -3038,6 +3038,9 @@ PMTRACE(0x13);
 	mpos = strlen(mcname);
 	tpos = strlen(toname);
 
+	/* toname must end with mcname, so it cannot be shorter */
+	if( tpos < mpos ) goto badname;
+
 	until( mpos == 0 )
 		if( mcname[--mpos] != toname[--tpos] ) goto badname;
 
