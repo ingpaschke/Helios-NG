@@ -190,7 +190,8 @@ double d; int n;
     nx = (int) d1.i.x + n;
     if (nx >= 0x7ff)
     { errno = ERANGE;
-      return HUGE_VAL;              /* overflow yields 'infinity'        */
+      /* overflow yields 'infinity' of the sign of d (ANSI 4.5.4.3)     */
+      return d < 0.0 ? -HUGE_VAL : HUGE_VAL;
     }
 /* Maybe I should be prepared to generate un-normalized numbers here, or */
 /* even deal with input d un-normalized and n positive yielding a proper */
