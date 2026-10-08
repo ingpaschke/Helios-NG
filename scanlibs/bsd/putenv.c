@@ -75,7 +75,7 @@ putenv( register char * variable )
 	   * the memory may not be ours
 	   */
 	  
-	  environ[ index ] = (char *) malloc( (unsigned)len + strlen( value ) + 1 );
+	  environ[ index ] = (char *) malloc( (unsigned)len + (value != NULL ? strlen( value ) : 0) + 1 );
 	  
 	  if (environ[ index ] != NULL)
 	    {
@@ -126,7 +126,7 @@ putenv( register char * variable )
 
       /* add new entry */
       
-      environ[ index ] = (char *) malloc( (unsigned)len + strlen( value ) + 1 );
+      environ[ index ] = (char *) malloc( (unsigned)len + (value != NULL ? strlen( value ) : 0) + 1 );
 
       if (environ[ index ] != NULL)
 	{
