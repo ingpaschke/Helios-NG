@@ -428,8 +428,12 @@ ip_reass(
 			break;
 		}
 		q = q->ipf_next;
-		m_freem(dtom(q->ipf_prev));
-		ip_deq(q->ipf_prev);
+		{
+			/* unlink the covered fragment before freeing it */
+			struct ipasfrag *covered = q->ipf_prev;
+			ip_deq(covered);
+			m_freem(dtom(covered));
+		}
 	}
 
 insert:
