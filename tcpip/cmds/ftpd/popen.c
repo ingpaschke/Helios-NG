@@ -41,7 +41,7 @@ static char sccsid[] = "@(#)popen.c	5.2 (Berkeley) 9/22/88";
 #define getdtablesize() (64)
 #endif
 
-#include "/giga/HeliosRoot/Helios/tcpip/cmds/ftpd/ftpd.h" /* "ftpd.h" */
+#include "ftpd.h"
   
 /*
  * Special version of popen which avoids call to shell.  This insures noone
