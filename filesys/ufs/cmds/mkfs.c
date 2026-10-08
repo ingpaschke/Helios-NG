@@ -969,7 +969,7 @@ malloc(size)
 	register u_long size;
 {
 #ifdef __HELIOS
-        Malloc(size);
+        return ((caddr_t)Malloc(size));	/* warnings patch */
 #else
 	u_long base, i;
 	static u_long pgsz;
