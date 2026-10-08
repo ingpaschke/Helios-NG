@@ -89,7 +89,8 @@ udp_input(
 	 */
 	len = ntohs((u_short)ui->ui_ulen);
 	if (((struct ip *)ui)->ip_len != len) {
-		if (len > ((struct ip *)ui)->ip_len) {
+		if (len > ((struct ip *)ui)->ip_len ||
+		    len < sizeof (struct udphdr)) {
 			udpstat.udps_badlen++;
 			
 			goto bad;
