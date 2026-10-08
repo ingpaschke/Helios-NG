@@ -432,7 +432,13 @@ retry:
 
 	if((e = PutMsg(&m)) < Err_Null) goto done;
 
-	if( control == Null(word) ) goto done;
+	/* no room for the environment: the sender has been told, and the	*/
+	/* caller must be told too (e is PutMsg's Err_Null here)		*/
+	if( control == Null(word) )
+	{
+		e = EC_Error+SS_SysLib+EG_NoMemory+EO_Message;
+		goto done;
+	}
 		
 	/* we are now ready for the environment message */
 
