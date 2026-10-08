@@ -654,9 +654,10 @@ static void writenum1(unsigned int i, int base )
 
 static void writenum(int i, int base)
 {
-	if( i<0 && base==10 ) { i=-i; BufIOputc('-'); }
-	if( i == 0 ) BufIOputc('0');
-	else writenum1(i,base);
+	unsigned int u = (unsigned int)i;	/* -INT_MIN overflows an int */
+	if( i<0 && base==10 ) { u=-u; BufIOputc('-'); }
+	if( u == 0 ) BufIOputc('0');
+	else writenum1(u,base);
 }
 
 static void writestr(char *s)
