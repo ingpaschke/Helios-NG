@@ -679,7 +679,7 @@ printf("dispatch  uid=%d   gid=%d     Msg %x\n",uid,gid,e);
 
   /* Any panic ? */
   if ((e = TestSemaphore(&ClientsActive)) > 0) {
-	printf("dispatcher panic, terminating when %d calls still active\n");
+	printf("dispatcher panic, terminating when %d calls still active\n", e);
 	WalkList(&ClientsRoot,(WordFnPtr)show_client_active,NULL);
   }
 }
