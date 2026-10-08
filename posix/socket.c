@@ -129,7 +129,7 @@ int socket(int domain, int type, int protocol)
 	f->pstream = p;
 
 done:
-	if( e < 0 )
+	if( e != 0 )
 	{
 		errno = posix_error(e);
 		if( s != NULL ) Close(s);
@@ -216,7 +216,7 @@ int accept(int fd, struct sockaddr *addr, int *len)
 
 done:	
 
-	if( e < 0 )
+	if( e != 0 )
 	{
 		errno = posix_error(e);
 		if( s1 != NULL ) Close(s1);
