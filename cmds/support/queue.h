@@ -20,4 +20,15 @@ typedef struct List {
         struct Node *Tail;      /* tail node on list            */
 } List;
 
+/* Host port: prototypes of queue.c (callers such as c.c declared none, */
+/* so Remove()'s pointer result was an implicit int)                    */
+extern void		InitList( struct List * );
+extern void		AddTail( struct List *, struct Node * );
+extern void		AddHead( struct List *, struct Node * );
+extern struct Node *	RemHead( struct List * );
+extern struct Node *	RemTail( struct List * );
+extern void		PreInsert( struct Node *, struct Node * );
+extern void		PostInsert( struct Node *, struct Node * );
+extern struct Node *	Remove( struct Node * );
+
 #endif
