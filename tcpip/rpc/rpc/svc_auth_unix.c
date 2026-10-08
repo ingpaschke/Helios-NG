@@ -78,6 +78,13 @@ _svcauth_unix(rqst, msg)
 	if (buf != NULL) {
 		aup->aup_time = IXDR_GET_LONG(buf);
 		str_len = (int) IXDR_GET_U_LONG(buf);
+		/* the name and its terminator must fit area_machname, and	*/
+		/* the name the credential (checked fully below)		*/
+		if (str_len < 0 || str_len >= MAX_MACHINE_NAME ||
+		    5 * BYTES_PER_XDR_UNIT + RNDUP(str_len) > auth_len) {
+			stat = AUTH_BADCRED;
+			goto done;
+		}
 		bcopy((caddr_t)buf, aup->aup_machname, (u_int)str_len);
 		aup->aup_machname[str_len] = 0;
 		str_len = RNDUP(str_len);
