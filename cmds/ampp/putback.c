@@ -56,7 +56,7 @@ PUBLIC void pbchar(UBYTE ch)
 #endif
         if( pbspos == pbstack ) 
         {	
-	        _trace("1 pbstack: %x %x %x",pbstack,pbsbase,pbspos);
+	        _trace("1 pbstack: %p %p %p",pbstack,pbsbase,pbspos);	/* Host port: %p, was %x */
         	error("Put back stack full");
 	}
         *(--pbspos) = ch;
@@ -68,7 +68,7 @@ PUBLIC void pbstr(BYTE *s)
 	pbspos -= size;        
         if( pbspos <= pbstack ) 
         {
-        	_trace("2 pbstack: %x %x %x",pbstack,pbsbase,pbspos);
+        	_trace("2 pbstack: %p %p %p",pbstack,pbsbase,pbspos);	/* Host port: %p, was %x */
         	error("Put back stack full");
         }
 #if DBPB
@@ -171,7 +171,7 @@ PUBLIC void pbdef(struct List *def)
 		
                 if( buf->size < 0 || buf->size > 1000000 )
                 {
-                	_trace("def = %x buf = %x buf->size = %x",def,buf,buf->size);
+                	_trace("def = %p buf = %p buf->size = %x",def,buf,buf->size);	/* Host port: %p, was %x */
                 	error("Invalid def buffer");
                 }
                 
@@ -179,8 +179,8 @@ PUBLIC void pbdef(struct List *def)
                 
                 if( pbspos == pbstack ) 
                 {
-                	_trace("def = %x buf = %x buf->size = %x",def,buf,buf->size);
-                	_trace("3 pbstack: %x %x %x",pbstack,pbsbase,pbspos);
+                	_trace("def = %p buf = %p buf->size = %x",def,buf,buf->size);	/* Host port: %p, was %x */
+                	_trace("3 pbstack: %p %p %p",pbstack,pbsbase,pbspos);	/* Host port: %p, was %x */
                 	error("Put back stack full");
                 }
 

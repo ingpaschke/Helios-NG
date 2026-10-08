@@ -94,7 +94,7 @@ error( BYTE * str, ... )
       va_start( ap, str );
 
       if (infile != NULL && *infile != '\0')
-	fprintf( verfd, "AMPP: Error: %s %ld : ", infile, in_line );
+	fprintf( verfd, "AMPP: Error: %s %d : ", infile, in_line );	/* Host port: %d, was %ld */
       else
 	fprintf( verfd, "AMPP: Error: " );
 
@@ -125,7 +125,7 @@ warn( BYTE * str, ... )
   va_start( ap, str );
 
   if (infile != NULL && *infile != '\0')
-    fprintf( verfd, "AMPP: Warning: %s %ld : ", infile, in_line );
+    fprintf( verfd, "AMPP: Warning: %s %d : ", infile, in_line );	/* Host port: %d, was %ld */
   else
     fprintf( verfd, "AMPP: Warning: " );
 
@@ -199,7 +199,7 @@ recover( BYTE * str, ... )
       va_start( ap, str );
 
       if (infile != NULL && *infile != '\0')
-	fprintf( verfd, "AMPP: Warning: %s %ld : ", infile, in_line );
+	fprintf( verfd, "AMPP: Warning: %s %d : ", infile, in_line );	/* Host port: %d, was %ld */
       else
 	fprintf( verfd, "AMPP: Warning: " );
 
@@ -415,7 +415,7 @@ parsearg(
 		  
 		  AddHead( &macro->def, &buf->node );
 		  
-		  adddef( (INT)s_macro, sym, (INT)macro );
+		  adddef( (INT)s_macro, sym, (intptr_t)macro );	/* Host port: was (INT)macro */
 		  
 		  break;
 		}
@@ -580,22 +580,19 @@ parsearg(
 	      
 	      for (i = MAX_INCLUDE_PATHS; i--;)
 		{
-		  char path[ 128 ];
+		  char * path;	/* Host port: incpath(), was a char[ 128 ] */
 	      
 
 		  if (incpaths[ i ] == NULL)
 		    continue;
 		  
-		  strcpy( path, incpaths[ i ] );
-	      
-		  if ( path[ strlen( path ) ] != '/' )
-		    strcat( path, "/" );
-	      
-		  strcat( path, infile );
+		  path = incpath( incpaths[ i ], infile );
 	      
 		  trace( "Open failed, trying %s", path );
 	      
 		  infd = fopen( path, "r" );
+
+		  free( path );
 
 		  if (infd != NULL)
 		    break;
@@ -643,7 +640,7 @@ main(
      int 	argc,
      BYTE **	argv )
 {
-  int 		infiles = 0;
+  volatile int	infiles = 0;	/* Host port: volatile, live across longjmp */
   BYTE **	copy_argv;
   
   

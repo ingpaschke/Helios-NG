@@ -32,7 +32,8 @@ PRIVATE void collectarg( struct Arg * arg );
 
 PUBLIC void macro()
 {
-	WORD nesting = 0;
+	/* Host port: volatile, the variable is live across setjmp() */
+	volatile WORD nesting = 0;
         jmp_buf catchall;
 
         /* the default recovery level simply quits */
@@ -195,7 +196,7 @@ PRIVATE void collectarg(struct Arg *arg)
 
         macro->nargs = 0;
 
-        adddef((INT)s_macro,arg->sym,(INT)macro);
+        adddef((INT)s_macro,arg->sym,(intptr_t)macro);	/* Host port: was (INT)macro */
 }
 
 /********************************************************/

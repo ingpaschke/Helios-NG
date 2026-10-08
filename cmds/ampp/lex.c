@@ -11,11 +11,20 @@ static char *RcsId = "$Id: lex.c,v 1.5 1994/03/08 13:05:50 nickc Exp $ Copyright
   
 #include "ampp.h"
 #include <ctype.h>
+#include <string.h>	/* Host port: memcpy() */
 
 #define trace if(traceflags&db_lex)_trace
 
 PUBLIC INT symb;
-PUBLIC BYTE token[128];
+/*
+ * Host port: the token grows as needed.  It was a fixed BYTE token[128]
+ * filled without a bound: an identifier or number of 128 characters or
+ * more overwrote the following globals (on x86-64 the symbol table, and
+ * ampp crashed).  Tokens that fit in 128 bytes are handled as before.
+ */
+PRIVATE BYTE tokinit[128];
+PUBLIC BYTE *token = tokinit;
+PRIVATE INT toklimit = sizeof tokinit;
 PUBLIC struct Def *tokdef;
 PUBLIC struct Symbol *toksym;
 PUBLIC INT toksize;
@@ -23,6 +32,21 @@ PUBLIC INT tokval;
 
 struct Symbol *lookup( BYTE * );
 PRIVATE void readnumber(INT ch);
+
+/* append ch to token, keeping room for the terminating NUL */
+PRIVATE void tokadd(INT ch)
+{
+        if ( toksize + 2 > toklimit )
+        {
+                BYTE *t = (BYTE *)alloc(toklimit * 2);
+
+                memcpy(t, token, (size_t)toksize);
+                if ( token != tokinit ) free(token);
+                token = t;
+                toklimit *= 2;
+        }
+        token[toksize++] = (int) ch;
+}
 
 /********************************************************/
 /* nextsym                                              */
@@ -44,7 +68,7 @@ PUBLIC void nextsym()
 	    ch == c_dot || ch == '/' )      /* possible first char of a token */
         {
                 do {
-                        token[toksize++]= (int) ch;
+                        tokadd(ch);
                         ch = rdch();
                 } while( isalnum(ch) || ch == '_' || 
 			ch == c_dot  || ch == '/' );
@@ -107,7 +131,7 @@ PUBLIC void nextsym()
         default      : symb = s_other;  break;
         }
 
-        token[toksize++] = (int) ch;
+        tokadd(ch);
         token[toksize] = '\0';
         trace("Symbol = '%s' %2x",token,symb);
 }
@@ -129,13 +153,13 @@ PRIVATE void readnumber(INT ch)
         if( ch == c_minus )
         {
                 sign = (int) ch;
-                token[toksize++] = (int) ch;
+                tokadd(ch);
                 ch = rdch();
         }
         else if( ch == c_hash )
         {
                 radix = 16;
-		token[toksize++] = (int) ch;
+		tokadd(ch);
                 ch = rdch();
         }
 
@@ -155,7 +179,7 @@ PRIVATE void readnumber(INT ch)
 		    break;
 		  }
                 val = val * radix + digit;
-                token[toksize++] = (int) ch;
+                tokadd(ch);
                 ch = rdch();
         }
 
