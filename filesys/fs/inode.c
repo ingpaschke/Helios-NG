@@ -362,6 +362,9 @@ word len;
 	/* if search for a given name */
 	if (len>0) 
 	{
+		/* names are at most 31 characters (as splitname cuts	*/
+		/* them); namei passes path components uncut		*/
+		if (len > sizeof(obj)-1) len = sizeof(obj)-1;
 		/* form the name as included in DirEntry */
 		strncpy(obj,name,len);
 		obj[len] = '\0';
