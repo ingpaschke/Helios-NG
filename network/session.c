@@ -500,7 +500,7 @@ static void do_create_window(ServInfo *servinfo)
    (void) Seek(window_node->WindowStream, S_Beginning, info->Pos);
 
 	/* Access the window server supplied, if any.			*/
-  if (info->WindowServerName ne MinInt);
+  if (info->WindowServerName ne MinInt)	/* hcc patch: was a stray ; */
    { window_node->WindowServer = 
          NewObject(RTOA(info->WindowServerName), &(info->WindowServerCap));
      if (window_node->WindowServer eq Null(Object))
@@ -1085,7 +1085,8 @@ static void getty_process(WindowNode *window_node)
   Objv[OV_Parent]	 = my_environ->Objv[OV_Task];
   Objv[OV_Home]		 = my_environ->Objv[OV_Home];
   Objv[OV_Console]	 = NewObject(window->Name, &(window->Access));
-  Objv[OV_CServer]	 = window_node->WindowServer;
+  Objv[OV_CServer]	 = (window_node->WindowServer eq Null(Object)) ?
+			(Object *) MinInt : window_node->WindowServer;	/* hhead patch */
   Objv[OV_Session]	 = (Object *) MinInt;
   Objv[OV_TFM]		 = (Object *) MinInt;
   Objv[OV_TForce]	 = (Object *) MinInt;
