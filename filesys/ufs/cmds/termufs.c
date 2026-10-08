@@ -88,7 +88,7 @@ int main ( int argc, char **argv )
 	if (severity != UfsTermHard) {
 	    /* Get the open files */
 	    if ((ofs = getopenfiles(argv[0],&max)) != NULL) {
-		fprintf(stderr,"%s Warning:  These files are still open\n");
+		fprintf(stderr,"%s Warning:  These files are still open\n", progname);
 		fprintf(stderr,"PID       UID   Filename\n");
 		for (index=0; ofs[index]; index++) {
 			of = ofs[index];
