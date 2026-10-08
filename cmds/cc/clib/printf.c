@@ -6,6 +6,8 @@
 
 /* printf and its friends return the number of characters planted. In    */
 /* the case of sprintf this does not include the terminating '\0'.       */
+/* When an output error occurs during the call (the stream's error      */
+/* indicator becomes set) they return a negative value instead.          */
 /* Consider using ftell instead of charcount in printf (see scanf).      */
 /* see c.ansilib re possible use of #define NO_FLOATING_POINT.           */
 
@@ -179,6 +181,7 @@ int __vfprintf(FILE *p, const char *fmt, va_list args, fp_print fp_display_fn)
 /*      of all possible values in all possible formats.                  */
 {
     int ch, charcount = 0;
+    int olderr = p->_flag & _IOERR;     /* error indicator before the call */
 
     while ((ch = *fmt++) != 0)
     {   if (ch != '%') { putc(ch,p); charcount++; }
@@ -397,6 +400,10 @@ int __vfprintf(FILE *p, const char *fmt, va_list args, fp_print fp_display_fn)
         }
     }
 
+/* ANSI: a negative value if an output error occurred.  putc sets the    */
+/* stream's error indicator when a write fails (or the stream cannot be  */
+/* written); one that was already set before this call is not counted.   */
+    if (olderr == 0 && (p->_flag & _IOERR) != 0) return EOF;
     return charcount;
 }
 
