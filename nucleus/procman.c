@@ -3831,13 +3831,14 @@ static void DoSendMessage(MCB *m, SockEntry *s)
 	DataGram *dg = (DataGram *)m->Control;
 
 	w = NewWaiter(FG_SendMessage,m->MsgHdr.Reply,s);
-	w->EndTime = dg->Timeout==-1?-1:GetDate()+(dg->Timeout/OneSec);
-	
+
 	if( w == NULL ) 
 	{
 		ErrorMsg(m,EC_Error|EG_NoMemory|EO_Socket);
 		return;
 	}
+
+	w->EndTime = dg->Timeout==-1?-1:GetDate()+(dg->Timeout/OneSec);
 
 	w->Addr = copystruct(*(word *)(m->Data + dg->SourceAddr),m->Data + dg->SourceAddr + 4);
 	w->Size = dg->DataSize;
@@ -3866,13 +3867,14 @@ static void DoRecvMessage(MCB *m, SockEntry *s)
 	}
 	
 	w = NewWaiter(FG_RecvMessage,m->MsgHdr.Reply,s);
-	w->EndTime = dg->Timeout==-1?-1:GetDate()+(dg->Timeout/OneSec);
 
 	if( w == NULL ) 
 	{
 		ErrorMsg(m,EC_Error|EG_NoMemory|EO_Socket);
 		return;
 	}
+
+	w->EndTime = dg->Timeout==-1?-1:GetDate()+(dg->Timeout/OneSec);
 
 	w->Size = dg->DataSize;
 			
