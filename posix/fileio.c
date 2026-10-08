@@ -527,11 +527,13 @@ extern int pipe(int fildes[2])
 
 	if ( (fildes[0]=findfd(0)) == -1 )
 	  {
+	    e = EMFILE;
 	    goto done;
 	  }	
 
 	if ( (fildes[1]=findfd(fildes[0]+1)) == -1 )
 	  {
+	    e = EMFILE;
 	    goto done;
 	  }
 		
