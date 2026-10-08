@@ -1109,7 +1109,7 @@ static int add_task(RmProcessor processor, ...)
   RmTaskforce	template;
   RmTask	task;
   char		buf[16];
-  bool		ok;
+  bool		ok = FALSE;	/* hcc patch: set TRUE only at the end */
   int		nextarg	= 1;
 
   va_start(args, processor);
