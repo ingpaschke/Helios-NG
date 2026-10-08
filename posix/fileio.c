@@ -1037,9 +1037,8 @@ static void freefd(int fd)
 {
 	Wait(&fdlock);
 
-	if( fd < 0 || fd >= fdvecsize ) return;
-	
-	if( fdvec[fd].flags & FD_ALLOC ) fdvec[fd].flags = 0;
+	if( fd >= 0 && fd < fdvecsize && (fdvec[fd].flags & FD_ALLOC) )
+		fdvec[fd].flags = 0;
 	
 	Signal(&fdlock);
 }
