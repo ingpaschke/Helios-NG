@@ -478,7 +478,9 @@ PRIVATE void InterceptRemote(void)
       }
 
      if (result eq 0x22222222)		/* Is it an IOputc message ?	*/
-      { if (buffer[count] eq '\n')	/* Yes, end of line ?		*/
+					/* Yes, end of line (or as much	*/
+					/* as do_IOdebug can take) ?	*/
+      { if ((buffer[count] eq '\n') || (count >= 190))
          { buffer[++count] = '\r';	/* Yes, so send to IOProc	*/
            buffer[++count] = '\0';
            (void) Fork(Stacksize, do_IOdebug, 4, buffer);
