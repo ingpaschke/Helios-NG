@@ -1383,7 +1383,7 @@ PMTRACE(0x05);
 	servinfo.DispatchInfo = info;
 	m->mcb.MsgHdr.FnRc = info->SubSys;
 
-	if ( m->mcb.MsgHdr.FnRc & FC_Mask != FC_GSP )
+	if ( (servinfo.FnCode & FC_Mask) != FC_GSP )	/* hhead patch: was FnRc & FC_Mask != FC_GSP */
 	{
 		ErrorMsg(&m->mcb,EC_Error+EG_FnCode );
 		PFree(m);
