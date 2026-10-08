@@ -490,7 +490,12 @@ extern int sigaction(int sig, struct sigaction *act, struct sigaction *oact)
 
 	Wait(&siglock);
 
-	if( oact != NULL ) *oact = sigactions[sig];
+	if( oact != NULL )	/* hhead patch: fields only, 1.3 has no sa_priv */
+	{
+		oact->sa_handler = sigactions[sig].sa_handler;
+		oact->sa_mask = sigactions[sig].sa_mask;
+		oact->sa_flags = sigactions[sig].sa_flags;
+	}
 	
 	if( act != NULL ) 
 	{
@@ -499,7 +504,9 @@ extern int sigaction(int sig, struct sigaction *act, struct sigaction *oact)
 		if( !CATCHABLE(sig) )
 		{ errno = EINVAL; Signal(&siglock); return -1; }
 
-		sigactions[sig] = *act;
+		sigactions[sig].sa_handler = act->sa_handler;	/* hhead patch: fields only */
+		sigactions[sig].sa_mask = act->sa_mask;
+		sigactions[sig].sa_flags = act->sa_flags;
 		
 		/* If we are setting the default action, and the	*/
 		/* default is to ignore signals, or if we are setting	*/
