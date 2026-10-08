@@ -2282,7 +2282,7 @@ RmProcessor     RmInsertProcessor(RmNetwork network, RmProcessor processor)
    { 
 loop:
      netname = ++temp;          /* now root or Cluster/Root */
-     if (netname eq '\0')               /* /Net/ ??? */
+     if (*netname eq '\0')              /* /Net/ ??? */
       return(RmErrno = network->Errno = processor->Errno = RmE_WrongNetwork,
              (RmProcessor)NULL);
 
