@@ -43,7 +43,7 @@ del( char * name )
 } /* del */
 
 int confirm () {
-    char    c,
+    int     c,	/* hcc patch: int, to see EOF */
             t;
     c = getchar();
     t = c;
