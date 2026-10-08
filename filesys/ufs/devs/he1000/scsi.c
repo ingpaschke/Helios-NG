@@ -343,8 +343,7 @@ int link_init(WORD link)
 	/* Allocate the link for use */
 	if ((status = AllocLink(link)) < 0)
 		return(status);
-		
-	
+	return(status);	/* warnings patch: was falling off the end */
 }
 
 
