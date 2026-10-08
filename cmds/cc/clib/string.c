@@ -390,12 +390,11 @@ int strcoll(const char *s1, const char *s2)
 size_t strxfrm(char *s1, const char *s2, size_t n)
 { size_t temp = strlen(s2);
 
-  if (temp > n)
-    return(0);
-  else
-    { strcpy(s1, s2);
-      return(temp);
-    }
+  /* copy only if the string and its terminator fit; the length is */
+  /* returned in any case (ANSI 4.11.4.5)			    */
+  if (temp < n)
+    strcpy(s1, s2);
+  return(temp);
 }
  
 /* End string processing library */
