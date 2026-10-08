@@ -304,7 +304,7 @@ get_context (ServInfo *servinfo)
 	
 /*debug("GetContext %x %x",m->MsgHdr.FnRc,servinfo->FnCode);*/
 	/* check that this is a GSP message */
-	if ( m->MsgHdr.FnRc & FC_Mask != FC_GSP )
+	if ( (servinfo->FnCode & FC_Mask) != FC_GSP )	/* hhead patch: was FnRc & FC_Mask != FC_GSP */
 	{
 		m->MsgHdr.FnRc |= EC_Error+EG_FnCode;
 		*(servinfo->Context) = '\0';
