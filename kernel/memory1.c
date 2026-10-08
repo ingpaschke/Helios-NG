@@ -570,6 +570,9 @@ void *Allocate(word size, Pool *source, Pool *dest)
 	if( GetRoot()->Flags & Root_Flags_xoffed ) return NULL;
 #endif
 
+	/* no block can be that large; the rounding would overflow	*/
+	if( size < 0 || size > 0x7fffffff - 31 ) return NULL;
+
 	/* add size of Memory header and up to next 16 bytes */
 	size = (size + 31) & ~15;
 
@@ -1552,6 +1555,9 @@ void *LowAllocate(word size, Pool *source, Pool *dest)
 	Memory *block;
 	word bsize;
 	Memory *start = Head_(Memory, source->Memory);
+
+	/* no block can be that large; the rounding would overflow	*/
+	if( size < 0 || size > 0x7fffffff - 31 ) return NULL;
 
 	/* add size of Memory header and up to next 16 bytes */
 	size = (size + 31) & ~15;
