@@ -1,0 +1,7 @@
+Bad module size 1000 at offset 0
+Transputer Helios Executable
+Image size = 72 bytes
+Object type is Program
+Name is 'pastend' 
+Stacksize = 1000 
+Heapsize = 2000 

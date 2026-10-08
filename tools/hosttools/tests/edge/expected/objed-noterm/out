@@ -1,0 +1,8 @@
+Module chain not terminated by 0 within the image
+Transputer Helios Executable
+Image size = 68 bytes
+Object type is Program
+Name is 'noterm' 
+Stacksize = 1000 
+Heapsize = 2000 
+Program :     noterm slot   1 version    1 size    68 datasize    0

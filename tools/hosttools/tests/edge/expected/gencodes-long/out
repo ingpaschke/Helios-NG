@@ -1,0 +1,4 @@
+#define	ErrMask		    0xff000000
+#define	ErrShift	    24
+#define	ErrLong		    0x01	/* mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm*/
+#define	ErrShort	    0x02	/* ok				*/

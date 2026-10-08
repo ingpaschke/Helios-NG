@@ -1,0 +1,1 @@
+asm CTREE/lib/c0.o bar.o -lCTREE/lib2/foo.lib -lCTREE/lib/helios.lib -lCTREE/lib/c.lib -nprog -s5000 -h5000 -o prog

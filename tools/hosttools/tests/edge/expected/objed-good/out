@@ -1,0 +1,9 @@
+Transputer Helios Executable
+Image size = 184 bytes
+Object type is Program
+Name is 'prog' 
+Stacksize = 1000 
+Heapsize = 2000 
+Program :       prog slot   1 version    1 size    68 datasize    0
+Module  :        mod slot   2 version    1 size    56 datasize    0
+ResRef  :        ref slot   3 version    1

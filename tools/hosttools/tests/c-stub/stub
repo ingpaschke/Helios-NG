@@ -1,0 +1,9 @@
+#!/bin/bash
+# stub compiler/assembler/ampp for run.sh: log the argv to $CLOG, with the
+# tree path replaced by CTREE and run.sh's OUTDIR by OUT (literally,
+# nothing else is masked)
+line="$(basename "$0") $*"
+[ -n "$VERIFY_CTREE" ] && line=${line//"$VERIFY_CTREE"/CTREE}
+[ -n "$VERIFY_OUT" ] && line=${line//"$VERIFY_OUT"/OUT}
+printf '%s\n' "$line" >> "$CLOG"
+exit 0

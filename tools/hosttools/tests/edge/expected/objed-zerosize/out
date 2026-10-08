@@ -1,0 +1,8 @@
+Bad module size 0 at offset 68
+Transputer Helios Executable
+Image size = 256 bytes
+Object type is Program
+Name is 'zero' 
+Stacksize = 1000 
+Heapsize = 2000 
+Program :       zero slot   1 version    1 size    68 datasize    0

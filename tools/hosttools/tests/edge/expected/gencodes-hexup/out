@@ -1,0 +1,3 @@
+#define	CxMask		    0x0000FF00
+#define	CxShift		    8
+#define	CxA		    0x1		/* a				*/

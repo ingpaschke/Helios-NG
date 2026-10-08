@@ -1,0 +1,2 @@
+rm: cannot remove 'foo.s': No such file or directory
+c: warning: Failed because /bin/rm exited with return code of 256
