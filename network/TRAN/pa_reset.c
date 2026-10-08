@@ -43,7 +43,7 @@ static void usage(Stream *);
 
 int main(void)
 { Environ	env;
-  uword		*reg;
+  volatile uword	*reg;	/* hcc patch: reset register */
   char		*number;
   int		link;
       
@@ -81,7 +81,7 @@ int main(void)
       usage(env.Strv[2]);
   }      
   
-  reg  = (uword *) Reset_Address;
+  reg  = (volatile uword *) Reset_Address;
   *reg = 0;
   *reg = 1;
   *reg = 2;

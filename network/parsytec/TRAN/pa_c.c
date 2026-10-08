@@ -381,7 +381,7 @@ static int RingNcm(NetworkDCB *device)
   if (device->Debug) driver_report(device, "pa_c.d, allocating link %d to the NCM", link);
     
   if (device->ParsytecRoot)
-   { int *reset = (int *) 0x000000C0;
+   { volatile int *reset = (volatile int *) 0x000000C0; /* hcc patch: reset register */
 
      if (device->Debug) driver_report(device, "pa_c.d, asserting Parsytec-style reset");
      
@@ -434,7 +434,7 @@ static int RingNcm(NetworkDCB *device)
   }
   
   if (device->ParsytecRoot)
-   { int *reset = (int *) 0x000000C0;
+   { volatile int *reset = (volatile int *) 0x000000C0; /* hcc patch: reset register */
      *reset = 0;
    }
   else
