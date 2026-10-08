@@ -537,7 +537,7 @@ static	RmNetwork	BuildHierarchy(void)
     for (i = 0; i < Net->NoTables; i++)
      { tab[i] = (RmUidTableEntry *) Malloc(RmL_SlotsPerTable * sizeof(RmUidTableEntry));
        if (tab[i] eq Null(RmUidTableEntry))
-        { for (j = 0; j < i; j++) Free(tab[i]);
+        { for (j = 0; j < i; j++) Free(tab[j]);
           Free(tab);
           RmFreeNetwork(result);
           return((RmNetwork) NULL);
