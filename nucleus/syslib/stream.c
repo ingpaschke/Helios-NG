@@ -625,6 +625,7 @@ GetFileSize( Stream * stream )
 	if( (e = CheckStream(stream,C_ReOpen)) != Err_Null ) return e;
 
 	mcb.Control = &res;
+	mcb.MsgHdr.Reply = NullPort;	/* for done: before InitMCB */
 
 	Wait(&stream->Mutex);
 
@@ -673,6 +674,7 @@ SetFileSize(
 	if( (e = CheckStream(stream,C_ReOpen)) != Err_Null ) return e;
 
 	mcb.Control = &res;
+	mcb.MsgHdr.Reply = NullPort;	/* for done: before InitMCB */
 
 	Wait(&stream->Mutex);
 
@@ -721,7 +723,9 @@ PUBLIC Port EnableEvents(Stream *stream, word mask)
 #endif
 	eventport = NullPort;
 	
-	if( (e = CheckStream(stream,C_ReOpen)) != Err_Null ) goto done;
+	/* stream->Mutex is not held yet: return directly (a failed	*/
+	/* ReOpen has set Result2 already)				*/
+	if( (e = CheckStream(stream,C_ReOpen)) != Err_Null ) return NullPort;
 
 	eventport = NewPort();
 
