@@ -364,7 +364,7 @@ usage( char * message, ... )
       fputc( '\n', stderr );
     }
   
-  fail( USAGE );
+  fail( USAGE, ProgName );
 }
 
 
