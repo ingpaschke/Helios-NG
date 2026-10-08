@@ -221,8 +221,10 @@ printf("dispatcher: makepath cpath='%s' tpath='%s'",cpath,tpath);
 			while ((p != buf) && (*p != c_dirchar)) p--;
 			*p = 0;
 		} else {
+			/* splitname returns the source length; the copy is	*/
+			/* at most NameMax-1 characters			*/
 			*p = c_dirchar;
-			p+= len;
+			p += strlen(p+1) + (tpath[len-1] == c_dirchar);
 		}
 		
 		tpath += len;
