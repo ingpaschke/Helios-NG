@@ -733,6 +733,7 @@ static	int	CheckHeliosWorld(int count, LinkConnection *conns)
          return(RmE_InUse);
       }
    }	/* end of for loop */
+  return(RmE_Success);	/* warnings patch: was falling off the end */
 }
 
 /**
