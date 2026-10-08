@@ -1130,7 +1130,7 @@ static int		MapTask_Search(RmProcessor, ...);
 bool	domain_MapTask(RmTask task)
 { RmProcessor		Template	= (RmProcessor) NULL;
   RmProcessor		result		= (RmProcessor) NULL;
-  int			rc;
+  int			rc = RmE_NotFound;	/* hcc patch: set on every path */
   RmProcessor		LeastBusy;
   int			LowestCost;
 
@@ -1847,7 +1847,7 @@ static int	AbortMapTaskforceAux(RmTask Task, ...)
   domain_entry->NumberUsers--;
   task_entry->Mapped = 0;
   if (domain_entry->NumberUsers eq 0)
-   if ((mapped_to->AllocationFlags & (RmF_Permanent || RmF_TfmProcessor)) eq 0)
+   if ((mapped_to->AllocationFlags & (RmF_Permanent | RmF_TfmProcessor)) eq 0)
     ReturnProcessorToPool(mapped_to);
   return(0);
 }
