@@ -1910,7 +1910,9 @@ extern word DoWrite(MCB *m, Buffer *(*GetBuffer)(), void *info)
 	{
 		while( got < msgdata )
 		{
-			word dsize = buf->Max - offset;
+			word dsize;
+			if( buf == NULL ){ e = EC_Error|EG_NoMemory; goto done; }
+			dsize = buf->Max - offset;
 			if( dsize > size - got ) dsize = size - got;
 			memcpy(&buf->Data[offset],&m->Data[got],(int)dsize);
 			if( offset+dsize > buf->Size ) buf->Size = offset+dsize;
@@ -1920,8 +1922,10 @@ extern word DoWrite(MCB *m, Buffer *(*GetBuffer)(), void *info)
 		}
 
 		pos += got;
-		offset = pos - buf->Pos;
+		/* there need not be a buffer after the last byte written */
 		if( got == size ) goto done;
+		if( buf == NULL ){ e = EC_Error|EG_NoMemory; goto done; }
+		offset = pos - buf->Pos;
 	}
 
 	InitMCB(m,MsgHdr_Flags_preserve,reply,NullPort,WriteRc_Sizes);
