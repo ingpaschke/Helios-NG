@@ -806,7 +806,7 @@ static Object *locate_root_processor(char *name)
              return(Null(Object));
            }
         }
-       elif (links eq 1)
+       else	/* hcc patch: was elif (links eq 1), neighbour unset for more */
         { neighbour = RmFollowLink(IOproc, 0, Null(int));
           if (neighbour eq RmM_NoProcessor)
            { puts("Startns: warning, consistency failure 3 in resource map.");
