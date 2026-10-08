@@ -106,16 +106,16 @@ extern char **_posix_init( void )
 
 static int hex2int(char *s)
 {
-	int n = 0;
+	unsigned int n = 0;
 	int i;
-	for( i = 0; i < 8; i++ )
+	for( i = 0; i < 8 && s[i] != '\0'; i++ )
 	{
 		char c = s[i];
 		if  ( '0' <= c && c <= '9' ) n = (n<<4) + c - '0';
 		elif( 'a' <= c && c <= 'f' ) n = (n<<4) + c - 'a' + 10;
 		else 			     n = (n<<4) + c - 'A' + 10;
 	}
-	return n;
+	return (int)n;
 }
 
 static void int2hex(int n, char *s)
