@@ -4068,6 +4068,18 @@ static void SocketServer(SockEntry *s)
 			if( !ForwardRequest(mcb,s,e,mcb->Data+req->DestAddr+6) )
 				break;
 		}
+		/* A forwarded Connect falls through to FG_Close and drops	*/
+		/* one user of this socket, ending its server loop (and	*/
+		/* freeing the entry) when that was the last one.  This is	*/
+		/* left as it is, but it is not proven to be right: it is	*/
+		/* only correct if the client gives up this reference with	*/
+		/* the Connect, i.e. if after ForwardRequest the connection	*/
+		/* belongs to the far socket (DoConnectIn there) and the	*/
+		/* client neither uses nor closes this socket again.  If the	*/
+		/* client also sends FG_Close (or still uses the socket),	*/
+		/* Users is decremented twice and the entry is freed while	*/
+		/* referenced.  Missing break or deliberate: undecided, see	*/
+		/* tools/llvm-t800/research/SP1-TRIAGE.md section 4.		*/
 		case FG_Close:
 		case FG_Close|RemoteBit:
 			s->Users--;
