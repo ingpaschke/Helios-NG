@@ -72,8 +72,8 @@ int main(int argc,STRING *argv)
    }
 #else
   /* Attempt to determine whether swapping is required */
-  if (   (unsigned)size & 0xf000000
-      && (unsigned)size & 0x000000f == 0)
+  if (   ((unsigned)size & 0xf0000000)
+      && ((unsigned)size & 0x0000000f) == 0)
   {
       /*
        * Top byte is set, but bottom one isn't.  Implies that the
@@ -87,8 +87,8 @@ int main(int argc,STRING *argv)
 
       fprintf (stderr, "	(swapped size is %d (0x%lx))\n", size, size);
 
-      if (   (unsigned)size & 0xf0000000
-	  && (unsigned)size & 0x0000000f == 0)
+      if (   ((unsigned)size & 0xf0000000)
+	  && ((unsigned)size & 0x0000000f) == 0)
       {
 	  fprintf (stderr, "Suspect swapped size.  I give up!\n");
 	  exit (EXIT_FAILURE);
