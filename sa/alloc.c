@@ -40,8 +40,8 @@ extern void *memtop(void)
 	SysInfo *sysinfo = _SYSINFO;
 	byte *base = sysinfo->freestore;
 	word probestep = ProbeStep;
-	word *probe = (word *)(((word)base + 3) & ~3);
-	word *p, *q;
+	volatile word *probe = (volatile word *)(((word)base + 3) & ~3); /* hcc patch: probe */
+	volatile word *p, *q;	/* hcc patch: probe */
 
 	/* make probe step > memory used so far */
 	while( probestep < ((word)probe-MinInt)/4 ) probestep = probestep<<1;
@@ -70,8 +70,8 @@ extern void *memtop(void)
 
 extern int memtest(word *base, int size)
 {
-	word *p;
-	word *end = base + size/4;
+	volatile word *p;	/* hcc patch: probe */
+	volatile word *end = base + size/4;
 
 	for(p = base; p != end; p++ )
 	{
