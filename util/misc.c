@@ -769,7 +769,7 @@ void IOdebug(const char *str, ... )
 			case 'O':			/* object	*/
 			case 'S':			/* stream	*/
 				o = va_arg(a,Object *);
-				if( (o == NULL && fch == 'O') ||
+				if( o == NULL ? fch == 'O' :
 				    (o->Flags & Flags_Stream) == 0 )
 				{
 					writestr("<Object: ");
