@@ -15,8 +15,30 @@ static int logfac = 0;
 static char *logident = NULL;
 static int logmask = -1;
 
-static char logbuf[100];
+#define LOGBUFSIZE 512
+static char logbuf[LOGBUFSIZE];
 static char fbuf[100];
+
+/* vsprintf into buf[size], dropping what does not fit.  This is the	*/
+/* string FILE that Clib's sprintf uses, with a finite count: once it	*/
+/* is used up, Clib's _flushbuf drops further characters.  The flag	*/
+/* values are those of stdio.h (only visible with __system_io).	*/
+#define LOG_IOWRITE	0x02
+#define LOG_IOSTRG	0x08
+
+static int bvsprintf(char *buf, int size, char *fmt, va_list a)
+{
+	FILE f;
+
+	if( size <= 0 ) return 0;
+	memset(&f,0,sizeof(FILE));
+	f._flag = LOG_IOSTRG+LOG_IOWRITE;
+	f._ptr = (unsigned char *)buf;
+	f._ocnt = size - 1;
+	vfprintf(&f,fmt,a);
+	*f._ptr = 0;
+	return (char *)f._ptr - buf;
+}
 
 extern int openlog(char *ident, int opt, int facility)
 {
@@ -50,19 +72,24 @@ extern int syslog(int priority, char *message, ... )
 	
 	va_start(a,message);
 
-	if( logident ) pos += sprintf(logbuf,"SYSLOG: %s ",logident);
+	if( logident ) pos += sprintf(logbuf,"SYSLOG: %.40s ",logident);
 	else pos += sprintf(logbuf,"SYSLOG: ");
 
+	/* the text is cut to leave room for "\r\n" and the terminator */
 	for(;;)
 	{
 		char ch = *message++;
 		if( ch == 0 || (ch == '%' && *message == 'm')) 
 		{
+			char *es;
 			fbuf[n] = 0;
-			pos += vsprintf(logbuf+pos,fbuf,a);
+			pos += bvsprintf(logbuf+pos,LOGBUFSIZE-2-pos,fbuf,a);
 			if( ch == 0 ) break;
 			message++;
-			pos += vsprintf(logbuf+pos,sys_errlist[errno],a);
+			if( errno >= 0 && errno < sys_nerr ) es = sys_errlist[errno];
+			else es = "Unknown error";
+			while( *es != 0 && pos < LOGBUFSIZE-3 ) logbuf[pos++] = *es++;
+			logbuf[pos] = 0;
 			n = 0;
 		}
 		else if( n < 99 ) fbuf[n++] = ch;
