@@ -192,7 +192,7 @@ PUBLIC void startdebug(DEBUG *debug, Port port, Port reply)
   debugf("windowserver = %s", debug->env.Objv[OV_CServer]->Name);
 
   if (debug->env.Objv[OV_CServer]->Name != NULL AND 
-      debug->env.Objv[OV_CServer]->Name != "\0")
+      debug->env.Objv[OV_CServer]->Name[0] != '\0')
   {
     debug->display = dopen(debug, debug->name, 
                            debug->env.Objv[OV_CServer]->Name);
