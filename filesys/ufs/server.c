@@ -217,7 +217,6 @@ int main(void)
 #endif /* __TRAN */
 
 	if (in_nucleus) {
-		void *devinfo;
 		InfoNode *filesysinfo, *deviceinfo;
 		FileSysInfo *fsi;
 		DiscDevInfo *ddi;
@@ -294,6 +293,7 @@ int main(void)
 		if ((rootdev = di->DriveId) == -1) {
 			rootdev = 0;	/* This is the default */
 		}
+		val = (int)rootdev;	/* hcc patch: for the Rootdev message */
 		rootdev = makedev(root_major,dkminor(rootdev,0));
 		if ((opt = hd_start(rootdevname,root_major)) != NULL) {
 			printf("Rootdev (major %d) %s:%d, %s\n",
