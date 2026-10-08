@@ -120,6 +120,10 @@ printf("load_dir_entries: extract entry, offset=%d  retval=%d\n",offset,retval);
 
  			/* Setup Pointer To Directory */
 			dir = (struct direct *)&ar->buf[offset];
+			/* A corrupt entry (zero or overlong record length)	*/
+			/* would stop or overrun the scan: skip the rest.	*/
+			if (dir->d_reclen == 0 || offset + dir->d_reclen > retval)
+				break;
 #ifdef __C40
 #undef d_ino
 #endif
