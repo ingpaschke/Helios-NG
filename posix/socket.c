@@ -471,17 +471,17 @@ extern int gethostid(void)
 	CHECKSIGS();
 	s = Socket("/internet",SOCK_DGRAM,0);
 
-	if( s == NULL ) e = ENOMEM;
-	
-	if( s != NULL ) e = (int)Bind(s,0,0);
-	
-	if( e >= 0 ) e = (int)GetSocketInfo(s,SOL_SYSTEM,SO_HOSTID,(void *)&id,(word *)&size);
-
-	if( s != NULL ) Close(s);
+	if( s == NULL ) e = EC_Error|SS_SysLib|EG_NoMemory|EO_Stream;
+	else
+	{
+		e = (int)Bind(s,0,0);
+		if( e >= 0 ) e = (int)GetSocketInfo(s,SOL_SYSTEM,SO_HOSTID,(void *)&id,(word *)&size);
+		Close(s);
+	}
 
 	if( e < 0 ) 
 	{
-		errno = posix_error(Result2(s));
+		errno = posix_error(e);
 		id = -1;
 	}
 	CHECKSIGS();
@@ -496,17 +496,17 @@ extern int gethostname(char *name, int namelen)
 	CHECKSIGS();
 	s = Socket("/internet",SOCK_DGRAM,0);
 
-	if( s == NULL ) e = ENOMEM;
-	
-	if( s != NULL ) e = (int)Bind(s,0,0);
-	
-	if( e >= 0 ) e = (int)GetSocketInfo(s,SOL_SYSTEM,SO_HOSTNAME,(void *)name,(word *)&namelen);
-
-	if( s != NULL ) Close(s);
+	if( s == NULL ) e = EC_Error|SS_SysLib|EG_NoMemory|EO_Stream;
+	else
+	{
+		e = (int)Bind(s,0,0);
+		if( e >= 0 ) e = (int)GetSocketInfo(s,SOL_SYSTEM,SO_HOSTNAME,(void *)name,(word *)&namelen);
+		Close(s);
+	}
 	
 	if( e < 0 ) 
 	{
-		errno = posix_error(Result2(s));
+		errno = posix_error(e);
 		e = -1;
 	} else e = 0;
 	CHECKSIGS();
