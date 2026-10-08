@@ -977,6 +977,7 @@ extern int pause(void)
 extern unsigned int sleep(unsigned int seconds)
 {
 	time_t starttime, timeslept;
+	struct sigaction sleepbuf, alarmbuf;
 	struct sigaction *sleepact = NULL;
 	struct sigaction *alarmact = NULL;
 
@@ -993,8 +994,8 @@ extern unsigned int sleep(unsigned int seconds)
 	
 	if( oldalarm == 0 || oldalarm > seconds )
 	{
-		sleepact = (struct sigaction *)Malloc(sizeof(struct sigaction));
-		alarmact = (struct sigaction *)Malloc(sizeof(struct sigaction));
+		sleepact = &sleepbuf;
+		alarmact = &alarmbuf;
 
 		sleepact->sa_handler = SIG_IGN;
 		sleepact->sa_mask = 0;
@@ -1023,9 +1024,6 @@ extern unsigned int sleep(unsigned int seconds)
 	if( alarmact != NULL )
 	{
 		sigaction(SIGALRM,alarmact,NULL);
-
-		Free(sleepact);
-		Free(alarmact);
 	}
 		
 	if( timeslept < oldalarm ) { alarm(oldalarm-timeslept); return 0; }
