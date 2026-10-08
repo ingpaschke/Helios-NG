@@ -61,15 +61,17 @@ match(
 {
   char buf[MAXLINE];
   int lineno = 0;
-  char nochars;
+  int nochars;
 
   while( (nochars = getline(&buf[0],MAXLINE)) != 0) {
 	char *cr = strchr(&buf[0],'\n');
 	lineno++;
 
 	if(cr == 0) {
-		fprintf(stderr,"Line too long in ");
-		fprintf(stderr,name == 0 ? "stdin\n":"%s\n",name);
+		if(nochars == MAXLINE - 1) {
+			fprintf(stderr,"Line too long in ");
+			fprintf(stderr,name == 0 ? "stdin\n":"%s\n",name);
+		}
 	} else
 		*cr = '\0';
 
@@ -96,23 +98,29 @@ pline(
 }
 
 
+/* Read a line (with its newline, if any) into buf[size] and terminate */
+/* it.  Returns 0 only at end of file with nothing read, so a last line */
+/* without a newline is still returned.					*/
 int
 getline(
 	char *buf,
 	int size )
 {
-  char *initbuf = buf, c;
+  char *initbuf = buf;
+  int c;
 
   while (1) {
-	c = (char)getc(instream);
-  	*(buf++) = c;
-	if (c == (char)EOF)  		return(0);
+	c = getc(instream);
+	if (c == EOF)  			break;
+  	*(buf++) = (char)c;
 
-  	if (buf - initbuf == size - 1) 	return((int)(buf - initbuf));
+  	if (buf - initbuf == size - 1) 	break;
 
-  	if (c == '\n')  		return((int)(buf - initbuf));
+  	if (c == '\n')  		break;
 
   }
+  *buf = '\0';
+  return((int)(buf - initbuf));
 }
 
 void
