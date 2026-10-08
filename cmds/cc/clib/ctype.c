@@ -221,15 +221,16 @@ _set_ctype_8859( int yes )
       int	i;
 
       /* remember 4 guard bytes before start of table */
+      /* (_ctype is a pointer here: the table has 256 entries) */
       
-      _ctype_copy = (unsigned char *)malloc( sizeof (_ctype) + 4 );
+      _ctype_copy = (unsigned char *)malloc( 256 + 4 );
 
       if (_ctype_copy == NULL)
 	return;
 
-      for (i = -4; i < sizeof (_ctype); i++)
+      for (i = -4; i < 256; i++)
 	{
-	  _ctype_copy[ i ] = _ctype[ i ];	  
+	  _ctype_copy[ i + 4 ] = _ctype[ i ];	  
 	}
 
       _ctype = _ctype_copy + 4;
