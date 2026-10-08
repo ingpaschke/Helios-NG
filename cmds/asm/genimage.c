@@ -11,7 +11,7 @@
 /*                                                                      */
 /* Copyright (c) 1987, Perihelion Software Ltd. All Rights Reserved.    */
 /************************************************************************/
-/* $Id: genimage.c,v 1.7 1994/08/09 16:43:25 al Exp $ */
+/* $Id: genimage.c,v 1.5 1991/03/28 17:55:07 nick Exp $ */
 
 #include "asm.h"
 
@@ -19,21 +19,14 @@
 
 PRIVATE WORD nchars = 0;
 
-#ifdef __DOS386
-
-PRIVATE void outbyte(UBYTE b);
-PRIVATE void outbyte1(WORD b);
-PRIVATE void imageheader(WORD imagesize);
-PRIVATE void outword(WORD val);
-
-#else /* !__DOS386 */
+/* Fix: for the "Code size error" message */
+PRIVATE char *fns[16] = { "j", "ldlp", "pfix", "ldnl", "ldc", "ldnlp",
+	"nfix", "ldl", "adc", "call", "cj", "ajw", "eqc", "stl", "stnl", "opr" };
 
 PRIVATE void outbyte(ellipsis);
 PRIVATE void outbyte1(ellipsis);
 PRIVATE void imageheader(ellipsis);
 PRIVATE void outword(ellipsis);
-
-#endif /* __DOS386 */
 
 /****************************************************************/
 /* Procedure: genimage                                          */
@@ -122,8 +115,16 @@ if(traceflags&db_kludge)
 			}
 			else if( pf > code->size ) 
 			{
-_trace("pf %d c->size %d; code %x val %x",pf,c->size,tag,val);
-				error("Code size error");
+				/* Fix: name the symbol and the module (ASM-	*/
+				/* REVIEW M9); it only said "Code size error"	*/
+				/* after a trace line with the raw numbers.	*/
+				char *name = exprlabel((WORD)code->vtype,code->value.w);
+				error("Code size error: %s %d needs %d bytes, size is %d"
+				      " (%s%s%s, module %d, offset %d)",
+				      fns[tag],val,pf,c->size,
+				      name ? "symbol '" : "no symbol",
+				      name ? name : "", name ? "'" : "",
+				      VMAddr(asm_Module,curmod)->id,pc);
 			}
 			
                         encode( (WORD)(tag<<4), val, outbyte1);
@@ -133,7 +134,8 @@ _trace("pf %d c->size %d; code %x val %x",pf,c->size,tag,val);
                 switch( (int)tag )
                 {
 		case s_newfile:
-			strcpy(infile,(char *)code->value.w);
+			infile = code->value.c;	/* Host port: was (char *)value.w */
+						/* Fix: was a strcpy into infile[128] */
 			break;
 
                 case s_bss:

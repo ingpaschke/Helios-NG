@@ -5,7 +5,7 @@
 /*                                                              */
 /* Author: NHG 19-Feb-87                                        */
 /****************************************************************/
-/* $Id: lex.c,v 1.5 1994/08/09 16:43:25 al Exp $ */
+/* $Id: lex.c,v 1.3 90/09/28 13:17:09 nick Exp $ */
 
  
 #include "asm.h"
@@ -25,22 +25,20 @@ PUBLIC struct keyentry *tokkey;
 PUBLIC INT toksize;
 PUBLIC Value tokval;
 PUBLIC WORD tempval = 0;
-
-#ifdef __DOS386
-
-PRIVATE struct keyentry *keylookup(char *mode);
-WORD readnumber(WORD ch);
-static void tokerror(void);
-int rdcharnum(int radix, int ch);
-
-#else /* !__DOS386 */
+/* Fix: for the range check of a negated number (ASM-REVIEW-FIXES A8)	*/
+/* Fix: TRUE when the current input is assembler text (.s), where a	*/
+/* byte >= 0x80 is never a .p token (ASM-REVIEW-FIXES A10): set by	*/
+/* assemble() for a file named *.s, and here by the first keyword	*/
+/* (instruction or directive spelt out), which a .p file never has.	*/
+PUBLIC bool textinput = FALSE;
+PUBLIC WORD tokcount = 0;	/* tokens read so far			*/
+PUBLIC bool toknegovf = FALSE;	/* the number token cannot be negated	*/
 
 PRIVATE struct keyentry *keylookup(ellipsis);
 WORD readnumber(ellipsis);
 static void tokerror(ellipsis);
 int rdcharnum(ellipsis);
 
-#endif
 /********************************************************/
 /* nextsym                                              */
 /*                                                      */
@@ -55,8 +53,7 @@ nextsym()
 {
   INT ch;
   
-
-  ch = ch;
+  tokcount++;			/* Fix: A8 */
   
   /* first read & ignore leading white space */
   
@@ -66,7 +63,7 @@ nextsym()
     }
   while ( ch == c_space || ch == c_tab );
   
-  trace( "1ch = %02lx",ch );
+  trace( "1ch = %02x",ch );
   
   toksize = 0;
   
@@ -101,6 +98,7 @@ nextsym()
 		{
 		  symb     = tokkey->type;
 		  tokval.w = tokkey->value;
+		  textinput = TRUE;	/* Fix: A10 */
 		  
 		  return;
 		}
@@ -170,7 +168,7 @@ nextsym()
       return;
     }
   
-  trace( "2ch = %02lx", ch );
+  trace( "2ch = %02x", ch );
   
   if ( ch == EOF )
     {
@@ -198,8 +196,11 @@ nextsym()
 	
 	if ( c == c_minus )
 	  {
-	    while ( (ch = asm_rdch()) != c_nl )
+	    /* Fix: stop at EOF too; a comment on the last line without	*/
+	    /* a newline made asm loop for ever (ASM-REVIEW M3).		*/
+	    while ( (ch = asm_rdch()) != c_nl && ch != EOF )
 	      ;
+	    if ( ch == EOF ) unrdch( ch );
 	    
 	    symb = s_nl;
 	  }
@@ -290,7 +291,7 @@ nextsym()
       
     }
   
-  trace( "3ch = %02lx", ch );
+  trace( "3ch = %02x", ch );
   
   token[ toksize++ ] = ch;
   token[ toksize   ] = '\0';
@@ -312,6 +313,8 @@ WORD ch;
         INT radix = 10;
         INT val = 0;
         BYTE sign = c_plus;
+        UWORD uval = 0;		/* Fix: overflow check */
+        bool overflow = FALSE;
         if( ch == c_minus )
         {
                 sign = ch;
@@ -335,7 +338,14 @@ WORD ch;
                 else if (radix == 16 && 'a' <= uch && uch <= 'f') 
                                    digit = uch - 'a' + 10;
                 else break;
+                /* Fix: a number that does not fit in 32 bits wrapped	*/
+                /* silently, and the digits were stored without a	*/
+                /* bound: 1040 digits or more overran token[] and	*/
+                /* crashed asm (ASM-REVIEW M5).				*/
+                if( uval > (0xffffffffU - digit) / radix ) overflow = TRUE;
+                uval = uval * radix + digit;
                 val = val * radix + digit;
+                if( toksize >= maxtok ) tokerror();
                 token[toksize] = ch;
 		toksize++;
                 ch = asm_rdch();
@@ -344,10 +354,16 @@ WORD ch;
         unrdch(ch);
         token[toksize] = '\0';
 
+        if( overflow ) linkerror("Number %s%s does not fit in 32 bits",radix == 16 ? "#" : "",token);
+
         symb = s_number;
         tokval.w = (sign==c_minus?-val:val);
+        /* Fix: unary minus is applied by the parser; -N fits in 32	*/
+        /* bits only for N <= 0x80000000 (A8)				*/
+        toknegovf = !overflow && uval > 0x80000000U;
 
 	trace("readnumber: %d",tokval.w);
+	return tokval.w;	/* Host port: was falling off the end */
 }
 
 int rdcharnum(radix,ch)
@@ -358,7 +374,7 @@ int ch;
 	int i;
         for( i = 0 ; i < 3 ; i++ )
         {
-                INT digit;
+                INT digit = 0;	/* Host port: silences gcc; radix is 8 or 16 */
                 UBYTE uch = locase(ch);
 
                 switch( radix )
@@ -399,7 +415,8 @@ char *name;
 
   while ( offset != 0 )
     {
-      struct keyentry *k = (struct keyentry *)(&(keytab[ offset ]));
+      /* Host port: offset is in bytes, keytab[] is UWORD (asm.h) */
+      struct keyentry *k = (struct keyentry *)((UBYTE *)keytab + offset);
 
       trace("keylookup %s == %s", name, k->name );
 

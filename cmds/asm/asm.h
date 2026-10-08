@@ -1,33 +1,28 @@
 
 #include <stdio.h>
 #include <setjmp.h>
-#ifdef __STDC__
-#include <helios.h>
-#include <string.h>
-#else
+/* Host port: the types come from ttypes.h on every host (it was the	*/
+/* pre-ANSI branch; the ANSI one included Helios's <helios.h>, whose	*/
+/* word is a long), plus the C library headers the sources use.	*/
+/* <queue.h> is no longer included: the List/Node functions were	*/
+/* declared but never used.						*/
 #include "ttypes.h"
-#endif
-#include <queue.h>
+#include <string.h>
+#include <stdlib.h>
+#include <time.h>
+#include <unistd.h>
 
-#ifdef __STDC__
-#define ellipsis 
-/* AM: removed the  ... */
-#else
-#define ellipsis
+/* Helios: the C library has no strdup(); asm.c has one (helios_strdup) */
+#ifdef __HELIOS
+extern char *helios_strdup(const char *s);
+#define strdup helios_strdup
 #endif
+
 
 #ifdef MWC
 #define ATARI 1
 #endif
 
-#ifdef __DOS386
-#include <stdarg.h>
-#include <time.h>
-#define LITTLE_ENDIAN
-#define VERBOSE 1
-#undef min
-#undef max
-#endif
 
 #ifdef IBMPC
 #define LITTLE_ENDIAN
@@ -36,9 +31,7 @@
 
 #ifdef __TRAN
 #define LITTLE_ENDIAN
-#ifndef __DOS386
 #define VERBOSE 0
-#endif
 #endif
 
 extern FILE *outfd;
@@ -85,6 +78,23 @@ extern WORD traceflags;
 extern WORD warnflags;
 #define warn_unref	0x0001
 #define warn_undef	0x0002
+/* Fix: undefined symbols and duplicate definitions are errors; -wu	*/
+/* and -wd make them warnings again, as in 1.3 (ASM-REVIEW H3, H8).	*/
+#define warn_dup	0x0004
+
+/* Host port: "ellipsis" stays empty (old-style declarations) for the	*/
+/* file-local functions; the exported ones have full prototypes below,	*/
+/* so that every call is checked against them.				*/
+#define ellipsis
+
+/* printf-style checking of the message functions' arguments		*/
+#ifdef __GNUC__
+#define PRINTFLIKE(f,a)	__attribute__((format(printf,f,a)))
+#define NORETURN	__attribute__((noreturn))
+#else
+#define PRINTFLIKE(f,a)
+#define NORETURN
+#endif
 
 #ifdef VM
 
@@ -116,6 +126,10 @@ typedef long	VMRef;
 
 
 /* general purpose union */
+/* Host port: on an LP64 host the char * makes this 8 bytes, of which	*/
+/* w, v and b share the first 4. A pointer stored in c must be read	*/
+/* back through c, never through w. A Value is never written to an	*/
+/* output file as a whole.						*/
 
 typedef union Value
   {
@@ -125,6 +139,19 @@ typedef union Value
     char *	c;
   }
 Value;
+
+/* Host port: a Value with every byte zero. A Value is 8 bytes on LP64	*/
+/* (it holds a char *); setting only .w or .v left the other bytes of	*/
+/* the code entries undefined (never read, but not deterministic).	*/
+#ifndef __GNUC__
+#define inline		/* Helios C (Norcroft) has no inline */
+#endif
+static inline Value valzero(void)
+{
+	Value v;
+	memset(&v,0,sizeof(v));
+	return v;
+}
 
 /* keyword dictionary */
 
@@ -386,21 +413,23 @@ extern WORD 	inlib;
 extern FILE *	deffd;
 extern WORD 	vmpagesize;
 extern WORD 	instr_size;
-extern BYTE 	infile[];
+extern char *	infile;		/* Fix: was BYTE infile[128] */
 extern char *	curfile;
 extern WORD 	waste;
-
-#ifdef __DOS386
-extern int 	main(int argc, char **argv);
-extern void 	error(BYTE *str, ...);
-extern void 	warn(BYTE *str, ...);
-extern void 	report(BYTE *str, ...);
-extern void 	_trace(BYTE *str, ...);
-extern void 	recover(BYTE *str, ...);
+extern void 	error(BYTE *str, ...) NORETURN PRINTFLIKE(1,2);
+extern void 	warn(BYTE *str, ...) PRINTFLIKE(1,2);
+extern void 	report(BYTE *str, ...) PRINTFLIKE(1,2);
+extern void 	_trace(BYTE *str, ...) PRINTFLIKE(1,2);
+extern void 	recover(BYTE *str, ...) NORETURN PRINTFLIKE(1,2);
+extern void 	recoverwarn(BYTE *str, ...) NORETURN PRINTFLIKE(1,2);
+extern void 	linkerror(BYTE *str, ...) PRINTFLIKE(1,2);
+extern void 	asmerror(BYTE *str, ...) PRINTFLIKE(1,2);
 extern WORD 	min(WORD a, WORD b);
 extern WORD 	max(WORD a, WORD b);
 extern WORD 	pfsize(WORD n);
-extern void 	encode(WORD op, WORD arg, void (* pbytefn)() );
+extern void 	encode(WORD op, WORD arg, void (*pbytefn)());
+extern UBYTE *	codevec;
+extern WORD 	codepos;
 extern void 	initcode(void);
 extern void 	gencode(UBYTE *code, WORD size);
 extern void 	genbyte(UWORD value);
@@ -422,20 +451,53 @@ extern void 	genend(void);
 extern void 	gensize(int size);
 extern void 	newfile(void);
 extern WORD 	asize(WORD value);
-extern void 	gencsc(void);
 extern void 	genimage(void);
 extern void 	growdata(void);
+extern WORD 	simPc;
+extern Code *	code;
+extern WORD 	iteration;
+extern WORD 	oldloc;
 extern void 	growcode(void);
 extern WORD 	eval(WORD type, WORD earg, WORD loc);
 extern WORD 	dodyadic(WORD op, WORD lexp, WORD rexp);
 extern WORD 	domonadic(WORD op, WORD value);
+extern INT 	symb;
+extern BYTE 	token[ maxtok + 16 ];
+extern Symbol *	toksym;
+extern VMRef 	toksymref;
+extern struct keyentry *	tokkey;
+extern INT 	toksize;
+extern Value 	tokval;
+extern bool 	textinput;	/* Fix: the input is .s text (A10) */
+extern WORD 	tokcount;	/* Fix: tokens read so far (A8) */
+extern bool 	toknegovf;	/* Fix: number > 0x80000000 (A8) */
+extern WORD 	tempval;
+/* Host port: keytab.c (written by keyform) defines the table as	*/
+/* UWORD words; it was declared UBYTE here, a type mismatch between	*/
+/* the files. lex.c addresses it in bytes. keyform.c has its own byte	*/
+/* array of that name.							*/
+#ifndef KEYFORM
+extern UWORD 	keytab[];
+#endif
+extern WORD 	dicttab[];
 extern void 	nextsym(void);
-extern UBYTE *	alloc(long n);
+extern WORD 	codesize;
+extern WORD 	heapsize;
+extern STEntry 	Symtab[ GLOBAL_HASHSIZE ];
+extern WORD 	symsize;
+extern WORD 	exprsize;
+extern WORD 	codeflags;
+extern UBYTE * 	alloc(INT n);
 extern void 	initmem(void);
 extern VMRef 	unary(WORD ntype, WORD etype, WORD expr);
 extern VMRef 	binary(WORD ntype, WORD ltype, WORD rtype, WORD lexp, WORD rexp);
 extern VMRef 	newcode(WORD type, WORD size, WORD vtype, WORD loc, WORD value);
 extern VMRef 	codeptr(void);
+extern VMRef 	module0;
+extern VMRef 	curmod;
+extern VMRef 	firstmodule;
+extern VMRef 	tailmodule;
+extern word 	nmodules;
 extern void 	setmodules(void);
 extern VMRef 	startmodule(WORD mod);
 extern void 	endmodule(void);
@@ -448,139 +510,18 @@ extern void 	initsym(void);
 extern VMRef 	lookup(BYTE *name);
 extern VMRef 	insert(BYTE *name, WORD local);
 extern void 	movesym(VMRef sym);
-extern void 	cps(void);
+extern WORD 	lineno;
+extern WORD 	etype;
 extern void 	initasm(void);
 extern void 	assemble(void);
 extern void 	objed(FILE *fd, char *name, long stacksize, long heapsize);
-extern void 	InitList(List *);
-extern void 	PreInsert(Node *, Node *);
-extern void 	PostInsert(Node *, Node *);
-extern Node 	*Remove(Node *);
-extern void 	AddHead(List *, Node *);
-extern void 	AddTail(List *, Node *);
-extern Node 	*RemHead(List *);
-extern Node 	*RemTail(List *);
-extern word 	WalkList(List *,WordFnPtr,...);
-extern Node 	*SearchList(List *,WordFnPtr,...);
 
-extern time_t 	time(time_t *tloc);
+
 extern void 	initmodules(void);
 extern void 	show_unref(void);
 extern void 	printtab(STEntry *tab);
+extern char *	exprlabel(WORD type, WORD value);	/* Fix: new */
 
-#else /* !__DOS386 */
-
-extern int 	main(ellipsis);
-extern void 	error(ellipsis);
-extern void 	warn(ellipsis);
-extern void 	report(ellipsis);
-extern void 	_trace(ellipsis);
-extern void 	recover(ellipsis);
-extern WORD 	min(ellipsis);
-extern WORD 	max(ellipsis);
-extern WORD 	pfsize(ellipsis);
-extern void 	encode(ellipsis);
-extern void 	initcode(ellipsis);
-extern void 	gencode(ellipsis);
-extern void 	genbyte(ellipsis);
-extern void 	gendirect(ellipsis);
-extern void 	copycode(ellipsis);
-extern VMRef 	deflabel(ellipsis);
-extern void 	genglobal(ellipsis);
-extern void 	genref(ellipsis);
-extern void 	genlabdef(ellipsis);
-extern void 	gendata(ellipsis);
-extern void 	gencommon(ellipsis);
-extern void 	geninit(ellipsis);
-extern void 	genmodule(ellipsis);
-extern void 	genalign(ellipsis);
-extern void 	genword(ellipsis);
-extern void 	genblkw(ellipsis);
-extern void 	genblkb(ellipsis);
-extern void 	genend(ellipsis);
-extern void 	gensize(ellipsis);
-extern void 	newfile(ellipsis);
-extern WORD 	asize(ellipsis);
-extern void 	gencsc(ellipsis);
-extern void 	genimage(ellipsis);
-extern void 	growdata(ellipsis);
-extern void 	growcode(ellipsis);
-extern WORD 	eval(ellipsis);
-extern WORD 	dodyadic(ellipsis);
-extern WORD 	domonadic(ellipsis);
-extern void 	nextsym(ellipsis);
-extern UBYTE *	alloc(ellipsis);
-extern void 	initmem(ellipsis);
-extern UBYTE *	alloc(ellipsis);
-extern VMRef 	unary(ellipsis);
-extern VMRef 	binary(ellipsis);
-extern VMRef 	newcode(ellipsis);
-extern VMRef 	codeptr(ellipsis);
-extern void 	setmodules(ellipsis);
-extern VMRef 	startmodule(ellipsis);
-extern void 	endmodule(ellipsis);
-extern void 	refsymbol_def(ellipsis);
-extern void 	refsymbol_nondef(ellipsis);
-extern void 	modstats(ellipsis);
-extern void 	parsepreasm(ellipsis);
-extern void 	genpreasm(ellipsis);
-extern void 	initsym(ellipsis);
-extern VMRef 	lookup(ellipsis);
-extern VMRef 	insert(ellipsis);
-extern void 	movesym(ellipsis);
-extern void 	cps(ellipsis);
-extern void 	initasm(ellipsis);
-extern void 	assemble(ellipsis);
-extern void 	objed(ellipsis);
-extern void 	InitList(ellipsis);
-extern void 	AddTail(ellipsis);
-extern void 	AddHead(ellipsis);
-extern Node *	RemHead(ellipsis);
-extern Node *	RemTail(ellipsis);
-
-/* extern int 	PreInsert(ellipsis);
-extern int 	PostInsert(ellipsis); */
-
-extern Node *	Remove(ellipsis);
-
-extern int 	time(ellipsis);
-extern void 	initmodules(ellipsis);
-extern void 	show_unref(ellipsis);
-extern void 	printtab(ellipsis);
-extern void 	report(ellipsis);
-
-#endif /* __DOS386 */
-
-extern UBYTE *	codevec;
-extern WORD 	codepos;
-extern WORD 	simPc;
-extern Code *	code;
-extern WORD 	iteration;
-extern WORD 	oldloc;
-extern INT 	symb;
-extern BYTE 	token[ maxtok + 16 ];
-extern Symbol *	toksym;
-extern VMRef 	toksymref;
-extern struct keyentry *	tokkey;
-extern INT 	toksize;
-extern Value 	tokval;
-extern WORD 	tempval;
-extern UBYTE 	keytab[];
-extern WORD 	dicttab[];
-extern WORD 	codesize;
-extern WORD 	heapsize;
-extern STEntry 	Symtab[ GLOBAL_HASHSIZE ];
-extern WORD 	symsize;
-extern WORD 	exprsize;
-extern WORD 	codeflags;
-extern List 	modlist;
-extern VMRef 	module0;
-extern VMRef 	curmod;
-extern VMRef 	firstmodule;
-extern VMRef 	tailmodule;
-extern word 	nmodules;
-extern WORD 	lineno;
-extern WORD 	etype;
 extern WORD filepos;
 
 #ifdef RDCH_FN

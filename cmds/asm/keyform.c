@@ -6,10 +6,11 @@
 /* directive names.                                             */
 /*                                                              */
 /****************************************************************/
-/* $Id: keyform.c,v 1.11 1994/08/09 16:43:25 al Exp $ */
+/* $Id: keyform.c,v 1.7 1991/06/07 07:30:14 nickc Exp $ */
 
 
 
+#define KEYFORM		/* Host port: keytab[] below, not asm.h's */
 #include "asm.h"
 
 #define TABSIZE 5000
@@ -23,6 +24,13 @@ UBYTE keytab[ TABSIZE ];
 INT keyupb = 4;
 
 FILE *ofd;
+
+/* Host port: prototypes (these were implicitly int functions) */
+void keyform(void);
+void keyform1(void);
+void keyform2(void);
+void install(char *name, int type, WORD value);
+void puttab(INT *tab, INT upb);
 
 #include "hash.c"
 
@@ -55,7 +63,11 @@ main()
     }
 
   /* fprintf(ofd,"#include "ttypes.h"\n\nINT keytab[] =\n{\n"); */
-  fprintf(ofd,"\nlong keytab[] =\n{\n");
+  /* Host port: the tables are arrays of 32-bit words; long is 64 bits	*/
+  /* on an LP64 host. The words hold the table bytes in the byte order	*/
+  /* of the host running keyform, which must be that of the host the	*/
+  /* assembler is built for (both little-endian here).			*/
+  fprintf(ofd,"#include \"ttypes.h\"\n\nUWORD keytab[] =\n{\n");
 
   for( i = 0; i < GLOBAL_HASHSIZE ; i++)
     {
@@ -67,24 +79,24 @@ main()
   keyform1();
   keyform2();
 
-  puttab(keytab,keyupb);
+  puttab((INT *)keytab,keyupb);
 
-  fprintf(ofd,"};\n\nlong dicttab[] = {\n");
+  fprintf(ofd,"};\n\nWORD dicttab[] = {\n");
 
   for( i = 0 ; i < GLOBAL_HASHSIZE-1; i++ )
     {
       if( (i % 10) == 0  ) fprintf(ofd,"\n   ");
-      fprintf(ofd,"%ld,",dicttab[i]);
+      fprintf(ofd,"%d,",dicttab[i]);
     }
 
-  fprintf(ofd,"%ld };\n",dicttab[ GLOBAL_HASHSIZE - 1 ]);
+  fprintf(ofd,"%d };\n",dicttab[ GLOBAL_HASHSIZE - 1 ]);
 
   fprintf(ofd,"\n/* chain lengths: ");
 
   for( i = 0 ; i < GLOBAL_HASHSIZE; i++ )
     {
       if( (i % 10) == 0  ) fprintf(ofd,"\n   ");
-      fprintf(ofd,"%ld,",ccount[i]);
+      fprintf(ofd,"%d,",ccount[i]);
     }
 
   fprintf(ofd,"\n*/\n\n");
@@ -94,7 +106,7 @@ main()
   exit(0);
 }
 
-keyform()
+void keyform()
 {
 
         /* direct functions */
@@ -152,7 +164,7 @@ keyform()
         install("rem",          s_oper2,        cat2(0x21,0xff));
 
 }
-keyform1()
+void keyform1()
 {
         install("ret",          s_oper2,        cat2(0x22,0xf0));
         install("lend",         s_oper2,        cat2(0x22,0xf1));
@@ -225,7 +237,7 @@ keyform1()
         install("postnormsn",   s_oper2,        cat2(0x26,0xfc));
         install("roundsn",      s_oper2,        cat2(0x26,0xfd));
 }
-keyform2()
+void keyform2()
 {
         install("ldinf",        s_oper2,        cat2(0x27,0xf1));
         install("fmul",         s_oper2,        cat2(0x27,0xf2));
@@ -325,7 +337,7 @@ keyform2()
 	install("ref",		s_directive,	(WORD)s_ref);        
 }
 
-install(name,type,value)
+void install(name,type,value)
 char *name;
 int type;
 WORD value;
@@ -333,18 +345,20 @@ WORD value;
         UWORD h = (hash(name) % GLOBAL_HASHSIZE);
         struct keyentry *k = (struct keyentry *)(&keytab[keyupb]);
 
-        printf("Install: %ld %s %lu %d %lx\n",keyupb,name,h,type,value);
+        printf("Install: %d %s %u %d %x\n",keyupb,name,h,type,value);
         k->next = 0;
         k->type = type;
         k->value = value;
 
-#if !defined(SWAPKEYTABLE) && !defined(__DOS386)
+/* Host port: the SUN4 host was big-endian; a little-endian Unix host	*/
+/* keeps the names in their natural order.				*/
+#if defined(SUN4) && defined(HOSTISBIGENDIAN)
 	{
 	int to = 3;
 	char *p = name;
 	char *q = k->name;
 
-	printf("swapping %s\n", name);
+printf("swapping %s\n", name);
 	while(*p)
 		{
 		q[to--] = *p++;
@@ -372,7 +386,7 @@ WORD value;
         keyupb = (keyupb + 3) & (~3);
 }
 
-puttab(tab,upb)
+void puttab(tab,upb)
 INT *tab;
 INT upb;
 {
@@ -381,8 +395,8 @@ INT upb;
         for( i = 0 ; i < upb ; i++ )
         {
                 if( (i % 8) == 0 ) fprintf(ofd,"\n");
-                fprintf(ofd,"0x%08lxL,",tab[i]);
+                fprintf(ofd,"0x%08x,",tab[i]);
         }
-        fprintf(ofd,"0x%08lxL",tab[upb]);
+        fprintf(ofd,"0x%08x",tab[upb]);
 }
 

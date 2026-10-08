@@ -1,8 +1,9 @@
-/* $Id: objdump.c,v 1.5 1991/12/02 15:08:10 martyn Exp $ */
+/* $Id: objdump.c,v 1.4 1990/09/28 14:18:19 nick Exp martyn $ */
 
 
 #include "asm.h"
 #include <ctype.h>
+#include <stdarg.h>
 
 #define RB "rb"
 
@@ -26,7 +27,28 @@ char *fns[] =
         "opr  "
 };
 
-char ebuf[300];
+/* Fix: ebuf was a char [300] filled without a bound by expr1() and	*/
+/* label(); a symbol name (up to 1023 characters) or an expression	*/
+/* longer than that overflowed it. It grows now.			*/
+static char ebuf0[300];
+char *ebuf = ebuf0;
+int ebufsize = sizeof(ebuf0);
+
+void ebufput(int i, int c)
+{
+	if( i >= ebufsize )
+	{
+		int nsize = ebufsize * 2;
+		char *n;
+		while( i >= nsize ) nsize *= 2;
+		n = malloc(nsize);
+		if( n == NULL ) { fprintf(stderr,"Error: out of memory\n"); exit(1); }
+		memcpy(n,ebuf,ebufsize);
+		if( ebuf != ebuf0 ) free(ebuf);
+		ebuf = n; ebufsize = nsize;
+	}
+	ebuf[i] = c;
+}
 int ch;
 FILE *f;
 int modnum;
@@ -42,11 +64,15 @@ int rdch()
 	return ch;
 }
 
-void error(fmt,arg)
-char *fmt, *arg;
+/* Host port: real varargs; "unexpected code %x" passed an int where	*/
+/* this took a char *.							*/
+void error(BYTE *fmt, ...)
 {
+	va_list ap;
 	fprintf(stderr,"Error: ");
-	fprintf(stderr,fmt,arg);
+	va_start(ap,fmt);
+	vfprintf(stderr,fmt,ap);
+	va_end(ap);
 	fprintf(stderr,"\n");
 	exit(1);
 }
@@ -56,10 +82,10 @@ void expr1()
 	int i = 0;
 	do
 	{
-		ebuf[i++] = ch;
+		ebufput(i++,ch);
 		rdch();
 	} while( ch > ' ' && ch < '~' );
-	ebuf[i] = 0;
+	ebufput(i,0);
 }
 
 void expr()
@@ -72,10 +98,10 @@ void label()
 {
 	int i = 0;
 	do {
-		ebuf[i++] = ch;
+		ebufput(i++,ch);
 		rdch();
 	} while( ch < 0x80 && ( isalnum(ch) || ch == '.' || ch == '_' ) );
-	ebuf[i] = 0;
+	ebufput(i,0);
 }
 
 void showcode(size)
@@ -100,7 +126,7 @@ int size;
 		{
 			ebuf[size] = 0;
 			printf("\"%s\"",ebuf);
-			if( ebuf[size-1] == 0 ) printf(",0\n");
+			if( size > 0 && ebuf[size-1] == 0 ) printf(",0\n");	/* Fix: size 0 */
 			else printf("\n");
 			return;
 		}
@@ -160,6 +186,11 @@ char *file;
 			
 		case s_code:
 			size = rdch();
+			/* Fix: a CODE record cut off at the end of the	*/
+			/* file passed size -1 (EOF) on; showcode() read	*/
+			/* ebuf[-1] for size 0 or -1. asm never writes an	*/
+			/* empty record.					*/
+			if( size == EOF ) error("unexpected end of file in a CODE record");
 			for( i = 0; i < size ; i++ )
 			{
 				ebuf[i]	= rdch();
@@ -268,4 +299,5 @@ char **argv;
 		else objdump(arg);
 		argv++;
 	}	
+	return 0;	/* Host port: was falling off the end */
 }

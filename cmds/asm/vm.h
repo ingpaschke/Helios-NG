@@ -1,4 +1,4 @@
-/* $Id: vm.h,v 1.4 1992/09/25 10:41:21 paul Exp $ */
+/* $Id: vm.h,v 1.3 1991/03/25 11:17:45 nick Exp $ */
 
 
 #define VMmask		0xf
@@ -29,6 +29,10 @@ typedef struct VMRef {
 #define offset_(x)	((x).offset)
 #define page_(x)	((x).page)
 
+/* Host port: a VMRef as the 32-bit number page<<16|offset, for	*/
+/* printing with %x (a struct cannot be passed to printf)		*/
+#define VMWord(x)	(((unsigned)page_(x) << 16) | (unsigned)offset_(x))
+
 #define VMSame(x,y) ((page_(x) == page_(y)) && (offset_(x) == offset_(y)))
 
 #define MakeVMRef(r,p,o) ((r).page = p, (r).offset = o)
@@ -58,11 +62,19 @@ VMswap(x):VMTable[page_(x)].addr+offset_(x)))
 
 #endif
 		
-#define VMcheck(v) ((*(int *)&v > 0) && (page_(v) > 0) && (page_(v) < VMTabUpb) && (offset_(v) < VMPageSize))
+/* Host port: VM allocations are rounded up to the alignment of a	*/
+/* pointer (and at least to 4 bytes, the transputer word): structures	*/
+/* held in VM pages contain a char * on an LP64 host.			*/
+#define VMgrain		(sizeof(char *) > 4 ? sizeof(char *) : 4)
+#define VMwordlen(s)	((int)(((s) + VMgrain - 1) & ~(VMgrain - 1)))
+
+/* Host port: VMWord(), not *(int *)&v: a VMRef is a bit-field struct	*/
+/* (also in NullRef, VMInit, VMswap)					*/
+#define VMcheck(v) (((int)VMWord(v) > 0) && (page_(v) > 0) && (page_(v) < VMTabUpb) && (offset_(v) < VMPageSize))
 
 #define VMDirty(x) {if(VMTable[page_(x)].status&VMswapped)VMswap(x);VMTable[page_(x)].status|=VMdirty;}
 
-#define NullRef(x) (*(int *)&(x) == 0)
+#define NullRef(x) (VMWord(x) == 0)
 
 extern VMpage *VMTable;
 extern char *VMfilename;

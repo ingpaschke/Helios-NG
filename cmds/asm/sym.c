@@ -5,7 +5,7 @@
 /*                                                              */
 /* Author: NHG 17-Feb-87                                        */
 /****************************************************************/
-/* $Id: sym.c,v 1.9 1994/08/09 16:43:25 al Exp $ */
+/* $Id: sym.c,v 1.6 1991/03/28 15:29:49 nick Exp $ */
 
 #include "asm.h"
 #include <ctype.h>
@@ -20,11 +20,7 @@ PRIVATE VMRef globheap;
 PUBLIC STEntry Symtab[ GLOBAL_HASHSIZE ];
 PUBLIC WORD symsize;
 
-#ifdef __DOS386
-UWORD hash(char *s);
-#else /* !__DOS386 */
 UWORD hash(ellipsis);
-#endif /* __DOS386 */
 
 /********************************************************/
 /* initsym                                              */
@@ -84,11 +80,11 @@ lookup( name )
 	  Symbol *	s;
 	  
 	  if ( !VMcheck( sym ) ) 
-	    error( "badvm l %x %x %s %d", sym, curmod, name, h );
+	    error( "badvm l %x %x %s %d", VMWord(sym), VMWord(curmod), name, h );
 	  
 	  s = VMAddr( Symbol, sym );
 	  
-	  trace( "mod lookup sym %x %s == %s", sym, name, s->name );
+	  trace( "mod lookup sym %x %s == %s", VMWord(sym), name, s->name );
 	  
 	  if ( !VMSame( curmod, s->module ) || s->global ) 
 	    warn( "global or external symbol found in local symbol table: %s", s->name );
@@ -125,11 +121,11 @@ lookup( name )
       
       
       if ( !VMcheck( sym ) ) 
-	error( "badvm g %x %x %s %d", sym, curmod, name, h );
+	error( "badvm g %x %x %s %d", VMWord(sym), VMWord(curmod), name, h );
       
       s = VMAddr( Symbol, sym );
       
-      trace( "glob lookup sym %x %s == %s", sym, name, s->name );
+      trace( "glob lookup sym %x %s == %s", VMWord(sym), name, s->name );
       
       
       if ( !s->global && !VMSame( curmod, module0 ) )
@@ -197,7 +193,7 @@ WORD local;
 
 	symsize += size;
 
-	trace("insert %s %d sym = %x",name,local,sym);
+	trace("insert %s %d sym = %x",name,local,VMWord(sym));
 
 	s = VMAddr(Symbol,sym);
 	VMDirty(sym);
@@ -206,7 +202,7 @@ WORD local;
         strcpy(s->name,name);
 	
         s->type       = 0;
-        s->def.w      = NULL;
+        s->def.w      = 0;	/* Host port: was NULL, a pointer */
 	s->referenced = 0;
 
 #ifdef NEW_REF
@@ -303,7 +299,7 @@ movesym( sym )
   
   VMlock( sym );
   
-  trace( "movesym ref %x name %s links %x %x", sym, s->name, s->next, s->prev );
+  trace( "movesym ref %x name %s links %x %x", VMWord(sym), s->name, VMWord(s->next), VMWord(s->prev) );
   
   if ( NullRef( s->prev ) )
     {
@@ -397,7 +393,7 @@ void show_unref()
 			asm_Module *m = NULL;
 			char *type;
 
-			if( !VMcheck(sym) ) error("badvm %x %d",sym,h);
+			if( !VMcheck(sym) ) error("badvm %x %d",VMWord(sym),h);
 
 			VMlock(sym);
 
@@ -425,7 +421,7 @@ _trace("%x %x t %x g %d r %d m %x d %d %s",sym,s,s->type,s->global,s->referenced
 			if( s->referenced == 0 && m != NULL && 
 			    m->linked && m->id == -1)
 			{
-				strcpy(infile,m->file);
+				infile = m->file ? m->file : "";	/* Fix: was a strcpy */
 				warn(" %s symbol %s unreferenced",type,s->name);
 			}
 
@@ -457,7 +453,7 @@ STEntry *tab;
 			asm_Module *m = NULL;
 			char *type;
 
-			if( !VMcheck(sym) ) error("badvm %x %d",sym,h);
+			if( !VMcheck(sym) ) error("badvm %x %d",VMWord(sym),h);
 
 			VMlock(sym);
 
@@ -486,7 +482,7 @@ _trace("%x %x t %x g %d r %d m %x d %d %s",sym,s,s->type,s->global,s->referenced
 			     report("%30s %s %4d no module",s->name,type,
 			     		s->referenced);
 			else report("%30s %s %4d [%d,%d]",s->name,type,
-					s->referenced,m->id,s->def);
+					s->referenced,m->id,s->def.w);
 
 			VMunlock(sym);
                         sym = s->next;
@@ -494,3 +490,67 @@ _trace("%x %x t %x g %d r %d m %x d %d %s",sym,s,s->type,s->global,s->referenced
         }
 }
 
+
+/********************************************************/
+/* Fix: exprlabel					*/
+/*							*/
+/* The name of a label in an expression, for messages:	*/
+/* the first symbol found, or the code label at a code	*/
+/* reference (by a search of the symbol tables), or	*/
+/* NULL.						*/
+/********************************************************/
+
+PRIVATE char *findcodelabel(STEntry *tab, int size, VMRef c)
+{
+	int h;
+	for( h = 0; h < size; h++ )
+	{
+		VMRef sym = tab[h].head;
+		while( !NullRef(sym) )
+		{
+			Symbol *s = VMAddr(Symbol,sym);
+			if( s->type == s_codesymb && VMSame(s->def.v,c) ) return s->name;
+			sym = s->next;
+		}
+	}
+	return NULL;
+}
+
+char *exprlabel(type, value)
+WORD type, value;
+{
+	Value v; v.w = value;
+
+	switch( (int)type )
+	{
+	case s_unbound: case s_codesymb: case s_label:
+	case s_datasymb: case s_datadone: case s_commsymb: case s_commdone:
+	case s_at:
+		return VMAddr(Symbol,v.v)->name;
+
+	case s_coderef:
+	{
+		VMRef m;
+		char *name = findcodelabel(Symtab,GLOBAL_HASHSIZE,v.v);
+		for( m = module0; name == NULL && !NullRef(m);
+		     m = VMAddr(asm_Module,m)->next )
+			name = findcodelabel(VMAddr(asm_Module,m)->symtab,LOCAL_HASHSIZE,v.v);
+		return name;
+	}
+
+	case s_expr:
+	{
+		Bnode *b = VMAddr(Bnode,v.v);
+		WORD rtype = b->rtype, rexp = b->rexp.w;
+		char *name = exprlabel((WORD)b->ltype,b->lexp.w);
+		return name ? name : exprlabel(rtype,rexp);
+	}
+
+	case s_monadic:
+	{
+		Unode *u = VMAddr(Unode,v.v);
+		return exprlabel((WORD)u->etype,u->expr.w);
+	}
+	}
+	return NULL;
+}

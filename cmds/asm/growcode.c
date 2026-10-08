@@ -13,7 +13,7 @@
 /*                                                                      */
 /* Copyright (c) 1987, Perihelion Software Ltd. All Rights Reserved.    */
 /************************************************************************/
-/* $Id: growcode.c,v 1.7 1994/08/09 16:43:25 al Exp $ */
+/* $Id: growcode.c,v 1.5 1991/03/28 17:50:25 nick Exp $ */
 
 #include "asm.h"
 
@@ -24,22 +24,12 @@
 PUBLIC WORD 	simPc;
 PUBLIC Code *	code;
 PUBLIC WORD 	iteration;
-PRIVATE 	dataoffset;
+PRIVATE int	dataoffset;	/* Host port: was implicit int */
 PUBLIC WORD 	oldloc;
-
-#ifdef __DOS386
-
-WORD eval(WORD type, WORD earg, WORD loc);
-WORD dodyadic(WORD op, WORD lexp, WORD rexp);
-WORD domonadic(WORD op, WORD value);
-
-#else /* !__DOS386 */
 
 WORD eval(ellipsis);
 WORD dodyadic(ellipsis);
 WORD domonadic(ellipsis);
-
-#endif /* __DOS386 */
 
 /****************************************************************/
 /* Procedure: growcode                                          */
@@ -51,10 +41,12 @@ WORD domonadic(ellipsis);
 PUBLIC void
 growcode()
 {
-  WORD 		oldchanges = 0;
-  bool 		growonly = FALSE;
+  /* Host port: volatile, as the locals a longjmp() back into this	*/
+  /* function finds must be.						*/
+  volatile WORD	oldchanges = 0;
+  volatile bool	growonly = FALSE;
   jmp_buf 	oldreclev;
-  WORD 		changes;
+  volatile WORD	changes;
   asm_Module *	m;
   
 
@@ -67,7 +59,11 @@ growcode()
     {
       register Code *	c;
       register WORD 	tag;
-      VMRef 		curblock;
+#ifdef __GNUC__
+      volatile VMRef	curblock;	/* Host port: live across longjmp() */
+#else
+      VMRef		curblock;	/* Helios C: no volatile struct assignment */
+#endif
 
       
       curmod   = module0;
@@ -84,19 +80,23 @@ growcode()
       changes = 0;
       simPc   = 0;
       
-      trace( "Iteration = %ld", iteration );
+      trace( "Iteration = %d", iteration );
       
       if ( iteration == MaxIterations )
         {
-	  warn( "PROBABLE BUG IN GROWCODE, %ld iterations", iteration );
+	  /* Fix: an error; the code sizes have not converged, so the	*/
+	  /* offsets in the image would be wrong (was a warning).	*/
+	  asmerror( "PROBABLE BUG IN GROWCODE, %d iterations", iteration );
 	  
 	  break;
         }
       
       /* when an error is detected, longjmp here */
       
+      /* Fix: recover() has counted the error already; counting it	*/
+      /* twice stopped asm at 50 errors (ASM-REVIEW-FIXES A11)	*/
       if ( setjmp( error_level ) != 0 )
-	code++, errors++;
+	code++;
       
       for (;;)
         {
@@ -108,7 +108,7 @@ growcode()
 	  if ( simPc != oldloc )
 	    changes++;
 	  
-	  trace( "code: %5ld : %2lx %3ld %2x %8lx", c->loc, tag, (WORD)c->size, c->vtype, c->value.w );
+	  trace( "code: %5d : %2x %3d %2x %8x", c->loc, tag, (WORD)c->size, c->vtype, c->value.w );
 	  
 	  if ( tag == s_newseg ) 
 	    {
@@ -139,7 +139,7 @@ growcode()
 	      m = VMAddr( asm_Module, curmod );
 	      
 	      if ( m->id < 0 )
-		error("Invalid module 1: %x %x %x %d", curmod, m, m->next, m->id );
+		error("Invalid module 1: %x %p %x %d", VMWord(curmod), (void *)m, VMWord(m->next), m->id );
 	      
 	      curblock = m->start;
 	      
@@ -191,8 +191,15 @@ growcode()
 		  
 		  if ( NullRef( s->module ) ) 
 		    {
-		      warn( "DATA label %s undefined - module set to zero", s->name );
+		      /* Fix: an error unless -wu (ASM-REVIEW H3) */
+		      if ( warnflags & warn_undef )
+		        warn( "DATA label %s undefined - module set to zero", s->name );
+		      else
+		        linkerror( "DATA label %s undefined", s->name );
 		      
+		      /* Fix: module 0 from now on, so that the symbol is	*/
+		      /* reported once, as in eval() (A12; was once per use)	*/
+		      s->module = module0;
 		      c->vtype   = s_number;
 		      c->value.w = 0;	
 		    }
@@ -202,7 +209,7 @@ growcode()
 		      
 		      if ( m->id < 0 )
 			{
-			  error( "Bad module number for %s m %x (%s) id %x", s->name, s->module, m->file, m->id );
+			  error( "Bad module number for %s m %x (%s) id %x", s->name, VMWord(s->module), m->file, m->id );
 			}
 		      
 		      c->vtype   = s_number;
@@ -230,7 +237,7 @@ growcode()
 	      
 	      isize = pfsize( expr );
 	      
-	      trace( "Etype = %lx expr = %lx isize = %lx", etype, expr, isize );
+	      trace( "Etype = %x expr = %x isize = %x", etype, expr, isize );
 	      
 	      /* For code references. If the offset is -ve then		*/
 	      /* repeat the evaluation with the new code size until	*/
@@ -295,7 +302,8 @@ growcode()
 	      break;
 	      
 	    case s_newfile:
-	      strcpy( infile, (char *)c->value.w );
+	      infile = c->value.c;	/* Host port: was (char *)value.w */
+					/* Fix: was a strcpy into infile[128] */
 	      trace( "new file %s", infile );
 	      break;
 	      
@@ -314,7 +322,7 @@ growcode()
       
       if ( verbose )
 	{
-	  fprintf( verfd, "Iteration %4ld Changes %ld     \r", iteration, changes );
+	  fprintf( verfd, "Iteration %4d Changes %d     \r", iteration, changes );
 	  
 	  fflush( verfd );
 	}
@@ -331,7 +339,7 @@ growcode()
   
   memcpy( error_level, oldreclev, sizeof (jmp_buf) );
   
-  /* report( "\n%ld Iterations Required", iteration ); */
+  /* report( "\n%d Iterations Required", iteration ); */
 
   return;
 }
@@ -363,7 +371,7 @@ WORD type,earg,loc;
     }
     else etype = type;
 
-    trace("Eval %2lx %8lx %8lx",etype,earg,loc);
+    trace("Eval %2x %8x %8x",etype,earg,loc);
 
     switch( (int)etype )
     {
@@ -421,19 +429,37 @@ WORD type,earg,loc;
     case s_modnum:
     	m = VMAddr(asm_Module,curmod);
 	etype = s_number;
-	if( m->id < 0 ) error("Invalid module 2: %x %x %x %d",curmod,m,m->next,m->id);
+	if( m->id < 0 ) error("Invalid module 2: %x %p %x %d",VMWord(curmod),(void *)m,VMWord(m->next),m->id);
         return m->id;
     
     case s_at:
         etype = s_number;
         s = VMAddr(Symbol,expr.v);
+        /* Fix: @ of an undefined symbol inside an expression or a	*/
+        /* word read module NullVMRef: "VM Error: invalid VMRef 0"	*/
+        /* (ASM-REVIEW M7). Handled as at the top level of an		*/
+        /* instruction.							*/
+        if( NullRef(s->module) )
+        {
+            if( warnflags & warn_undef )
+                warn("DATA label %s undefined - module set to zero",s->name);
+            else
+                linkerror("DATA label %s undefined",s->name);
+            s->module = module0;	/* module 0 from now on, reported once */
+            return 0;
+        }
         m = VMAddr(asm_Module,s->module);
-       	if( m->id < 0 ) error("Invalid module 3: %x %x %x %d",s->module,m,m->next,m->id);
+       	if( m->id < 0 ) error("Invalid module 3: %x %p %x %d",VMWord(s->module),(void *)m,VMWord(m->next),m->id);
         return m->id;
 
     case s_unbound:     /* undefined - an error!!        */
         s = VMAddr(Symbol,expr.v);
-        warn("Symbol '%s' undefined - set to zero",s->name);
+        /* Fix: an error unless -wu; it was a warning and the image	*/
+        /* used 0, e.g. a call to address 0 (ASM-REVIEW H3).		*/
+        if( warnflags & warn_undef )
+	        warn("Symbol '%s' undefined - set to zero",s->name);
+        else
+	        linkerror("Symbol '%s' undefined",s->name);
         s->def.w = 0;
         s->type = s_datadone;
         return 0;
@@ -493,7 +519,7 @@ WORD type,earg,loc;
         rvalue = eval(rtype,rexp.w,loc); rtype = etype;
 
 
-	trace("Expr: L %2lx %8lx Op %2lx R %2lx %8lx",ltype,lvalue,
+	trace("Expr: L %2x %8x Op %2x R %2x %8x",ltype,lvalue,
 		ntype,rtype,rvalue);
 		
         if( islabel(ltype) && islabel(rtype) && ltype != rtype )
@@ -538,7 +564,7 @@ WORD type,earg,loc;
 
     }
 
-    return 0;
+    return 0;	/* Host port: was falling off the end */
 }
 
 PUBLIC WORD dodyadic(op,lexp,rexp)
@@ -550,16 +576,23 @@ WORD op,lexp,rexp;
         case s_plus : return lexp  +  rexp;
         case s_minus: return lexp  -  rexp;
         case s_mul  : return lexp  *  rexp;
-        case s_div  : return lexp  /  rexp;
-        case s_rem  : return lexp  %  rexp;
-        case s_shl  : return lexp  << rexp;
-        case s_shr  : return lexp  >> rexp;
+        /* Host port: x86 traps on a division by zero and on		*/
+        /* MinInt / -1, AArch64 returns 0 and MinInt: give the same	*/
+        /* answers everywhere. The shift counts are taken modulo 32,	*/
+        /* as the i386 shift instructions did.				*/
+        case s_div  : if( rexp == 0 ) error("Division by zero");
+                      if( rexp == -1 ) return (WORD)(0 - (UWORD)lexp);
+                      return lexp  /  rexp;
+        case s_rem  : if( rexp == 0 ) error("Division by zero");
+                      if( rexp == -1 ) return 0;
+                      return lexp  %  rexp;
+        case s_shl  : return (WORD)((UWORD)lexp << (rexp & 31));
+        case s_shr  : return lexp  >> (rexp & 31);
         case s_and  : return lexp  &  rexp;
         case s_or   : return lexp  |  rexp;
         case s_xor  : return lexp  ^  rexp;
     }
-
-    return 0;
+    return 0;	/* Host port: was falling off the end */
 }
 
 PUBLIC WORD domonadic(op,value)
@@ -567,11 +600,10 @@ WORD op,value;
 {
     switch ( (int)op )
     {
-        case s_minus: return -value;
+        case s_minus: return (WORD)(0 - (UWORD)value);
         case s_not  : return ~value;
     }
-
-    return 0;
+    return 0;	/* Host port: was falling off the end */
 }
 
 /*  -- End of growcode.c -- */

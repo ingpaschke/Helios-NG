@@ -11,7 +11,7 @@
 /*                                                                      */
 /* Copyright (c) 1987, Perihelion Software Ltd. All Rights Reserved.    */
 /************************************************************************/
-/* $Id: module.c,v 1.7 1994/08/09 16:43:25 al Exp $ */
+/* $Id: module.c,v 1.5 1991/06/07 07:30:14 nickc Exp $ */
 
 #include "asm.h"
 
@@ -34,20 +34,9 @@ PRIVATE word 	highmodule    = 0;
 PRIVATE VMRef *	modtab        = NULL;
 PRIVATE word 	modtabend     = 0;
 
-#ifdef __DOS386
-
-void linkmodule( VMRef v );
-void dorefs( VMRef mod );
-static void extendmodtab( void );
-
-#else /* !__DOS386 */
-
 void linkmodule( ellipsis );
 void addref( ellipsis );
 void dorefs( ellipsis );
-static void extendmodtab( ellipsis );
-
-#endif /* __DOS386 */
 
 #ifdef NEW_REF
 
@@ -67,6 +56,9 @@ FwdRef *	fwdrefs = NULL;
 FwdRef *	fwdfree = NULL;
 
 #endif
+
+
+static void extendmodtab( ellipsis );
 
 PUBLIC void
 initmodules()
@@ -135,7 +127,7 @@ setmodules()
 	  
 	  modtab[ m->id ] = v;
 
-	  trace( "Pre-defined module %x[%x] at %d", v, m, m->id );
+	  trace( "Pre-defined module %x[%p] at %d", VMWord(v), (void *)m, m->id );
 
 	  if ( m->id > maxmodule )
 	    maxmodule = m->id;
@@ -170,7 +162,7 @@ setmodules()
 	  
 	  VMDirty( v );
 
-	  trace( "Assign module %x[%x] to %d", v, m, lastm );
+	  trace( "Assign module %x[%p] to %d", VMWord(v), (void *)m, lastm );
 
 	  if ( m->id > maxmodule )
 	    maxmodule = m->id;
@@ -202,7 +194,7 @@ setmodules()
 	    
 	    m = VMAddr( asm_Module, curmod );
 
-	    trace( "Added module %x[%x] %d to list", curmod, m, m->id );
+	    trace( "Added module %x[%p] %d to list", VMWord(curmod), (void *)m, m->id );
 
 	    curmod = m->next = modtab[ i ];
 	  }
@@ -212,7 +204,7 @@ setmodules()
   
   m = VMAddr( asm_Module, curmod );
   
-  trace( "Last module = %x %d", curmod, m->id );
+  trace( "Last module = %x %d", VMWord(curmod), m->id );
   
   m->next = NullVMRef;
   
@@ -328,7 +320,7 @@ linkmodule( v )
       return;		/* return if module already linked */
     }  
 
-  trace( "link module %x symbol %s", s->module, s->name );
+  trace( "link module %x symbol %s", VMWord(s->module), s->name );
 
   m->linked = TRUE;
   m = VMAddr( asm_Module, tailmodule );
@@ -358,7 +350,7 @@ startmodule( mod )
   int 		i;
 
 
-  trace( "startmodule %x", v );
+  trace( "startmodule %x", VMWord(v) );
   
   VMlock( v );
   
@@ -395,7 +387,7 @@ startmodule( mod )
   
   maxmodules++;
   
-  trace( "new module %x %d in %s", curmod, filemod, infile );
+  trace( "new module %x %d in %s", VMWord(curmod), filemod, infile );
   
   /* leave new curmod locked */
 
@@ -428,7 +420,7 @@ endmodule()
   bool 		linked = VMAddr( asm_Module, curmod )->linked;
 
   
-  trace( "endmodule %x", curmod );
+  trace( "endmodule %x", VMWord(curmod) );
   
   /* first scan fwdrefs & throw out all local & refs to linked modules */
 
@@ -589,7 +581,7 @@ endmodule()
   
   VMDirty( curmod );
   
-  trace( "endmodule %x done", curmod );
+  trace( "endmodule %x done", VMWord(curmod) );
 
   return;
 }
@@ -610,7 +602,7 @@ dorefs( mod )
   if ( NullRef( r ) )
     return;
 
-  trace( "scanning refs for %x", mod );
+  trace( "scanning refs for %x", VMWord(mod) );
 
   VMlock( r );
   
@@ -641,7 +633,7 @@ extendmodtab()
   if ( newtab == NULL )
     error( "Cannot get space for module table" );
   
-  trace( "Extending modtab from %x[%d] to %x[%d]", modtab, modtabend, newtab, modtabend + modtabinc );
+  trace( "Extending modtab from %p[%d] to %p[%d]", (void *)modtab, modtabend, (void *)newtab, modtabend + modtabinc );
   
   for( i = modtabend ; i < modtabend + modtabinc ; i++ ) newtab[ i ] = NullVMRef;
   for( i = 0 ;         i < modtabend ;             i++ ) newtab[ i ] = modtab[ i ];
@@ -658,8 +650,8 @@ extendmodtab()
 void
 modstats()
 {
-  report( "Link Statistics: Total Modules  %8ld Linked Modules %8ld", maxmodules, linkedmodules - 1 );	
-  report( "                 Highest Module %8ld", highmodule );
+  report( "Link Statistics: Total Modules  %8d Linked Modules %8d", maxmodules, linkedmodules - 1 );	
+  report( "                 Highest Module %8d", highmodule );
 
   return;
 }

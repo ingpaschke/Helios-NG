@@ -1,4 +1,4 @@
-/* $Id: encode.c,v 1.5 1992/09/25 10:41:21 paul Exp $ */
+/* $Id: encode.c,v 1.4 1991/06/07 07:30:14 nickc Exp $ */
 
 #ifdef __HELIOS
 #include <helios.h>

@@ -4,7 +4,7 @@
 /*                                                              */
 /* Author: NHG 19-Feb-87                                        */
 /****************************************************************/
-/* $Id: mem.c,v 1.5 1992/09/25 10:41:21 paul Exp $ */
+/* $Id: mem.c,v 1.4 1991/06/07 07:30:14 nickc Exp $ */
 
 #include "asm.h"
 
@@ -33,7 +33,7 @@ UBYTE *getml();
 #define MALLOC(n) (UBYTE *)getml(n)
 #else
 #ifdef __STDC__
-void *malloc(int n);
+/* Host port: malloc comes from <stdlib.h> (asm.h); it takes a size_t */
 #else
 byte *malloc();
 #endif
@@ -41,8 +41,9 @@ byte *malloc();
 #endif
 #endif
 
+/* Host port: the VM allocation grain, see vm.h */
 #ifndef wordlen
-#define wordlen( s ) (((s) + 3) & ~3)
+#define wordlen( s ) VMwordlen( s )
 #endif
 
 /********************************************************/
@@ -110,7 +111,7 @@ unary( ntype, etype, expr )
   
   exprsize += sizeof (Unode);
   
-  trace( "unary %x %x : %x %x", v, node, etype, expr );
+  trace( "unary %x %p : %x %x", VMWord(v), (void *)node, etype, expr );
 
   return v;
 }
@@ -129,7 +130,7 @@ binary( ntype, ltype, rtype, lexp, rexp )
   node->lexp.w = lexp;
   node->rexp.w = rexp;
   
-  trace( "binary %x %x : l %x %x r %x %x", v, node, ltype, lexp, rtype, rexp );
+  trace( "binary %x %p : l %x %x r %x %x", VMWord(v), (void *)node, ltype, lexp, rtype, rexp );
   
   exprsize += sizeof (Bnode);
   
@@ -163,7 +164,7 @@ newcode( type, size, vtype, loc, value )
 	
   p = VMAddr( Code, v );
 		
-  trace( "newcode: %8lx : %2lx %3ld %3ld %8lx", p, type, size, vtype, value );
+  trace( "newcode: %8p : %2x %3d %3d %8x", (void *)p, type, size, vtype, value );
 
   p->type    = type;
   p->size    = size;
@@ -210,7 +211,7 @@ codeptr()
       
       codesize += sizeof (Code);
       
-      trace( "code extension: %lx", codeseg );
+      trace( "code extension: %x", VMWord(codeseg) );
       
       VMDirty( v ) ;
       
