@@ -244,7 +244,7 @@ out:
 		else {
 			if( (instream = fopen(*argp, "r")) == (FILE *)NULL) {
 				fprintf(stderr,"Can't open ");
-				fprintf(stderr,*argp);
+				fprintf(stderr,"%s",*argp);
 				fprintf(stderr,"\n");
 				status = 2;
 			} else {
