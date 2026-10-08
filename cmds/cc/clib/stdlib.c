@@ -66,7 +66,7 @@ __rand( void )
    *  number generator.
    */
   
-  temp = (_random_number_seed[ _random_k ] =+ _random_number_seed[ _random_j ]);
+  temp = (_random_number_seed[ _random_k ] += _random_number_seed[ _random_j ]);
 
   if (--_random_j == 0)
     _random_j = 54,
