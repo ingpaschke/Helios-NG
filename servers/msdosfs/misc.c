@@ -1314,4 +1314,5 @@ int recursive_search(void)
 	    }
 
 	Free(dir_stack);
+	return 0;	/* warnings patch: was falling off the end */
 }
