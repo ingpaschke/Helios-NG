@@ -242,6 +242,14 @@ threadps.o : threadps.c
 	$(NC) -c $(NCFLAGS) -I$(HSRC)/kernel -o$@ $<
 
 
+# hhead patch: sysbreak and sysbuild need cmds/support/getargs.c
+vpath getargs.c $(HSRC)/cmds/support
+sysbreak : $(CSTART) sysbreak.o getargs.o
+	$(LINK) $(LINKFLAGS) -o$@ -n$@ -s2000 -h4000 $^
+
+sysbuild : $(CSTART) sysbuild.o getargs.o
+	$(LINK) $(LINKFLAGS) -o$@ -n$@ -s2000 -h4000 $^
+
 # cat needs the server library
 cat : $(CSTART) cat.o
 	$(LINK) $(LINKFLAGS) -o$@ -n$@ $^ $(LIB)/servlib.def
