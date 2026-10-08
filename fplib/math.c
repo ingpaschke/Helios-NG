@@ -657,14 +657,41 @@ double pow(double x, double y)
             }
             return 0.0;
         }
-        if (y < (double)INT_MIN || y > (double)INT_MAX ||
-            (double)(ny = (int)y) != y)
+        if (!(y >= (double)INT_MIN && y <= (double)INT_MAX) ||
+            (double)(ny = (int)y) != y)     /* (also when y is a NaN)    */
         {   errno = EDOM;
             return -HUGE_VAL;
         }
 /* Here y is an integer and x is negative.                               */
         x = -x;
         sign = (ny & 1);
+    }
+/* The reduction below casts 16*y to int, which overflows for |y| >= 2**27 */
+/* (and is undefined for a NaN).  Such a y gives an overflow or an        */
+/* underflow unless x is very close to 1, so take y*log(x) and exp of it, */
+/* with exp's limits.  log(x) is at least about 2**-53 in magnitude when  */
+/* x is not 1, so from |y| > 1e19 on the sign alone decides (and the      */
+/* product, which could overflow, is not formed).                         */
+    if (!(y < 134217728.0 && y > -134217728.0))
+    {   if (y != y)
+        {   errno = EDOM;
+            return y;
+        }
+        r = log(x);
+        if (r == 0.0) return sign ? -1.0 : 1.0;
+        if (y > 1.0e19 || y < -1.0e19)
+            r = ((y > 0.0) == (r > 0.0)) ? 1000.0 : -1000.0;
+        else r = y * r;
+        if (r > _exp_arg_limit)
+        {   errno = ERANGE;
+            return sign ? -HUGE_VAL : HUGE_VAL;
+        }
+        if (r < _exp_negative_arg_limit)
+        {   errno = ERANGE;
+            return 0.0;
+        }
+        r = exp(r);
+        return sign ? -r : r;
     }
     if (y == 2.0 && x < 1.e20) return x*x;  /* special case.             */
     g = frexp(x, &m);
@@ -685,6 +712,22 @@ double pow(double x, double y)
     u2 = +(r + z * _pow_k) + z;
 #define _reduce(v) ((double)(int)(16.0*(v))*0.0625)
     u1 = (double)(16*m-p-1) * 0.0625;
+/* u1 + u2 is log2(x), so y*(u1 + u2) is the binary exponent of the      */
+/* result.  Settle a certain overflow or underflow before the reduction, */
+/* whose casts to int overflow when that exponent is very large (from    */
+/* about 2**27 on).  The limits are well beyond the range of doubles     */
+/* (2**1024 to 2**-1074) and the error of the estimate; results closer   */
+/* to the range ends are handled by the tests on iw1 and mdash below.    */
+    {   double e = y * (u1 + u2);
+        if (e > 1100.0)
+        {   errno = ERANGE;         /* Overflow certain                  */
+            return sign ? -HUGE_VAL : HUGE_VAL;
+        }
+        if (e < -1200.0)
+        {   errno = ERANGE;         /* Underflow certain                 */
+            return 0.0;
+        }
+    }
     {   double y1 = _reduce(y);
         double y2 = y - y1;
         double w = u2*y + u1*y2;
