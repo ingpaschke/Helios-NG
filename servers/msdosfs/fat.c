@@ -174,7 +174,9 @@ int reload()
   Sector_size = driveinfo.SectorSize;
 
   Cluster_size = boot.ClusterSize;
-  if( Cluster_size > 4  ||  Cluster_size < 1)
+	/* grow() and create_obj() build a cluster in 2048-byte buffers */
+  if( Cluster_size > 4  ||  Cluster_size < 1 ||
+      Cluster_size * Sector_size > 2048 )
   {
 #ifdef debugE
 	IOdebug("msdosfs ERROR : reload : boot bad, Cluster_size = %d",
