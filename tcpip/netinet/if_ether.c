@@ -434,6 +434,11 @@ arpinput(
 
 	case ETHERTYPE_IP:
 	case ETHERTYPE_IPTRAILERS:
+		/* in_arpinput reads the fixed Ethernet/IP layout */
+		if (ar->ar_hln != sizeof(ac->ac_enaddr) ||
+		    ar->ar_pln != sizeof(struct in_addr) ||
+		    m->m_len < sizeof(struct ether_arp))
+			break;
 		in_arpinput(ac, m);
 		return;
 
