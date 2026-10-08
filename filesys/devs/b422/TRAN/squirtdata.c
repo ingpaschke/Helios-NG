@@ -11,7 +11,7 @@ WORD squirtdata(WORD link)
  *	giving it's board size.
  */
 {
-	BYTE		s[10];
+	BYTE		s[11];
 	WORD		n;
 	INT16		i16;
 	WORD		size = 26321;
