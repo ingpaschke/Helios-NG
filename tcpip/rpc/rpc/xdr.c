@@ -543,7 +543,8 @@ xdr_string(xdrs, cpp, maxsize)
 
 	case XDR_DECODE:
 		if (nodesize == 0) {
-			return (TRUE);
+			/* size + 1 overflowed: a length no string has */
+			return (FALSE);
 		}
 		if (sp == NULL)
 			*cpp = sp = (char *)mem_alloc(nodesize);
