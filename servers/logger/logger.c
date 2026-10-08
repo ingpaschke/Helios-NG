@@ -384,6 +384,15 @@ static	void	IOdebug_process(void)
          i = -1;
        }
      index += mcb.MsgHdr.DataSize;
+
+	/* A long line without a newline: write what has arrived, so	*/
+	/* that the next message (IOdebug sends at most 80 bytes at	*/
+	/* a time) still fits into IObuffer.				*/
+     if (index > IOdebug_Limit + 4 - 128)
+      { IObuffer[index] = '\0';
+        write_to_log(IObuffer);
+        index = 4;
+      }
    }
 }
 
