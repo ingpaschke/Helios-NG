@@ -113,7 +113,7 @@ int socket(int domain, int type, int protocol)
 	case AF_INET:	dname = "/internet"; break;
 	default:
 		if(opendb("/helios/etc/socket.conf",0)!=0 ||
-		   scandb("!d?d?d%s",domain,type,protocol,dname)!=0)
+		   scandb("!d?d?d%s",domain,type,protocol,&dname)!=0)
 		{ e = EPROTOTYPE; goto done; }
 		closedb(0);
 	}
