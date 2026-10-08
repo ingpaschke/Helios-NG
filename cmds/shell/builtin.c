@@ -660,6 +660,12 @@ int b_eval(
 	   char *argv[] )
 {
   char line[LINE_MAX + 1];
+  char **a;
+  int length = 0;
+
+  /* the words, blank separated and terminated, must fit line */
+  for (a = argv + 1; *a != NULL; a++) length += strlen(*a) + 1;
+  if (length > sizeof(line)) return error(ERR_WORDTOOLONG, argv[0]);
 
   sputargv(line, argv + 1, ' ');
   return runcmdline(line);
