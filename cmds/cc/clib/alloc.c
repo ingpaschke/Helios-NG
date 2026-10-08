@@ -27,8 +27,15 @@ static void _alloc_bad_size()
 }
 
 
+/* Malloc takes a signed word: a size_t above MAXSTORE would reach it  */
+/* as a negative number (-1..-8 are statistics requests that return a  */
+/* number, not a block), and sizes just below 2^31 overflow its	       */
+/* rounding.  No such block can exist, so these fail here.	       */
+#define MAXMALLOC (MAXSTORE - 64)
+
 void *malloc(size_t size)
 { 
+  if (size > MAXMALLOC) return(NULL);
   return(Malloc(size));
 }
 
@@ -41,10 +48,10 @@ void *realloc(void *ptr, size_t size)
   void *newptr;
 
   if (ptr == (void *) NULL)		/* NULL pointer legal here */
-    return(Malloc(size));
+    return(malloc(size));
 
   old_size = (size_t)MemSize(ptr);
-  newptr   = Malloc(size);
+  newptr   = malloc(size);
   if (newptr == (void *) NULL)
     return(NULL);
 
