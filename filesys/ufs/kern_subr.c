@@ -63,6 +63,7 @@ int copystr(char *source, char *dest, u_int max, u_int *size)
 	if (size == NULL) size = &sz;
 	for(*size=0; (max) && (*source); max--, (*size)++) *dest++ = *source++;
 	if (max) *dest = '\0';
+	return (max ? 0 : ENAMETOOLONG);	/* warnings patch */
 }
 int copyinstr(char *source, char *dest, u_int max, u_int *size)
 {
@@ -71,6 +72,7 @@ int copyinstr(char *source, char *dest, u_int max, u_int *size)
 	if (size == NULL) size = &sz;
 	for(*size=0; (max) && (*source); max--, (*size)++) *dest++ = *source++;
 	if (max) *dest = '\0';
+	return (max ? 0 : ENAMETOOLONG);	/* warnings patch */
 }
 
 ffs(mask)
