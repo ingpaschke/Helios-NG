@@ -19,9 +19,13 @@
 
 #define	MAXSTRSIZE	0x10
 
-void main(int argc, char **argv)
+int main(int argc, char **argv)	/* Host port: int, was void */
 {
-	char 	c;
+	/* Host port: unsigned, so that a byte >= 0x80 is written as one	*/
+	/* \x escape on every host, as in the shipped squirtdata.c (made	*/
+	/* on an RS/6000, where char is unsigned); with a signed char an	*/
+	/* i386 or x86-64 host wrote out-of-range escapes like \x0ffffffb1	*/
+	unsigned char 	c;
 	int 	i, j, sz, nstr;
 	int 	total = 0;
 	FILE	*inf, *outf;
@@ -140,5 +144,6 @@ void main(int argc, char **argv)
 
 	fclose(inf);
 	fclose(outf);
+	return 0;	/* Host port: main returns int */
 }
 

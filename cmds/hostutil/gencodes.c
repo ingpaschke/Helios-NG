@@ -21,19 +21,19 @@
 --------------------------------------------------------*/
 
 #include <stdio.h>
-#if defined(R140) || defined(SUN4) || defined(HP) || defined(RS6000)
-# include <strings.h>
-#else
+/* Host port: the C library headers on every host (the SUN4 branch	*/
+/* declared malloc() itself) and <stdarg.h> (<varargs.h> is gone)	*/
+#if defined(__HELIOS)
 # include <string.h>
 # include <stdlib.h>
 # include <posix.h>
+#else
+# include <string.h>
+# include <stdlib.h>
+# include <unistd.h>
 #endif
 
-#if defined(__HELIOS)
 #include <stdarg.h>
-#else
-#include <varargs.h>
-#endif
 
 #include <fcntl.h>
 
@@ -46,28 +46,15 @@ typedef struct FDB {
 	char	buf[FDBBUFMAX];
 } FDB;
 
-#if !defined(R140) && !defined(SUN4) && !defined(HP) && !defined(RS6000)
+/* Host port: these prototypes on every host, tfprintf() with "..." */
 static char *skipname(char *p);
 static char *skipspace(char *p);
 static int strtonum(char *s);
-static void rdline(FDB *fdb, char *buf);
+static char *rdline(FDB *fdb);
 static int rdch(FDB *fdb);
 
-#if defined(__HELIOS)
 static void tfprintf(FILE *f, char *fmt, ... );
-#else
-static void tfprintf(FILE *f, char *fmt, long va_alist );
-#endif
-
-#else
-static char *skipname();
-static char *skipspace();
-static int strtonum();
-static void rdline();
-static int rdch();
-extern char *malloc();
-static void tfprintf();
-#endif
+static void *xrealloc(void *p, size_t size);
 
 /*--------------------------------------------------------
 -- fdbopen						--
@@ -138,15 +125,16 @@ FDB *fdb;
 extern void fdbscan(name)
 char *name;
 {
-#if 0
-	char *line = malloc(1000);
-	char *classline = malloc(1000);
-#else
-	static char line [1000];
-	static char classline [1000];
-#endif
+	/* Host port: a line of any length (rdline() grows its buffer;	*/
+	/* both were static [1000], filled without a bound)		*/
+	char *line;
+	static char *classline = NULL;
 	char *codename, *codenum, *codemsg, *p;
-	char *classmask, *classpfix;
+	/* Host port: a code line before the first class line used	*/
+	/* classpfix uninitialised: the i386 reference printed a NULL	*/
+	/* there as "(null)", x86-64 -O2 printed stack garbage. Start	*/
+	/* with that text, so the output stays that of the reference.	*/
+	char *classmask, *classpfix = "(null)";
 	int classbits;
 	FDB *fdb = fdbopen(name);
 	FILE *f = stdout;
@@ -161,7 +149,7 @@ char *name;
 	
 	for(;;)
 	{
-		rdline(fdb,line);
+		line = rdline(fdb);
 /*printf("%s",line);*/
 		if( copying )
 		{
@@ -187,7 +175,7 @@ char *name;
 				break;
 			case '!':
 				p = line+2;
-				while( *p != '\n' ) p++;
+				while( *p != '\n' && *p != 0 ) p++;	/* Host port: stop at the NUL too */
 				*p = 0;
 				if( f != stdout ) fclose(f);
 				if( (f = fopen(line+2,"w")) == NULL )
@@ -201,7 +189,7 @@ char *name;
 				break;
 			default:
 				p = line+1;
-				while( *p != '\n' ) p++;
+				while( *p != '\n' && *p != 0 ) p++;	/* Host port: stop at the NUL too */
 				*p = 0;
 				tfprintf(f,"/*%s\t\t\t\t\t*/\n", line+1);
 				break;
@@ -210,6 +198,8 @@ char *name;
 		case '!':		/* class name	*/
 			if( line[1] == '!' ) continue;
 
+			free(classline);
+			classline = xrealloc(NULL, strlen(line) + 1);
 			(void)strcpy(classline,line);			
 			p = skipspace(classline+1);
 			p = skipname(p);
@@ -221,6 +211,12 @@ char *name;
 			p = skipname(p);
 			classbits = strtonum(classmask);
 			classshift = 0;
+			/* Host port: a mask of 0 looped forever */
+			if( classbits == 0 )
+			{
+				fprintf(stderr,"gencodes: class mask 0 in line: %s",line);
+				exit(1);
+			}
 			while(((classbits>>classshift) & 1) == 0) classshift++;
 
 			if( classpfix[0] != 0 )
@@ -254,43 +250,64 @@ char *name;
 
 static int tabtab[] = { 8, 20, 12, 3, 29, 2, 8 };
 
-#if defined(__HELIOS)
+/* Host port: a <stdarg.h> function on every host (was <varargs.h>) */
 static void tfprintf(FILE *f, char *fmt, ...)
 {
-#else
-static void tfprintf(f, fmt, va_alist )
-FILE *f;
-char *fmt;
-va_dcl
-{
-#endif
 	va_list a;
-	static char fbuf[100];
+	/* Host port: fbuf grows and every conversion is measured; both	*/
+	/* were static [100] without a bound (a message of about 100	*/
+	/* characters overflowed pbuf)					*/
+	static char *fbuf = NULL;
+	static size_t fbufsize = 0;
 	int n = 0;
 	int pos = 0;
 	int tabn = 0;
 	int i;
 	int percent = 0;
 
-#if defined(__HELIOS)
-	va_start(a, fmt);
-#else	
-	va_start(a);
-#endif
+	va_start(a, fmt);	/* Host port: <stdarg.h> */
 	
 	for(;;)
 	{
 		char c = *fmt++;
+		if( (size_t)n + 2 > fbufsize )
+		{
+			fbufsize = fbufsize ? 2 * fbufsize : 100;
+			fbuf = xrealloc(fbuf, fbufsize);
+		}
 		if( c == 0 || c == '\t' || c == '%')
 		{
 			int newpos;
 			fbuf[n] = 0;
 			if( percent ) 
 			{
-				static char pbuf[100];
-				sprintf(pbuf,fbuf,va_arg(a,int));
+				char *pbuf;
+				int len;
+				/* Host port: a %s takes a char *; every argument	*/
+				/* was fetched as an int, which truncates a pointer	*/
+				/* on LP64. The conversion is the first letter after	*/
+				/* the %.						*/
+				char *conv = fbuf+1;
+				while( *conv != 0 && !((*conv >= 'a' && *conv <= 'z') ||
+						       (*conv >= 'A' && *conv <= 'Z')) )
+					conv++;
+				if( *conv == 's' )
+				{
+					char *arg = va_arg(a,char *);
+					len = snprintf(NULL,0,fbuf,arg);
+					pbuf = xrealloc(NULL,(size_t)len + 1);
+					snprintf(pbuf,(size_t)len + 1,fbuf,arg);
+				}
+				else
+				{
+					int arg = va_arg(a,int);
+					len = snprintf(NULL,0,fbuf,arg);
+					pbuf = xrealloc(NULL,(size_t)len + 1);
+					snprintf(pbuf,(size_t)len + 1,fbuf,arg);
+				}
 				fputs(pbuf,f);
 				pos += strlen(pbuf);
+				free(pbuf);
 			}
 			else { fputs(fbuf,f); pos += n; }
 			if( c == '%' )
@@ -345,11 +362,15 @@ char *s;
 {
 	int radix = 10;
 	int val = 0;
+	/* Host port: declared outside the loop and set to 0: a		*/
+	/* character that is no digit (an upper case hex digit but F,	*/
+	/* see below) repeats the previous digit (as the i386 -O0 build	*/
+	/* did) or adds 0, instead of using an uninitialised value	*/
+	int digit = 0;
 	
 	while( *s )
 	{
 		char c = *s++;
-		int digit;
 		
 		if( c == 'x' ) { radix = 16; continue; }
 		
@@ -363,14 +384,24 @@ char *s;
 	return val;
 }
 
-static void rdline(fdb,buf)
-FDB *fdb; char *buf;
+/* Host port: returns the line in a buffer that grows as needed	*/
+/* (the caller's was a char[1000] filled without a bound)		*/
+static char *rdline(fdb)
+FDB *fdb;
 {
+	static char *buf = NULL;
+	static size_t size = 0;
 	int pos = 0;
 	int c = 0;
 
 	for(;;)
 	{
+		/* room for a tab's 8 spaces and the NUL */
+		if( (size_t)pos + 9 > size )
+		{
+			size = size ? 2 * size : 1000;
+			buf = xrealloc(buf, size);
+		}
 		c = rdch(fdb);
 		switch( c )
 		{
@@ -386,6 +417,20 @@ FDB *fdb; char *buf;
 	}
 done:
 	buf[pos] = 0;
+	return buf;
+}
+
+/* Host port: realloc() or fail */
+static void *xrealloc(void *p, size_t size)
+{
+	void *q = realloc(p, size);
+
+	if( q == NULL )
+	{
+		fprintf(stderr,"gencodes: out of memory\n");
+		exit(1);
+	}
+	return q;
 }
 
 static int rdch(fdb)
