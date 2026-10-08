@@ -116,7 +116,7 @@ struct List *list;
 /* list->Head of an empty list                          */
 /********************************************************/
 
-PreInsert(next,node)
+void PreInsert(next,node)	/* Host port: void, was implicit int */
 struct Node *next, *node;
 {
         node->Next = next;
@@ -132,7 +132,7 @@ struct Node *next, *node;
 /* pred may be a list                                   */
 /********************************************************/
 
-PostInsert(pred,node)
+void PostInsert(pred,node)	/* Host port: void, was implicit int */
 struct Node *pred, *node;
 {
         node->Next = pred->Next;
