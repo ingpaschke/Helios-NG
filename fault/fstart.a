@@ -74,7 +74,10 @@ Resident
 		stub	strcpy
 		stub	strcmp
 		stub	IOdebug
-		stub	__rt_sdiv10
+		-- hhead patch 74: armcc helper, Util has it only on ARM
+		_if _defp 'helios.arm [
+			stub	__rt_sdiv10
+		]
 	]
 ]
 
