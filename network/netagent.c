@@ -1127,8 +1127,7 @@ static int transputer_BootLink(word link, MPtr image, Config *config, word confs
 	/* Delays during this time should be safe because nboot knows	*/
 	/* the bootlink and hence cannot be fould up by other		*/
 	/* processors...						*/
-  for (rc = 0; rc < 1024; rc++)
-   temp[0] += rc;
+  Delay(1000);	/* hcc patch: 1 ms for nboot.i to reset its links (was a busy loop) */
 
   temp[0] = 4;			/* bootstrap command */
   if (LinkOut(1, link, temp, 2 * OneSec) ne Err_Null)
