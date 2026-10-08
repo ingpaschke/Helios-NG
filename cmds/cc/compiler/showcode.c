@@ -663,7 +663,7 @@ trace("peephole out ldl %d stl %d",v->reallocal, t->next->opd.local->reallocal )
 		}
                	aprintf("-- Line %d (%s)\n", t -> opd.line -> l,
                                              t -> opd.line -> f);
-		if( debug_notify >= 5 || profile_option >= 2 )
+		if( debug_notify >= 5 || full_profile_option )
 		{
 			LabelNumber *l = filenamelabel(t->opd.line->f);
 			aprintf("\tldc\t..%d-2\n",l->name); 
