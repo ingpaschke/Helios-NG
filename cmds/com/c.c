@@ -220,6 +220,12 @@
 #include <sys/stat.h>
 #include <ctype.h>
 
+/* Host port: format checking with gcc and clang; Helios C (Norcroft) */
+/* has no __attribute__ */
+#ifndef __GNUC__
+#define __attribute__(x)
+#endif
+
 #ifndef EXIT_SUCCESS
 #define EXIT_SUCCESS 0
 #endif
@@ -590,8 +596,6 @@ static NameList		MacroOpts;
 static NameList		LinkOpts;
 static NameList		ModulaOpts;
 
-static char 		FortranP1Opts[ 256 ];
-static char		FortranP2Opts[ 256 ];
 static char *		FortranMapFile;
 
 static FileList		SourceFiles;
@@ -722,6 +726,10 @@ static bool		use_non_standard_features = false;
 
 #ifdef __STDC__
 static int ExecuteCommandLine( void );
+/* Host port: the printf format of every call is checked */
+static void error( char * format, ... ) __attribute__((format(printf, 1, 2)));
+static void warning( char * format, ... ) __attribute__((format(printf, 1, 2)));
+static void fail( char * format, ... ) __attribute__((format(printf, 1, 2)));
 #else
 static int ExecuteCommandLine();
 #endif
@@ -1057,10 +1065,157 @@ DupName( pname )
     
     
   strcpy( ptr, pname );
-    
+
   return ptr;
-    
+
 } /* DupName */
+
+/*}}}*/
+/*{{{  StrFormat, StrBuf, DirName (Host port) */
+
+/*
+ * Host port: the driver built paths and argument strings in fixed arrays
+ * (100 bytes in AddLibrary, ARGBUFSIZE = 1024 elsewhere, 1024 for the -p
+ * command lines, 200 argv entries, 256 for the FORTRAN options) without a
+ * length check.  A C_LIBDIR of more than about 86 characters overflowed
+ * AddLibrary's buffer on every run.  These helpers allocate what the
+ * string needs instead; the strings themselves are unchanged.
+ */
+
+static char *StrVFormat( const char * format, va_list args ) __attribute__((format(printf, 1, 0), nonnull(1)));
+
+static char *
+StrVFormat( const char * format, va_list args )
+  /*
+   * returns a malloc'd string formatted as vprintf would print it
+   */
+{
+  int		len;
+  char *	ptr;
+#ifdef UNIX
+  va_list	copy;
+
+
+  va_copy( copy, args );
+  len = vsnprintf( NULL, 0, format, copy );
+  va_end( copy );
+
+  if (len < 0)
+    fail( "failed to format a string" );
+
+  ptr = SafeAlloc( (unsigned long)len + 1 );
+
+  (void) vsnprintf( ptr, (size_t)len + 1, format, args );
+#else
+  /*
+   * Helios: no vsnprintf() or va_copy(); format into a buffer of the
+   * size of the driver's old fixed arrays (ARGBUFSIZE) and copy it
+   */
+  static char	buf[ ARGBUFSIZE ];
+
+
+  len = vsprintf( buf, format, args );
+
+  if (len < 0 || len >= (int)sizeof (buf))
+    fail( "failed to format a string" );
+
+  ptr = SafeAlloc( (unsigned long)len + 1 );
+
+  strcpy( ptr, buf );
+#endif
+
+  return ptr;
+
+} /* StrVFormat */
+
+static char *StrFormat( const char * format, ... ) __attribute__((format(printf, 1, 2)));
+
+static char *
+StrFormat( const char * format, ... )
+  /*
+   * returns a malloc'd string formatted as printf would print it
+   */
+{
+  va_list	args;
+  char *	ptr;
+
+
+  va_start( args, format );
+  ptr = StrVFormat( format, args );
+  va_end( args );
+
+  return ptr;
+
+} /* StrFormat */
+
+/*
+ * a string that grows as text is appended.  'size' 0 means that 's' still
+ * points to the static empty string it was initialised with.
+ */
+
+typedef struct StrBuf
+  {
+    char *	s;
+    size_t	size;
+  }
+StrBuf;
+
+static void
+StrBufCat( StrBuf * pbuf, const char * text )
+  /*
+   * appends 'text' to the string in 'pbuf'
+   */
+{
+  size_t	used = strlen( pbuf->s );
+  size_t	need = used + strlen( text ) + 1;
+
+
+  if (need > pbuf->size)
+    {
+      size_t	size = pbuf->size ? pbuf->size : 256;
+      char *	ptr;
+
+
+      while (size < need)
+	size *= 2;
+
+      ptr = SafeAlloc( (unsigned long)size );
+
+      memcpy( ptr, pbuf->s, used + 1 );
+
+      if (pbuf->size)
+	free( pbuf->s );
+
+      pbuf->s    = ptr;
+      pbuf->size = size;
+    }
+
+  strcpy( pbuf->s + used, text );
+
+  return;
+
+} /* StrBufCat */
+
+static char *
+DirName( const char * dir )
+  /*
+   * returns a malloc'd copy of 'dir' with a '/' appended unless it is
+   * empty or already ends in one (AddInclude, AddSymbol, AddLibraryPath,
+   * RemoveLibraryPath)
+   */
+{
+  size_t	len = strlen( dir );
+
+
+  return StrFormat( "%s%s", dir, (len > 0 && dir[ len - 1 ] != '/') ? "/" : "" );
+
+} /* DirName */
+
+/* Host port: the FORTRAN pass options grow as needed, were static [256] */
+static char		FortranP1Empty[ 1 ];
+static char		FortranP2Empty[ 1 ];
+static StrBuf		FortranP1Opts = { FortranP1Empty, 0 };
+static StrBuf		FortranP2Opts = { FortranP2Empty, 0 };
 
 /*}}}*/
 /*{{{  AddName */
@@ -1189,7 +1344,7 @@ AddNamef( plist, format, va_alist )
    * adds a node to a list containing a constructed string
    */	
 {
-  static char	buffer[ ARGBUFSIZE ];
+  char *	buffer;	/* Host port: allocated, was a static [ARGBUFSIZE] */
   va_list	args;
   
   
@@ -1199,11 +1354,13 @@ AddNamef( plist, format, va_alist )
   va_start( args );
 #endif
   
-  vsprintf( buffer, format, args );
+  buffer = StrVFormat( format, args );
   
   va_end(   args );
   
   AddName( plist, buffer );
+  
+  free( buffer );
   
   return;
   
@@ -1229,7 +1386,7 @@ AddLibraryName( resident, format, va_alist )
    * adds a name to the Library Name list
    */	
 {
-  static char	buffer[ ARGBUFSIZE ];
+  char *	buffer;	/* Host port: allocated, was a static [ARGBUFSIZE] */
   va_list	args;
   NameList *	plibs;
   NameNode *	pname;
@@ -1252,7 +1409,7 @@ AddLibraryName( resident, format, va_alist )
   va_start( args );
 #endif
   
-  vsprintf( buffer, format, args );
+  buffer = StrVFormat( format, args );
   
   va_end(   args );
   
@@ -1272,6 +1429,8 @@ AddLibraryName( resident, format, va_alist )
       
       AddName( plibs, buffer );
     }
+  
+  free( buffer );
   
   return;
   
@@ -1429,7 +1588,7 @@ AddLibrary( dir, stem )
    * returns true iff the library was found, false otherwise
    */
 {
-  static char	buf[ 100 ];	/* XXX */
+  char *	buf = NULL;	/* Host port: allocated, was a static [100] */
   struct stat	status;  
   bool		resident  = false;
   char *	seperator = dir[ strlen(dir) - 1 ] == '/' ? "" : "/";
@@ -1439,7 +1598,7 @@ AddLibrary( dir, stem )
     {
       /* stem already has an extension - do not try adding one */
 
-      sprintf( buf, "%s%s%s", dir, seperator, stem );
+      free( buf ); buf = StrFormat( "%s%s%s", dir, seperator, stem );
       
       if (file_exists( buf ))
 	{
@@ -1458,32 +1617,32 @@ AddLibrary( dir, stem )
     }
   else
     {
-      sprintf( buf, "%s%s%slib.def", dir, seperator, stem );
+      free( buf ); buf = StrFormat( "%s%s%slib.def", dir, seperator, stem );
       
       if (file_exists( buf ))
 	goto got_resident;
       
-      sprintf( buf, "%s%s%s.def", dir, seperator, stem );
+      free( buf ); buf = StrFormat( "%s%s%s.def", dir, seperator, stem );
       
       if (file_exists( buf ))
 	goto got_resident;
       
-      sprintf( buf, "%s%s%slib", dir, seperator, stem );
+      free( buf ); buf = StrFormat( "%s%s%slib", dir, seperator, stem );
       
       if (file_exists( buf ))
 	goto got_scanned;
       
-      sprintf( buf, "%s%s%s.lib", dir, seperator, stem );
+      free( buf ); buf = StrFormat( "%s%s%s.lib", dir, seperator, stem );
       
       if (file_exists( buf ))
 	goto got_scanned;
       
-      sprintf( buf, "%s%s%s", dir, seperator, stem );
+      free( buf ); buf = StrFormat( "%s%s%s", dir, seperator, stem );
       
       if (file_exists( buf ))
 	goto got_scanned;
       
-      sprintf( buf, "%s%slib%s.a", dir, seperator, stem );
+      free( buf ); buf = StrFormat( "%s%slib%s.a", dir, seperator, stem );
       
       if (file_exists( buf ))
 	goto got_scanned;
@@ -1508,9 +1667,13 @@ AddLibrary( dir, stem )
 		}
 	    }
 	  
+	  free( buf );
+	  
 	  return TRUE;
 	}
     }
+  
+  free( buf );
   
   return FALSE;
   
@@ -1538,6 +1701,8 @@ AddLibrary( dir, stem )
     }
   
   AddLibraryName( resident, "-l%s", buf );
+  
+  free( buf );
   
   return TRUE;
   
@@ -1598,8 +1763,13 @@ FindAndAddLibrary( pfile_name )
 /*}}}*/
 /*{{{  Execution */
 
-static char 	command_line[  1024 ];		/* XXX */
-static char 	command_line2[ 1024 ];		/* XXX */
+/* Host port: the -p command lines grow as needed, were static [1024] */
+static char	command_line_empty[ 1 ];
+static char	command_line2_empty[ 1 ];
+static StrBuf	CommandLine  = { command_line_empty,  0 };
+static StrBuf	CommandLine2 = { command_line2_empty, 0 };
+#define command_line	(CommandLine.s)
+#define command_line2	(CommandLine2.s)
 
 /*{{{  ExecuteList */
 
@@ -1621,7 +1791,7 @@ ExecuteList( nlist )
   int		argc   	= ListSize( (List *)nlist );
   char **	argv 	= (char **)SafeAlloc( ((unsigned long)argc + 1) * sizeof( char * ) );
   NameNode *	pnode;
-  char *	cmdline;
+  StrBuf *	cmdline;
   
 
 #ifdef DEBUG
@@ -1630,13 +1800,13 @@ ExecuteList( nlist )
   
   if (USE_PIPE && command_line[ 0 ] != '\0')
     {
-      cmdline = command_line2;
+      cmdline = &CommandLine2;
 
-      cmdline[ 0 ] = '\0';
+      cmdline->s[ 0 ] = '\0';
     }
   else
     {
-      cmdline = command_line;
+      cmdline = &CommandLine;
     }
     
   i = 0;
@@ -1647,8 +1817,8 @@ ExecuteList( nlist )
     {
       if (USE_PIPE)
 	{
-	  strcat( cmdline, pnode->name );
-	  strcat( cmdline, " " );
+	  StrBufCat( cmdline, pnode->name );
+	  StrBufCat( cmdline, " " );
 	    
 	  continue;
 	}
@@ -1710,23 +1880,36 @@ ExecuteList( nlist )
 
 static char **
 #ifdef __STDC__
-command_line_to_argv( char * command_line )
+command_line_to_argv( char * line )
 #else
-command_line_to_argv( command_line )
-  char *  command_line;
+command_line_to_argv( line )
+  char *  line;
 #endif
 {
-  static char *	argv[ 200 ];		/* XXX */
+  /* Host port: as many entries as the line can have, was a static [200] */
+  static char **	argv = NULL;
+  static size_t		argv_size = 0;
   char *	ptr;
   int		index;
   char		c;
   bool		found_quote;
   
 
-  if (command_line == NULL)
+  if (line == NULL)
     return NULL;
 
-  ptr   = command_line;
+  /* every argument ends at a character of the line: at most strlen + 1 */
+  
+  if (strlen( line ) + 2 > argv_size)
+    {
+      free( argv );
+      
+      argv_size = strlen( line ) + 2;
+      
+      argv = (char **)SafeAlloc( (unsigned long)(argv_size * sizeof (char *)) );
+    }
+
+  ptr   = line;
   index = 0;
   found_quote = false;
   
@@ -1755,7 +1938,7 @@ command_line_to_argv( command_line )
 	{
 	  /* point to start of command line argument */
 	  
-	  argv[ index++ ] = command_line;
+	  argv[ index++ ] = line;
 
 	  /* terminate the argument */
 	  
@@ -1768,7 +1951,7 @@ command_line_to_argv( command_line )
 
 	  /* remember start of next bit of command line */
 	  
-	  command_line = ptr;
+	  line = ptr;
 	}
     }
 
@@ -2347,10 +2530,10 @@ F77_Compile( fnode )
   
   AddNamef( plist, "%s/%s", pname, ptmp );
       
-  if (FortranP1Opts[ 0 ])
+  if (FortranP1Opts.s[ 0 ])
     {
       AddName( plist, ","           );
-      AddName( plist, FortranP1Opts );
+      AddName( plist, FortranP1Opts.s );
     }
     
   if ((result = ExecuteList( plist )) == 0)
@@ -2363,15 +2546,15 @@ F77_Compile( fnode )
       
       AddNamef( plist, "%s.s", fnode->root );
       
-      if (FortranP2Opts[ 0 ] ||
+      if (FortranP2Opts.s[ 0 ] ||
 	  FortranMapFile)
 	{
 	  AddName( plist, "," );
 	  AddName( plist, "," );
 	  
-	  if (FortranP2Opts[ 0 ])
+	  if (FortranP2Opts.s[ 0 ])
 	    {
-	      AddName( plist, FortranP2Opts );
+	      AddName( plist, FortranP2Opts.s );
 	    }
 	  else
 	    {
@@ -2942,12 +3125,12 @@ DoLink(
 	       This  = (FileNode *)NextNode( (Node *)This ) )
 	    {
 	      FILE *	input;
-	      char	name[ ARGBUFSIZE ];
+	      char *	name;	/* Host port: allocated, was [ARGBUFSIZE] */
 
 
 	      /* build the source file's name */
 	      
-	      sprintf( name, "%s.%s", This->root, This->ext );
+	      name = StrFormat( "%s.%s", This->root, This->ext );
 
 	      /* tell the world */
 	      
@@ -2994,6 +3177,8 @@ DoLink(
 		      input = Null( FILE );		  /* be paranoid */
 		    }
 		}
+
+	      free( name );
 	    }
 
 	  if (VERBOSE || VERIFY)
@@ -3464,7 +3649,7 @@ AddInclude( path )
  * add the indicated path(s) to the include argument list
  */
 {
-  static char	buffer[ ARGBUFSIZE ];
+  char *	buffer;	/* Host port: allocated, was a static [ARGBUFSIZE] */
   NameNode *	This;
   char *	end;
   char *	start = path;
@@ -3483,18 +3668,14 @@ AddInclude( path )
 	  path = NULL;
 	}
       
-      strcpy( buffer, start );
-      
-      start = end + 1;
-      
       /*
        * add trailing / if none present and name is not blank
+       * (Host port: DirName; the old test read buffer[ -1 ] for a blank name)
        */
       
-      if (buffer[ strlen( buffer ) - 1 ] != '/' && strlen( buffer ) > 0)
-	{
-	  strcat( buffer, "/" );
-	}
+      buffer = DirName( start );
+      
+      start = end + 1;
       
       /*
        * check for and ignore duplicates, for faster compilation
@@ -3505,10 +3686,16 @@ AddInclude( path )
 	   This = (NameNode *)NextNode( (Node *)This) )
 	{
 	  if (streq( This->name, buffer ))
-	    return;
+	    {
+	      free( buffer );
+	      
+	      return;
+	    }
 	}
       
       AddName( &IncludeDirs, buffer );
+      
+      free( buffer );
     }
 
   return;
@@ -3529,7 +3716,7 @@ AddSymbol( path )
  * add the indicated path(s) to the symbol search argument list (M2)
  */
 {
-  static char	buffer[ ARGBUFSIZE ];
+  char *	buffer;	/* Host port: allocated, was a static [ARGBUFSIZE] */
   NameNode *	This;
   char *	end;
   char *	start = path;
@@ -3548,18 +3735,14 @@ AddSymbol( path )
 	  path = NULL;
 	}
       
-      strcpy( buffer, start );
-      
-      start = end + 1;
-      
       /*
        * add trailing / if none present and name is not blank
+       * (Host port: DirName; the old test read buffer[ -1 ] for a blank name)
        */
       
-      if (buffer[ strlen( buffer ) - 1 ] != '/' && strlen( buffer ) > 0)
-	{
-	  strcat( buffer, "/" );
-	}
+      buffer = DirName( start );
+      
+      start = end + 1;
       
       /*
        * check for and ignore duplicates, for faster compilation
@@ -3570,10 +3753,16 @@ AddSymbol( path )
 	   This = (NameNode *)NextNode( (Node *)This) )
 	{
 	  if (streq( This->name, buffer ))
-	    return;
+	    {
+	      free( buffer );
+	      
+	      return;
+	    }
 	}
       
       AddName( &SymbolDirs, buffer );
+      
+      free( buffer );
     }
 
   return;
@@ -3594,7 +3783,7 @@ AddLibraryPath( path )
  * add the indicated path(s) to the library path list
  */
 {
-  static char	buffer[ ARGBUFSIZE ];
+  char *	buffer;	/* Host port: allocated, was a static [ARGBUFSIZE] */
   NameNode *	This;
   char *	end;
   char *	start = path;
@@ -3613,18 +3802,14 @@ AddLibraryPath( path )
 	  path = NULL;
 	}
       
-      strcpy( buffer, start );
-      
-      start = end + 1;
-      
       /*
        * add trailing / if none present and name is not blank
+       * (Host port: DirName; the old test read buffer[ -1 ] for a blank name)
        */
       
-      if (buffer[ strlen( buffer ) - 1 ] != '/' && strlen( buffer ) > 0)
-	{
-	  strcat( buffer, "/" );
-	}
+      buffer = DirName( start );
+      
+      start = end + 1;
       
       /*
        * check for and ignore duplicates, for faster compilation
@@ -3636,11 +3821,15 @@ AddLibraryPath( path )
 	{
 	  if (streq( This->name, buffer ))
 	    {
+	      free( buffer );
+	      
 	      return;
 	    }
 	}
 
       AddNameToFront( &LibraryDirs, buffer );
+      
+      free( buffer );
     }
 
   return;
@@ -3661,7 +3850,7 @@ RemoveLibraryPath( pPath )
  * Remove the indicated path(s) from the library path list
  */
 {
-  static char	aBuffer[ ARGBUFSIZE ];
+  char *	aBuffer;	/* Host port: allocated, was a static [ARGBUFSIZE] */
   NameNode *	pThis;
   char *	pEnd;
   char *	pStart = pPath;
@@ -3680,17 +3869,13 @@ RemoveLibraryPath( pPath )
 	  pPath = NULL;
 	}
       
-      strcpy( aBuffer, pStart );
+      /* add trailing / if none present and name is not blank */
+      /* (Host port: DirName; the old test read aBuffer[ -1 ] for a blank name) */
+      
+      aBuffer = DirName( pStart );
       
       pStart = pEnd + 1;
       
-      /* add trailing / if none present and name is not blank */
-      
-      if (aBuffer[ strlen( aBuffer ) - 1 ] != '/' && strlen( aBuffer ) > 0)
-	{
-	  strcat( aBuffer, "/" );
-	}
-
       /* find name in list and remove */
       
       for (pThis  = (NameNode *)FirstNode( (List *)&LibraryDirs );
@@ -3706,6 +3891,8 @@ RemoveLibraryPath( pPath )
 
       if (pThis == NULL)
 	warning( "Unable to remove library path '%s'", aBuffer );
+      
+      free( aBuffer );
     }
 
   return;
@@ -3725,22 +3912,44 @@ AddIncludeOpts(
  * add the include path(s) to the C compiler's search list
  */
 {
-  static char	buffer[ ARGBUFSIZE ];
+  /*
+   * Host port: built in a StrBuf, was a static [ARGBUFSIZE] (all include
+   * directories together overflowed it).  'buffer' is a zeroed copy with
+   * two spare bytes, so that a "-i" of 4 characters gives "-j" below as
+   * the zero-initialised static array did.
+   */
+  static char	empty[ 1 ];
+  StrBuf	list;	/* Helios C: no initialiser for an auto struct */
+  char *	buffer;
+  size_t	len;
   NameNode *	This = (NameNode *)FirstNode( (List *)&IncludeDirs );
   
   
   if (This == NULL)
     return;
   
-  strcpy( buffer, "-i" );
+  list.s    = empty;
+  list.size = 0;
+  StrBufCat( &list, "-i" );
   
   for ( ;
        This;
        This = (NameNode *)NextNode( (Node *)This) )
     {
-      strcat( buffer, This->name );
-      strcat( buffer, "," );
+      StrBufCat( &list, This->name );
+      StrBufCat( &list, "," );
     }
+  
+  len    = strlen( list.s );
+  buffer = (char *)calloc( len + 3, 1 );
+  
+  if (buffer == NULL)
+    fail( "malloc failed (for %lu bytes)", (unsigned long)len + 3 );
+  
+  memcpy( buffer, list.s, len );
+  
+  if (list.size)
+    free( list.s );
   
   buffer[ strlen( buffer ) - 1 ] = '\0'; 	/* remove trailing ',' */
   
@@ -3756,6 +3965,8 @@ AddIncludeOpts(
   
   AddName( &CompileOpts, buffer + 3 ); 		/* -j version */
 
+  free( buffer );
+  
   return;
   
 } /* AddIncludeOpts */
@@ -3773,27 +3984,33 @@ AddSymbolOpts(
  * compile a symbol list for passing to the modula compiler
  */
 {
-  static char	buffer[ ARGBUFSIZE ];
+  static char	empty[ 1 ];	/* Host port: a StrBuf, was a static [ARGBUFSIZE] */
+  StrBuf	buffer;	/* Helios C: no initialiser for an auto struct */
   NameNode *	This = (NameNode *)FirstNode( (List *)&SymbolDirs );
   
   
   if (This == NULL)
     return;
   
-  strcpy( buffer, "-i" );
+  buffer.s    = empty;
+  buffer.size = 0;
+  StrBufCat( &buffer, "-i" );
   
   for (;
        This;
        This = (NameNode *)NextNode( (Node *)This ))
     {
-      strcat( buffer, This->name );
-      strcat( buffer, "," );
+      StrBufCat( &buffer, This->name );
+      StrBufCat( &buffer, "," );
     }
   
-  buffer[ strlen( buffer ) - 1 ] = '\0'; 	/* remove trailing ',' */
+  buffer.s[ strlen( buffer.s ) - 1 ] = '\0'; 	/* remove trailing ',' */
   
-  AddName( &ModulaOpts, buffer ); 		/* -i version */
+  AddName( &ModulaOpts, buffer.s ); 		/* -i version */
 
+  if (buffer.size)
+    free( buffer.s );
+  
   return;
   
 } /* AddSymbolOpts */
@@ -3910,9 +4127,16 @@ usage(
   int	pfds[ 2 ];
   
   
-  pipe( pfds );
+  /* Host port: pipe() checked; without a pipe the text goes to stderr unpaged */
   
-  pid = vfork();
+  if (pipe( pfds ) != 0)
+    {
+      pfds[ 0 ] = pfds[ 1 ] = -1;
+      
+      pid = -1;
+    }
+  else
+    pid = vfork();
   
   if (pid == 0)
     {
@@ -3921,7 +4145,7 @@ usage(
       close( pfds[ 0 ] );
       close( pfds[ 1 ] );
       
-      execlp( "more", "more", 0 );
+      execlp( "more", "more", (char *)0 );	/* Host port: (char *)0, was 0 */
       
       pid = -1;
       
@@ -3933,8 +4157,11 @@ usage(
   
   else dup2( pfds[ 1 ], 2 );
   
-  close( pfds[ 0 ] );
-  close( pfds[ 1 ] );
+  if (pfds[ 0 ] != -1)
+    {
+      close( pfds[ 0 ] );
+      close( pfds[ 1 ] );
+    }
   
   error( "Helios compiler driver, version %d.%d (RCS $Revision: 1.2 $)", VERSION, REVISION );
   error( "Usage: %s [options] files", ProgName );
@@ -4105,7 +4332,7 @@ NULL
 };
   int i;
   for (i = 0; strings[i] != NULL; i++)
-	error(strings[i]);
+	error( "%s", strings[i] );	/* Host port: "%s", was the text as the format */
 }
   
   if (pid >= 0) 
@@ -4311,8 +4538,8 @@ main( argc, argv )
 
   AddLibraryPath( c_libdir );
   
-  FortranP1Opts[ 0 ] = '\0';
-  FortranP2Opts[ 0 ] = '\0';
+  FortranP1Opts.s[ 0 ] = '\0';
+  FortranP2Opts.s[ 0 ] = '\0';
   FortranMapFile     = NULL;
   
   NCompiles = 0;
@@ -4404,7 +4631,7 @@ main( argc, argv )
 		}
 	      else
 		{
-		  strcat( FortranP2Opts, "+B" );
+		  StrBufCat( &FortranP2Opts, "+B" );
 
 		  if (_is_norcroft_compiler)
 		    {
@@ -4566,14 +4793,14 @@ main( argc, argv )
 		    AddName( &ModulaOpts,  "-t9" );
 		    AddName( &CompileOpts, "-t9" );
 		    AddName( &Defines,    "T9000" );		    
-		    strcat( FortranP2Opts, "+F" );
+		    StrBufCat( &FortranP2Opts, "+F" );
 		    break;
 		    
 		  case '8':
 		    AddName( &ModulaOpts,  "-t8" );
 		    AddName( &CompileOpts, "-t8" );
 		    AddName( &Defines,    "T800" );
-		    strcat( FortranP2Opts, "+F" );
+		    StrBufCat( &FortranP2Opts, "+F" );
 		    break;
 		    
 		  case '5':
@@ -4703,20 +4930,20 @@ main( argc, argv )
 		}
 	      else
 		{
-		  strcat( FortranP1Opts, "+W" );
+		  StrBufCat( &FortranP1Opts, "+W" );
 
 		  if (arg[ 2 ] != '\0')
-		    strcat( FortranP1Opts, &arg[ 2 ] );
+		    StrBufCat( &FortranP1Opts, &arg[ 2 ] );
 		}
 
 	      break;
 	      
 	    case 'X': /* Cross reference width */
 	      
-	      strcat( FortranP1Opts, "+X" );
+	      StrBufCat( &FortranP1Opts, "+X" );
 
 	      if (arg[ 2 ] != '\0')
-		strcat( FortranP1Opts, &arg[ 2 ] );
+		StrBufCat( &FortranP1Opts, &arg[ 2 ] );
 	      
 	      break;
 	      
@@ -4729,11 +4956,11 @@ main( argc, argv )
 		      fail( "No text following -Z option" );
 		    }
 		  
-		  strcat( FortranP1Opts, argv[ i ] );
+		  StrBufCat( &FortranP1Opts, argv[ i ] );
 		}
 	      else
 		{
-		  strcat( FortranP1Opts, &arg[ 2 ] );
+		  StrBufCat( &FortranP1Opts, &arg[ 2 ] );
 		}
 	      
 	      break;
@@ -4796,11 +5023,11 @@ main( argc, argv )
 	      switch (arg[ 2 ])
 		{
 		case '6':
-		  strcat( FortranP1Opts, "+6" );
+		  StrBufCat( &FortranP1Opts, "+6" );
 		  break;
 		  
 		case '7':
-		  strcat( FortranP1Opts, "+7" );
+		  StrBufCat( &FortranP1Opts, "+7" );
 		  break;
 
 		case '\0':
@@ -4840,7 +5067,7 @@ main( argc, argv )
 	      
 	      AddName( &ModulaOpts,  "-g" );
 	      
-	      strcat( FortranP2Opts, "+G" );
+	      StrBufCat( &FortranP2Opts, "+G" );
 
 	      (void) AddLibrary( c_libdir, "d" );	/* debugging library */
 	      
@@ -4915,7 +5142,7 @@ main( argc, argv )
 	      
 	      AddName( &ModulaOpts,  "-m" );
 	      
-	      strcat( FortranP2Opts, "+M" );
+	      StrBufCat( &FortranP2Opts, "+M" );
 
 	      break;
 	      
@@ -4990,7 +5217,7 @@ main( argc, argv )
 
 	      AddName( &ModulaOpts,  "-p" );
 	      
-	      strcat( FortranP2Opts, "+P" );
+	      StrBufCat( &FortranP2Opts, "+P" );
 	      
 	      break;
 	      
@@ -5033,7 +5260,7 @@ main( argc, argv )
 
 	      AddName( &ModulaOpts,  "-r" );
 	      
-	      strcat( FortranP2Opts, "+R" );
+	      StrBufCat( &FortranP2Opts, "+R" );
 	      
 	      break;
 	      
@@ -5085,7 +5312,7 @@ main( argc, argv )
 		{
 		  AddName( &ModulaOpts, "-t" );
 	      
-		  strcat( FortranP1Opts, "+T" );
+		  StrBufCat( &FortranP1Opts, "+T" );
 
 		  if (_is_norcroft_compiler)
 		    {
@@ -5103,8 +5330,8 @@ main( argc, argv )
 	      
 	    case 'v': /* verify */
 	      
-	      strcat( FortranP1Opts, "+V" );
-	      strcat( FortranP2Opts, "+V" );
+	      StrBufCat( &FortranP1Opts, "+V" );
+	      StrBufCat( &FortranP2Opts, "+V" );
 	      
 	      Flags |= FLAG_v;
 	      
