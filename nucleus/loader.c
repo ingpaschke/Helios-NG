@@ -1466,12 +1466,12 @@ debug(("ReadStream %S",s));
 			if( size <= 0 ) break;
 
 #if READBUFFER
-			SetMData_(image,got,buffer,dsize);
+			SetMData_(image,got,buffer,size);
 #else
-			buffer += dsize;
+			buffer += size;
 #endif
 
-			got += dsize;
+			got += size;
 
 			/* The first read adjusts us to a READSIZE boundary */
 			/* READSIZE should be a multiple of the disc block  */
