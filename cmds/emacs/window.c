@@ -552,7 +552,7 @@ int f,n;
 {
 	nextwind(FALSE, 1);
 	backpage(f, n);
-	prevwind(FALSE, 1);
+	return(prevwind(FALSE, 1));
 }
 
 scrnextdw(f, n)		/* scroll the next window down (forward) a page */
@@ -560,7 +560,7 @@ int f,n;
 {
 	nextwind(FALSE, 1);
 	forwpage(f, n);
-	prevwind(FALSE, 1);
+	return(prevwind(FALSE, 1));
 }
 
 savewnd(f, n)		/* save ptr to current window */

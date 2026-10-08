@@ -123,7 +123,7 @@ int f, n;	/* default flag and numeric argument */
 
 {
 	linsert(n, ' ');
-	backchar(f, n);
+	return(backchar(f, n));
 }
 
 /*
