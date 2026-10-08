@@ -637,7 +637,7 @@ static void start_server(Object *processor, char *server, char **Argv)
   procman = Locate(processor, "/tasks");
   if ((procman eq Null(Object)) && (processor ne Null(Object)))
    printf("Startns: warning, failed to locate Processor Manager of %s\n",
-            processor);
+            processor->Name);
   prog = Execute(procman, bin);
   if (prog eq Null(Object))
    { printf("Startns: failed to execute server %s, fault 0x%08lx\n",
