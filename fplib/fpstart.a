@@ -178,8 +178,11 @@ Resident
 				extern 	word	_huge_val
 				word	_huge_val_hi
 
-				initword	_huge_val	[#7FEFFFFF]
-				initword	_huge_val_hi	[#FFFFFFFF]
+				-- a double is stored low word first on the transputer:
+				-- _huge_val holds the low word, _huge_val_hi the high
+				-- word, so HUGE_VAL == DBL_MAX (#7FEFFFFF FFFFFFFF)
+				initword	_huge_val	[#FFFFFFFF]
+				initword	_huge_val_hi	[#7FEFFFFF]
 
 				-- static tables of fp constants used by math.c
 	--			vec	32	_fplib_a3
