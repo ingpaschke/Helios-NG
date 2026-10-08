@@ -179,9 +179,9 @@ static int getint(int c, int base, int (*rdch)(),int (*unrdch)(),void *info)
 	for(;;)
 	{
 		if( '0' <= c && c <= '7' ) d = c - '0';
-		elif( base == 10 && (c == '8' || c == '9') ) d = c - '0';
+		elif( c == '8' || c == '9' ) d = c - '0';
 		elif( base == 16 && 'a' <= c && c <= 'f' ) d = c - 'a' + 10;
-		elif( base == 16 && 'A' <= c && c <= 'A' ) d = c - 'A' + 10;
+		elif( base == 16 && 'A' <= c && c <= 'F' ) d = c - 'A' + 10;
 		else break;
 		if( d >= base ) break;
 		val = val*base + d;
