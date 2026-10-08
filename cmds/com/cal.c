@@ -188,7 +188,7 @@ make_title(
   
   int 	m_len;
   int 	i;
-  char 	year[ 5 ];
+  char 	year[ 16 ];	/* warnings patch: " %04d" needs 6+ bytes */
 
   
   strcpy( title, "" );
