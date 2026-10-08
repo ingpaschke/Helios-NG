@@ -329,7 +329,9 @@ char *makepath(char *pathname, char *context, char *path)
 			while( p != pathname && *p != c_dirchar ) p--;
 			*p = 0;
 		}
-		else *p = c_dirchar, p += len;
+		/* splitname returns the source length; the copy is at	*/
+		/* most NameMax-1 characters				*/
+		else *p = c_dirchar, p += strlen(p+1) + (path[len-1] == c_dirchar);
 		
 		path += len;
 		
