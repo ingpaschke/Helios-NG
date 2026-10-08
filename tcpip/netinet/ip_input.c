@@ -611,8 +611,12 @@ ip_dooptions(
 		if (opt == IPOPT_NOP)
 			optlen = 1;
 		else {
+			if (cnt < IPOPT_OLEN + 1) {
+				code = &cp[IPOPT_OPTVAL] - (u_char *)ip;
+				goto bad;
+			}
 			optlen = cp[IPOPT_OLEN];
-			if (optlen <= 0 || optlen > cnt) {
+			if (optlen < IPOPT_OLEN + 1 || optlen > cnt) {
 				code = &cp[IPOPT_OLEN] - (u_char *)ip;
 				goto bad;
 			}
@@ -633,7 +637,8 @@ ip_dooptions(
 		 */
 		case IPOPT_LSRR:
 		case IPOPT_SSRR:
-			if ((off = cp[IPOPT_OFFSET]) < IPOPT_MINOFF) {
+			if (optlen < IPOPT_OFFSET + 1 ||
+			    (off = cp[IPOPT_OFFSET]) < IPOPT_MINOFF) {
 				code = &cp[IPOPT_OFFSET] - (u_char *)ip;
 				goto bad;
 			}
@@ -653,7 +658,7 @@ ip_dooptions(
 				break;
 			}
 			off--;			/* 0 origin */
-			if (off > optlen - sizeof(struct in_addr)) {
+			if (off > optlen - (int)sizeof(struct in_addr)) {
 				/*
 				 * End of source route.  Should be for us.
 				 */
@@ -679,7 +684,8 @@ ip_dooptions(
 			break;
 
 		case IPOPT_RR:
-			if ((off = cp[IPOPT_OFFSET]) < IPOPT_MINOFF) {
+			if (optlen < IPOPT_OFFSET + 1 ||
+			    (off = cp[IPOPT_OFFSET]) < IPOPT_MINOFF) {
 				code = &cp[IPOPT_OFFSET] - (u_char *)ip;
 				goto bad;
 			}
@@ -687,7 +693,7 @@ ip_dooptions(
 			 * If no space remains, ignore.
 			 */
 			off--;			/* 0 origin */
-			if (off > optlen - sizeof(struct in_addr))
+			if (off > optlen - (int)sizeof(struct in_addr))
 				break;
 			bcopy((caddr_t)(&ip->ip_dst), (caddr_t)&ipaddr.sin_addr,
 			    sizeof(ipaddr.sin_addr));
@@ -707,7 +713,7 @@ ip_dooptions(
 		case IPOPT_TS:
 			code = cp - (u_char *)ip;
 			ipt = (struct ip_timestamp *)cp;
-			if (ipt->ipt_len < 5)
+			if (ipt->ipt_len < 5 || ipt->ipt_ptr < 5)
 				goto bad;
 			if (ipt->ipt_ptr > ipt->ipt_len - sizeof (long)) {
 				if (++ipt->ipt_oflw == 0)
