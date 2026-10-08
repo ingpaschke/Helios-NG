@@ -701,7 +701,7 @@ PRIVATE void ExecuteCommand(BYTE *string, WORD id)
 { FullHead head;
   Object   *tfm = Null(Object);
   Object   *prog = Null(Object), *code = Null(Object);
-  Stream   *s;
+  Stream   *s = Null(Stream);	/* hcc patch: closed at end */
   Object   *objv[2];
   Stream   *strv[4];
   Environ  env;
@@ -1976,7 +1976,7 @@ PRIVATE void Drive_Delete(MCB *mcb, string fullname)
       SendError(mcb, EC_Recover + SS_IOProc + EG_Timeout + EO_Link, release);
      else
       SendError(mcb, EC_Error + SS_IOProc + EG_Delete + 
-		(exists eq Dir_t) ? EO_Directory : EO_File, release);
+		((exists eq Dir_t) ? EO_Directory : EO_File), release);
    }
   else
    Return(mcb, ReplyOK, 0, 0, release);
