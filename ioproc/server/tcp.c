@@ -442,7 +442,7 @@ Conode *myco;
 
 		char *buf;
 
-		if((buf = (char *) malloc(csize+dsize)) == NULL)
+		if((buf = (char *) malloc(csize * 4 + dsize)) == NULL)
 		   {
 		   Request_Return(SS_InterNet|EC_Error|EG_NoMemory|EO_Socket,
 				0L, 0L);
