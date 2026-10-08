@@ -2395,8 +2395,8 @@ static void float_errors(void)
   fprintf(Output, " 4) small discrepancies between C and assembler results.\n");
   fprintf(Output, " 5) corruption of element between strides.\n\n");
 
-  memcpy(XA, YA, sizeof(YA));
-  memcpy(XC, YC, sizeof(YC));
+  memcpy(XA, YA, VectorProcessed * sizeof(*YA));	/* hcc patch: was sizeof(YA) */
+  memcpy(XC, YC, VectorProcessed * sizeof(*YC));
   XA[-2]			= 999;
   YA[VectorProcessed + 3]	= -999;
   XC[3]				= 1000;
@@ -2422,8 +2422,8 @@ static void double_errors(void)
   fprintf(Output, " 4) small discrepancies between C and assembler results.\n");
   fprintf(Output, " 5) corruption of element between strides.\n\n");
 
-  memcpy(XA, YA, sizeof(YA));
-  memcpy(XC, YC, sizeof(YC));
+  memcpy(XA, YA, VectorProcessed * sizeof(*YA));	/* hcc patch: was sizeof(YA) */
+  memcpy(XC, YC, VectorProcessed * sizeof(*YC));
   XA[-2]			= 999;
   YA[VectorProcessed + 3]	= -999;
   XC[3]				= 1000;
