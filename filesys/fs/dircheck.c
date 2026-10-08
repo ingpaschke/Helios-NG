@@ -104,6 +104,7 @@ validate_entry ( struct dir_elem *dp, char *path, word should_be, word ref_updat
  word blocks_err	= NONE;
  word size_err		= NONE;
  word matrix_err	= NONE;
+ word matrix_warn	= NONE;	/* hhead patch: no A/D bit, report only */
  de_errors = 0;				/* At first: no errors found	*/
 					/* Clear the comparison struct	*/
  memset ( &de, 0, sizeof (struct dir_elem) );
@@ -210,10 +211,9 @@ IOdebug ("	validate_entry :	Check the access matrix");
 #endif
 					/* At least one alter or dele-	*/
 					/* bit must be set!		*/
- if ( ! dp->de_inode.i_matrix & 0xc0c0c0c0 )
+ if ( ! ( dp->de_inode.i_matrix & 0xc0c0c0c0 ) )
  {
-	matrix_err |= SERIOUS;
-	de_errors++;
+	matrix_warn |= WARNING;	/* hhead patch: report, do not repair */
  }
 
 /*---  Are the number of blocks and the size of the entry plausibel ? --*/
@@ -391,8 +391,11 @@ IOdebug ("	validate_entry :	Check the type of the entry");
  if ( times_err || de_errors || inval_cnt )
 	fst.damaged_inodes++;
 					/* Print the entry name		*/
- if ( times_err || de_errors || inval_cnt || ! silent_mode )
+ if ( times_err || de_errors || inval_cnt || matrix_warn || ! silent_mode )
  	print_cur ();
+ if ( matrix_warn )		/* hhead patch */
+	IOdebug ("%sNo alter or delete bit is set in the access matrix.",
+		 S_WARNING);
 
 					/* Print a detailed error-report*/
 					/* if any error occurred:	*/
