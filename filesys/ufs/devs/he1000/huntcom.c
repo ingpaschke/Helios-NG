@@ -188,7 +188,7 @@ int scsi_format(
 	int  state;
 
 	scsi_command[0] = 0x04; 	/* write 6 byte command */
-	scsi_command[1] = (lun << 5) || 0x18;
+	scsi_command[1] = (lun << 5) | 0x18;
 	scsi_command[2] = 0x00;
 	scsi_command[3] = getbyte(interleave,1);
 	scsi_command[4] = getbyte(interleave,0);
