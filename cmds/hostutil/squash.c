@@ -1,14 +1,24 @@
 
 
 #include <stdio.h>
+#include <stdlib.h>	/* Host port: free() */
+#include <string.h>	/* Host port: strchr() */
+#include <sys/types.h>	/* Host port: ssize_t */
 
 int main()
 {
 	int copying = 0;
-	char line[100];
-	while(gets(line) != NULL)
+	/* Host port: getline() and the newline removed, as gets() did;	*/
+	/* gets() is gone from C11. A line of any length is read whole	*/
+	/* (gets() into char line[100] overflowed the stack beyond 99	*/
+	/* characters; master.fdb has 83 at most).			*/
+	char *line = NULL;
+	size_t size = 0;
+	while(getline(&line,&size,stdin) != -1)
 	{
-		char *p = line;
+		char *p = strchr(line,'\n');
+		if( p != NULL ) *p = 0;
+		p = line;
 		if( *p == '#') 
 		{
 			if( p[1] == '{' ) copying = 1;
@@ -20,6 +30,7 @@ int main()
 		if( *p == 0 ) continue;
 		printf("%s\n",line);
 	}
+	free(line);
 
 	return 0;
 }

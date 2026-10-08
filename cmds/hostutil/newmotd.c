@@ -86,23 +86,23 @@ int main()
   sprintf(lbuff,"Helios Operating System Version 1.31/\"Sk\xF6ll\"") ;
 
   fputc(0x0D,stdout), fputc(0x0A,stdout) ;
-  for (nspaces = ((80 - strlen(lbuff)) / 2); (nspaces > 0); nspaces--)
+  for (nspaces = ((80 - (int)strlen(lbuff)) / 2); (nspaces > 0); nspaces--)	/* Host port: int, was size_t arithmetic */
     fputc(0x20,stdout) ;
   fputc(0x1B,stdout), fputc(0x5B,stdout), fputc(0x37,stdout), fputc(0x6D,stdout) ;
-  fprintf(stdout,lbuff) ;
+  fputs(lbuff,stdout) ;	/* Host port: was fprintf(stdout,lbuff) */
   fputc(0x1B,stdout), fputc(0x5B,stdout), fputc(0x30,stdout), fputc(0x6D,stdout) ;
   fputc(0x0D,stdout), fputc(0x0A,stdout) ;
 
   sprintf( lbuff,"Copyright (C) 1987-1994, Perihelion Distributed Software") ;  
-  for (nspaces = ((80 - strlen(lbuff)) / 2); (nspaces > 0); nspaces--)
+  for (nspaces = ((80 - (int)strlen(lbuff)) / 2); (nspaces > 0); nspaces--)	/* Host port: int, was size_t arithmetic */
     fputc(0x20,stdout) ;
-  fprintf(stdout,lbuff) ;
+  fputs(lbuff,stdout) ;	/* Host port: was fprintf(stdout,lbuff) */
   fputc(0x0D,stdout), fputc(0x0A,stdout) ;
 
   sprintf( lbuff,"GPL'ed 2013, by the Helios-NG Team") ;  
-  for (nspaces = ((80 - strlen(lbuff)) / 2); (nspaces > 0); nspaces--)
+  for (nspaces = ((80 - (int)strlen(lbuff)) / 2); (nspaces > 0); nspaces--)	/* Host port: int, was size_t arithmetic */
     fputc(0x20,stdout) ;
-  fprintf(stdout,lbuff) ;
+  fputs(lbuff,stdout) ;	/* Host port: was fprintf(stdout,lbuff) */
   fputc(0x0D,stdout), fputc(0x0A,stdout) ;
 
   /* AxM: Fixed this part to be y2k compliant */
@@ -112,9 +112,9 @@ int main()
 	  do_date( ltime->tm_mday ),
 	  1900 + ltime->tm_year ) ;
           
-  for (nspaces = ((80 - strlen(lbuff)) / 2); (nspaces > 0); nspaces--)
+  for (nspaces = ((80 - (int)strlen(lbuff)) / 2); (nspaces > 0); nspaces--)	/* Host port: int, was size_t arithmetic */
     fputc(0x20,stdout) ;
-  fprintf(stdout,lbuff) ;
+  fputs(lbuff,stdout) ;	/* Host port: was fprintf(stdout,lbuff) */
   fputc(0x0D,stdout), fputc(0x0A,stdout) ;
   fputc(0x0D,stdout), fputc(0x0A,stdout) ;
   
