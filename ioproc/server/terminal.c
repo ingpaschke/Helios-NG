@@ -638,6 +638,13 @@ char *window_name;
      return(window);
    }
 
+                       /* the name goes into DirEntry.Name[NameMax] */
+  if (strlen(window_name) >= NameMax)
+   { iofree(window);
+     Request_Return(EC_Error + SS_IOProc + EG_Name + EO_Window, 0L, 0L);
+     return((Window *) NULL);
+   }
+
   window->handle = create_a_window(window_name);
 
   if (window->handle eq 0L)
@@ -795,18 +802,22 @@ Conode *myco;
 
   window_name++;
 
+  if (strlen(window_name) >= NameMax)     /* see new_window() */
+    { Request_Return(EC_Error + SS_IOProc + EG_Name + EO_Window, 0L, 0L);
+      return;
+    }
+
   window = (Window *) Dir_find_node(myco);
   if (window ne (Window *) NULL)
    { sprintf(&(misc_buffer1[0]), "%s.%d", IOname, Next_WindowID++);
      strcpy(IOname, &(misc_buffer1[0]));
    }
 
+                      /* new_window() replies itself when it fails */
   if (new_window(window_name) ne (Window *) NULL)
    { temp = FormOpenReply(Type_File, 0L, -1L, -1L);
      Request_Return(ReplyOK, open_reply, temp);
    }
-  else
-   Request_Return(EC_Error + SS_IOProc + EG_Create + EO_Window, 0L, 0L);
 }
 
 /**
