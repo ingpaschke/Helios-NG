@@ -1119,9 +1119,10 @@ PRIVATE void fn( send_console_data, (word, word, byte *, word));
 PRIVATE int  fn( empty_buffer, (Window *));
 
 /**
-*** In raw input mode, I read as many characters as I am asked for
-*** or as there are available within the time limit. I perform no
-*** editing of any sort, and echo all characters if the echo attribute is set.
+*** In raw input mode, I wait until at least one character is available
+*** or the time limit expires, and then send what there is, up to the
+*** amount asked for (as POSIX VMIN=1). I perform no editing of any
+*** sort, and echo all characters if the echo attribute is set.
 **/
 
 PRIVATE void raw_Console_read(myco, count, timelimit, reply_port)
@@ -1169,6 +1170,11 @@ word   reply_port;
             for (waitabit=10; waitabit; waitabit--) Suspend();
             break;
           }
+                /* The buffer is empty. Once some data has been read, */
+                /* send it rather than wait for the full count: a     */
+                /* raw read returns what has been typed so far.       */
+          if (i > 0)
+           { count = i; break; }
           myco->timelimit = timelimit;
           myco->type = 0L;
           Suspend();                       /* No, suspend coroutine for a bit. */
