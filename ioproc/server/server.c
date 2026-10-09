@@ -1478,8 +1478,9 @@ PRIVATE int MainLoop()
                       /* BLV - patch to cope with very slow I/O Servers,    */
                       /* for example ones using the hydra interface. The    */
                       /* root processor may start sending the search message*/
-                      /* before the handshake has finished.                 */
-     if ((mcb->MsgHdr.FnRc eq 0x60002010) && (tempport eq 0L))
+                      /* before the handshake has finished. A retried       */
+                      /* Search carries FR_Mask bits as well.               */
+     if (((mcb->MsgHdr.FnRc & ~FR_Mask) eq 0x60002010) && (tempport eq 0L))
       tempport = 1L;
       
                                                 /* who is the request for ? */

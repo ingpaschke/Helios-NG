@@ -221,7 +221,7 @@ typedef word Attribute;
 -- General Functions
 ----------------------------------------------------------------*/
 
-#define FG_Mask         0x00FFFFF0L
+#define FG_Mask         0x000FFFF0L     /* without FR_Mask, as codes.h */
 
 /* IOC requests */
 #define FG_Unknown      0x00000000L
