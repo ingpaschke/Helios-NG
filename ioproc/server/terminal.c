@@ -2189,7 +2189,7 @@ Screen *screen;
 **/
 PRIVATE void reset_escape(screen)
 Screen *screen;
-{ screen->flags &= ~(ANSI_escape_found | ANSI_in_escape);
+{ screen->flags &= ~(ANSI_escape_found | ANSI_in_escape | ANSI_toomany);
   screen->flags |= ANSI_firstdigit;
   screen->args[0] = 0; screen->args[1] = 0; screen->args[2] = 0;
   screen->args[3] = 0; screen->args[4] = 0;
@@ -2293,13 +2293,24 @@ Window *window;
 	 {        /* If it is a digit, it is part of the current arg */
          case '0': case '1': case '2': case '3': case '4':
          case '5': case '6': case '7': case '8': case '9':
-           *(screen->args_ptr) = (10 * *(screen->args_ptr)) + (*str - '0');
+                /* Parameters after the fifth are ignored, and each */
+                /* value is clamped so that it cannot overflow.     */
+           if (screen->flags & ANSI_toomany) break;
+           if (*(screen->args_ptr) < ANSI_argmax)
+             { *(screen->args_ptr) = (10 * *(screen->args_ptr)) + (*str - '0');
+               if (*(screen->args_ptr) > ANSI_argmax)
+                 *(screen->args_ptr) = ANSI_argmax;
+             }
            if (screen->flags & ANSI_firstdigit)
              { screen->gotdigits++; screen->flags &= ~ANSI_firstdigit; }
            break;
 
                 /* A semicolon marks the end of the current arg. */
-	 case ';':  screen->args_ptr++; screen->flags |= ANSI_firstdigit; break;
+	 case ';':  if (screen->args_ptr < &(screen->args[ANSI_maxargs - 1]))
+                      { screen->args_ptr++; screen->flags |= ANSI_firstdigit; }
+                    else
+                      screen->flags |= ANSI_toomany;
+                    break;
 
 	 case '@':  insert_chars((screen->gotdigits) ? screen->args[0] : 1);
 	            goto end;
