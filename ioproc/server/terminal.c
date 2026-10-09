@@ -1497,8 +1497,13 @@ Conode *myco;
      return;
    }
 
-  if (count > 0x7FFFL)   /* silly */
+  if ((count > 0x7FFFL) || (count < 0L))   /* silly */
    { Request_Return(EC_Error + SS_IOProc + EG_WrongSize + EO_File, 0L, 0L);
+     return;
+   }
+                /* data sent with the request must fit the size given */
+  if ((word) mcb->MsgHdr.DataSize > count)
+   { Request_Return(EC_Error + SS_IOProc + EG_WrongSize + EO_Message, 0L, 0L);
      return;
    }
 
@@ -1563,9 +1568,13 @@ Conode *myco;
             (void) Console_TidyStream(myco);
             Seppuku();
           }
-         fetched   += (word) mcb->MsgHdr.DataSize;
-         memcpy(a_ptr, mcb->Data, mcb->MsgHdr.DataSize);
-         a_ptr     += mcb->MsgHdr.DataSize;           /* next bit of buffer */
+         { word chunk = (word) mcb->MsgHdr.DataSize;
+                         /* never more than the count given in the request */
+           if (chunk > count - fetched) chunk = count - fetched;
+           fetched   += chunk;
+           memcpy(a_ptr, mcb->Data, (int) chunk);
+           a_ptr     += chunk;                        /* next bit of buffer */
+         }
          timelimit = Now + divlong(timeout, time_unit);     /* reset timer */
        }
 
