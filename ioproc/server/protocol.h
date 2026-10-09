@@ -888,9 +888,10 @@ typedef struct Config {
         word    MyName;         /* full path name               */
         word    ParentName;     /* ditto                        */
         word    NLinks;         /* number of links              */
-        word    LinkConf[1];    /* NLinks LinkConf structs      */
-        char    namespace[CONFIGSPACE];	/* space for extra links and */
-					/* MyName / ParentName */
+		/* NLinks LinkConf structs, then MyName / ParentName. Helios */
+		/* declares LinkConf[1] followed by CONFIGSPACE bytes; one   */
+		/* array of the same size lets build_config() index it.      */
+        word    LinkConf[1 + CONFIGSPACE / sizeof(word)];
 } Config;
 
 /* Config.Flags end up as Root.Flags */

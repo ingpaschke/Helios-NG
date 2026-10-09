@@ -1498,6 +1498,11 @@ PRIVATE word build_config()
 	 !mystrcmp(box_type, "SPIRIT40") )
       numlinks = 7;
    }
+  if ((bootlink < 0L) || (bootlink >= numlinks))
+   { ServerDebug("Warning : bootlink %ld is not a link, using %d.",
+                 bootlink, Default_BootLink);
+     bootlink = (word) Default_BootLink;
+   }
 
   config.PortTabSize = swap(1024L);
   config.Incarnation = swap(1L);
@@ -1621,17 +1626,31 @@ PRIVATE word build_config()
   if (C40HalfDuplex)
 	    config.LinkConf[(int) bootlink] |= swap(Link_Flags_HalfDuplex);
 
-  config.MyName      = swap( ((word) &config.LinkConf[numlinks]) -
-                             ((word) &config.MyName));
-  config.ParentName  = swap( (((word) &config.LinkConf[numlinks]) +
-			     strlen(procname) + 1) -
-                             ((word) &config.ParentName) );
+	/* The two names follow the link configurations; they must fit */
+	/* in the rest of the vector.                                  */
+  { int  room = (int) (sizeof(config.LinkConf) - numlinks * sizeof(word));
+    int  lp   = strlen(procname);
+    int  lm   = strlen(myname);
+    char *names = (char *) &config.LinkConf[(int) numlinks];
 
-  strcpy( ((char *)&config.LinkConf[numlinks]), procname);
-  strcpy( ((char *)&config.LinkConf[numlinks]) + strlen(procname) + 1, myname );
+    if (lp + 1 + lm + 1 > room)
+     { ServerDebug("Warning : processor names %s and %s are too long, truncated.",
+                   procname, myname);
+       if (lp > room / 2 - 1) lp = room / 2 - 1;
+       if (lm > room - lp - 2) lm = room - lp - 2;
+     }
+    memcpy(names, procname, lp);
+    names[lp] = '\0';
+    memcpy(names + lp + 1, myname, lm);
+    names[lp + 1 + lm] = '\0';
 
-  return((word) (sizeof(Config) + ((numlinks - 1) * sizeof(word)) +
-		strlen(procname) + 1 + strlen(myname) + 1 - CONFIGSPACE));
+    config.MyName      = swap( ((word) names) - ((word) &config.MyName));
+    config.ParentName  = swap( ((word) (names + lp + 1)) -
+                               ((word) &config.ParentName) );
+
+    return((word) (sizeof(Config) + ((numlinks - 1) * sizeof(word)) +
+		  lp + 1 + lm + 1 - CONFIGSPACE));
+  }
 }
 /*}}}*/
 
