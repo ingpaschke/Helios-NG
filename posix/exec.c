@@ -47,7 +47,7 @@ STATIC void (*_exitvector[EXIT_LIMIT])(void);
 STATIC int number_of_exit_functions;
 STATIC Environ MyEnv;
 
-static void waiter(PCB *pcb);
+static void waiter(int slot, pid_t pid, Stream *stream);
 static void startfail(char *why, word e);
 static void int2hex(int n, char *s);
 static int hex2int(char *s);
@@ -450,7 +450,12 @@ extern int execve(char *name, char **argv, char **envv)
 		childvec[inchild].prog = prog;	
 		childvec[inchild].stream = stream;
 		childvec[inchild].spare = 0;
-		unless( Fork(WaiterStack, waiter,4,&(childvec[inchild])) )
+		/* The waiter gets the slot index, pid and stream by value:	*/
+		/* vfork_start may move childvec (it grows by childvecinc	*/
+		/* when every slot is busy), so a pointer into it would go	*/
+		/* stale while this child runs.					*/
+		unless( Fork(WaiterStack, waiter, 3*sizeof(word),
+			     inchild, childvec[inchild].pid, stream) )
 		{
 			/* No memory for the waiter, so nothing would ever	*/
 			/* report the end of this child and waitpid would	*/
@@ -491,34 +496,48 @@ fail:
 /* will come) or a vector cannot be had, the child is marked lost	*/
 /* (spare) with an error code in status, and waitpid returns -1 for it	*/
 /* instead of waiting for ever.						*/
+/*									*/
+/* The child is named by its childvec index and pid, never by a	*/
+/* pointer: vfork_start reallocates childvec when all slots are busy,	*/
+/* which moves every entry.  childvec is only touched under forklock	*/
+/* (vfork_start runs with it held), and the slot cannot be reused	*/
+/* before the store below, because waitpid frees a slot only once its	*/
+/* status is no longer MinInt and only this waiter changes it from	*/
+/* MinInt.  The pid check guards that invariant.			*/
 #define WaiterVec	4
 #define WaiterVecMax	256
 
-static void waiter(PCB *pcb)
+static void waiter(int slot, pid_t pid, Stream *stream)
 {
 	extern void inner_raise(int sig, bool async, bool propagate);
 	word svbuf[WaiterVec];
-	word svsize = InitProgramInfo(pcb->stream,PS_Terminate);
+	word svsize = InitProgramInfo(stream,PS_Terminate);
 	word *sv    = svbuf;
 	word status;
+	bool lost = FALSE;
 	
 	if( svsize > WaiterVec && svsize <= WaiterVecMax )
 		sv = (word *)Malloc(svsize * sizeof(word));
-_Trace(0xAAAA000a,MyTask,pcb->pid);	
+_Trace(0xAAAA000a,MyTask,pid);	
 	if( svsize <= 0 || svsize > WaiterVecMax || sv == NULL )
 	{
 		status = svsize < 0 ? svsize :
-			 svsize == 0 ? Result2(pcb->stream) :
+			 svsize == 0 ? Result2(stream) :
 			 EC_Error|SS_SysLib|EG_NoMemory|EO_Task;
 		if( status >= 0 ) status = EC_Error|SS_SysLib|EG_Broken|EO_Task;
-		IOdebug("posix: cannot wait for child %d (%E)",pcb->pid,status);
-		pcb->spare = 1;
+		IOdebug("posix: cannot wait for child %d (%E)",pid,status);
+		lost = TRUE;
 	}
-	else status = GetProgramInfo(pcb->stream,sv,-1);
+	else status = GetProgramInfo(stream,sv,-1);
 _Trace(0xAAAA000b,MyTask,status);	
 	Wait( &forklock );
 _Trace(0xAAAA000c,MyTask,status);	
-	pcb->status = (int)status;
+	if( slot > 0 && slot < childvecsize && childvec[slot].pid == pid )
+	{
+		childvec[slot].status = (int)status;
+		if( lost ) childvec[slot].spare = 1;
+	}
+	else IOdebug("posix: child %d lost its slot %d",pid,slot);
 
 	AbortPort(WaitPort,0);
 _Trace(0xAAAA000d,MyTask,status);	
