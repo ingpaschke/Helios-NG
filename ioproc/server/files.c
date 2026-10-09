@@ -810,9 +810,9 @@ PRIVATE void Drive_Createfile()
     {
 #if floppies_available
       if (floppy_errno) floppy_handler();
+#endif
       Request_Return(Server_errno, 0L, 0L);
       return;
-#endif
     }
 
   temp = FormOpenReply(Type_File, 0l, -1l, -1l);
