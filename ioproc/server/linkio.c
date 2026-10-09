@@ -379,8 +379,11 @@ MCB *mcb;
   }
 #endif
 
+                 /* ContSize is a byte of the header, 0 to 255 words, but */
+                 /* the field is a plain (signed) char: read it unsigned. */
   if (mcb->MsgHdr.ContSize ne 0)   /* get the control vector */
-   if ((x = fetch_block(mcb->MsgHdr.ContSize * 4, (byte *) mcb->Control, 100)) > 0)
+   if ((x = fetch_block((int) ((UBYTE) mcb->MsgHdr.ContSize) * 4,
+                        (byte *) mcb->Control, 100)) > 0)
     { ServerDebug("Warning : failed to read control vector (%d)", x);
 #if 0
       ServerDebug("Warning : fl %x, cs %x, ds %x, dp %lx, rp %lx, fnrc %lx",mcb->MsgHdr.Flags,mcb->MsgHdr.ContSize, mcb->MsgHdr.DataSize, mcb->MsgHdr.Dest, mcb->MsgHdr.Reply, mcb->MsgHdr.FnRc);
@@ -390,7 +393,7 @@ MCB *mcb;
 
 #if swapping_needed
   { register word *x = mcb->Control; int y;
-    for (y = 0; y < mcb->MsgHdr.ContSize; y++)
+    for (y = 0; y < (int) ((UBYTE) mcb->MsgHdr.ContSize); y++)
      { *x = swap(*x); x++; }
   }
 #endif
@@ -417,6 +420,13 @@ MCB *mcb;
  	    for (x = maxdata; x < (word) mcb->MsgHdr.DataSize; x++)
              (void) byte_from_link(&(y[0]));
 	 }
+		/* Tell the sender, rather than let it time out and */
+		/* retry the same message.                          */
+        mcb->MsgHdr.ContSize = 0;
+        mcb->MsgHdr.DataSize = 0;
+        mcb->MsgHdr.Flags    = 0;
+        if (mcb->MsgHdr.Reply ne 0L)
+         Request_Return(EC_Error + SS_IOProc + EG_WrongSize + EO_Message, 0L, 0L);
         return(false);
       }
 
