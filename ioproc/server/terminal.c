@@ -1075,6 +1075,10 @@ Conode *myco;
     { Request_Return(ReadRc_EOD, 0L, 0L);
       return;
     }
+  if (count < 0L)           /* garbage from the transputer */
+    { Request_Return(EC_Error + SS_IOProc + EG_Parameter + EO_Message, 0L, 0L);
+      return;
+    }
                /* I want a sensible limit on the amount read, 1 Kbyte reads */
                /* from a console are silly.                                 */
   if (count > Console_limit) count = Console_limit; 
