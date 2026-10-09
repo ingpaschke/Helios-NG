@@ -441,8 +441,9 @@ int loadimage()
       { ServerDebug("Insufficient memory to store system image.");
         goto done;
       }
-     if (fread(&(cur_data->data[0]), 1, cur, infd) eq 0)
-      { ServerDebug("Failed to read system image.");
+     if (fread(&(cur_data->data[0]), 1, cur, infd) ne (size_t) cur)
+      { ServerDebug("Failed to read system image.");    /* or it is short */
+        iofree(cur_data);
         goto done;
       }
      cur_data->size = cur;
@@ -540,6 +541,13 @@ PRIVATE void load_boot()
    }
 
   bootsize = swap(ihdr[2]);
+
+	/* A transputer takes the size of the bootstrap as the first byte */
+	/* down the link; 0 and 1 mean poke and peek.                     */
+  if ((bootsize <= 0L) ||
+      ((target_processor eq Processor_Trannie) &&
+       ((bootsize < 2L) || (bootsize > 255L))))
+   { ServerDebug("Bad bootstrap size %ld.", bootsize); goto fail; }
 
   bootstrap =  (char *)(malloc((uint) bootsize));
   if( bootstrap eq NULL )
@@ -1341,7 +1349,7 @@ static void send_nucleus()
 	   cur = (int) (((isize - l) > MaxChunk) ? MaxChunk : isize - l);
 
 			/* read chunk */
-           if (fread(cur_data, 1, (size_t)cur, infd) eq 0)
+           if (fread(cur_data, 1, (size_t)cur, infd) ne (size_t)cur)
 	    {
 	      ServerDebug("Failed to read (%x) bytes in system image (read 0x%lx out of 0x%lx).", cur, l, isize);
 
