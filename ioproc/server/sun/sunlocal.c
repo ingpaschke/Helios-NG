@@ -2469,8 +2469,10 @@ servinfo *reply;
 *** concerned need not be a file.
 **/
 PRIVATE int fn( socket_open, (char *, WORD));
-#define Blocking_bit     0x100
-#define Blocking_mask    0x0FF
+        /* A file descriptor of a fifo or device is marked with the     */
+        /* blocking bit, which must lie above any descriptor number.     */
+#define Blocking_bit     0x40000000
+#define Blocking_mask    0x3FFFFFFF
 
 int open_file(name, Heliosmode)
 char *name;
@@ -2532,7 +2534,7 @@ PRIVATE int socket_open(name, mode)
 char *name;
 WORD mode;
 { Server_errno = EC_Error + SS_IOProc + EG_WrongFn + EO_Object;
-  return(-1);
+  return(0);                         /* open_file's failure value */
   use(name)
   use(mode)
 }
