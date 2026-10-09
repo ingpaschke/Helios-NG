@@ -438,6 +438,7 @@ misssuspend:
    
     if (myco->flags & CoFlag_CtrlCed) {
     	 myco->type = CoReady;
+         myco->flags &= ~CoFlag_CtrlCed;   /* reported, so clear it */
          return;
     }
   }
@@ -1183,6 +1184,7 @@ word   reply_port;
             count = 0;   /* Braked so ensure flush */
             /* Let break get there 1st */
             for (waitabit=10; waitabit; waitabit--) Suspend();
+            myco->flags &= ~CoFlag_CtrlCed;   /* reported, so clear it */
             break;
           }
                 /* The buffer is empty. Once some data has been read, */
