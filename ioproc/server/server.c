@@ -2896,7 +2896,11 @@ VoidConFnPtr *handlers;
   newco->id        = CoCount++;
   newco->timelimit = Now + StreamTimeout;
   newco->name[0]   = 0x7f;
-  strcpy(&(newco->name[1]), IOname);
+     /* IOname can be up to IOCDataMax characters; the name field only */
+     /* serves the debug listing and the same-file check of hosts with */
+     /* short paths, so keep what fits.                                */
+  strncpy(&(newco->name[1]), IOname, sizeof(newco->name) - 2);
+  newco->name[sizeof(newco->name) - 1] = '\0';
   newco->handlers  = handlers;  
   newco->extra     = (ptr) extra;
   mcb->MsgHdr.Dest = newco->id;
