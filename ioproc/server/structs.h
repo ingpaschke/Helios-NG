@@ -264,7 +264,7 @@ typedef struct Window { ObjNode       node;
 #if use_ANSI_emulator
                         Screen        screen;
 #endif
-                        UBYTE         Table[Console_limit];
+                        UBYTE         Table[Console_limit + 1]; /* & Console_limit */
 			word	      handle;
                         int           head, tail;
                         int           XOFF;
