@@ -1638,6 +1638,10 @@ Conode *myco;
        { (*(myco->handlers)[TidyServer_off])(myco);
          Seppuku();
        }
+                                       /* and protect us from Nick Garnett */
+                                       /* (private requests carry names too) */
+     mcb->Data[mcb->MsgHdr.DataSize] = '\0';
+
                              /* The message may be part of a private protocol */
      if (((mcb->MsgHdr).FnRc & FC_Mask) ne FC_GSP)
        { (*((myco->handlers)[Private_off]))(myco);
@@ -1648,9 +1652,6 @@ Conode *myco;
       { (*((myco->handlers)[Private_off]))(myco);
         continue;
       }
-
-                                       /* and protect us from Nick Garnett */
-     mcb->Data[mcb->MsgHdr.DataSize] = '\0';
 
                                            /* work out the local name IOname  */
      unless(convert_name())
@@ -1853,7 +1854,12 @@ PRIVATE void Forward()
 { register char *server_name, *server_end;
   Conode *tempco;
 
-  for (server_name = IOname; *server_name ne '/'; server_name++);
+  for (server_name = IOname; (*server_name ne '/') && (*server_name ne '\0');
+       server_name++);
+  if (*server_name eq '\0')
+   { Request_Return(EC_Error + SS_IOProc + EG_Name + EO_Message, 0L, 0L);
+     return;
+   }
   server_name++;
 
   for (server_end = server_name; *server_end ne '/' && *server_end ne '\0';
@@ -2227,9 +2233,7 @@ Conode *myco;
 #else
   char *newname = (char *) &(misc_buffer1[0]);
 #endif
-  char *data = mcb->Data;
-  int  context = (int) mcb->Control[Context_off];
-  int  dest    = (int) mcb->Control[RenameToname_off];
+  char *data;
 
   if (strcmp(IOname, myco->name) && IOname[0] ne '\0')
    {
@@ -2238,29 +2242,24 @@ Conode *myco;
      return;
    }
 
-  if (context ne -1 && data[dest] ne '/')
-   { 
-     strcpy(newname, &(data[context]));
-     pathcat(newname, &(data[dest]));
-   }
-  else
-    {
-      strcpy(newname, &(data[dest]));
-    }
-
-  unless(flatten(newname))
+  unless(request_name(newname, RenameToname_off))
     { Request_Return(EC_Error + SS_IOProc + EG_Name + EO_Server, 0L, 0L);
 
       return;
     }
 
+  data = newname + strlen(newname);
+ 
+  while ((data > newname) && (data[-1] ne '/')) data--;
+
+  if (strlen(data) >= sizeof(myco->name))
+    { Request_Return(EC_Error + SS_IOProc + EG_Name + EO_Server, 0L, 0L);
+      return;
+    }
+
   strcpy(network_name, newname);
 
-  data = newname + strlen(newname) - 1;
- 
-  while (*data ne '/') data--;
-
-  strcpy(myco->name, ++data);
+  strcpy(myco->name, data);
 
   Request_Return(ReplyOK, 0L, 0L);
 
@@ -2638,6 +2637,7 @@ word convert_name()
   int  name      = (int) control[Pathname_off];
   register int  	next = (int) control[Nextname_off];
   register char *	dest = IOname;
+  char *limit = &(IOname[IOCDataMax - 1]);   /* room for the terminator */
 
   if ((context eq -1) && (name eq -1))
    { Debug(Name_Flag, ("System library error : NULL context and NULL name"));
@@ -2651,15 +2651,29 @@ word convert_name()
       return (false);
     }
 
+                     /* every offset must be inside the request's data */
+  if (!data_offset_ok(next) ||
+      ((name ne -1) && !data_offset_ok(name)) ||
+      ((context ne -1) && !data_offset_ok(context)))
+    {
+      Debug (Name_Flag, ("System library error: bad name offsets %d %d %d", context, name, next));
+
+      return (false);
+    }
+
    Debug(Name_Flag, ("Context %s, name %s, rest %s", (context ne -1) ? &(data[context]) : "NULL", (name ne -1) ? &(data[name]) : "NULL", (next ne -1) ? &(data[next]) : "NULL" ) );
 
   for ( ; data[next] ne '/' && data[next] ne '\0'; next++)
-    *dest++ = data[next];
+    { if (dest >= limit) return(false);
+      *dest++ = data[next];
+    }
 
   if (data[next] eq '/')
     { control[Nextname_off] = next+1;
       for ( ; data[next] ne '\0'; next++)
-        *dest++ = data[next];
+       { if (dest >= limit) return(false);
+         *dest++ = data[next];
+       }
     }
   elif (name ne -1)
     if ( ((next < name) && (context < name)) ||
@@ -2670,9 +2684,12 @@ word convert_name()
 
   if ( ((next < name) && (context < name)) ||
        ((next > name) && (context > name)) )
-   { *dest++ = '/';
+   { if (dest >= limit) return(false);
+     *dest++ = '/';
      for ( ; data[name] ne '\0'; name++)
-       *dest++ = data[name];
+      { if (dest >= limit) return(false);
+        *dest++ = data[name];
+      }
    }
 
 finished:
@@ -2707,7 +2724,8 @@ char *name;
              if (*source eq '/' || *source eq '\0')
                { 
                  if (entries <= 1) return(false);
-                 dest--; dest--; while (*dest ne '/')  dest--;
+                 dest--; dest--;
+                 while ((dest > name) && (*dest ne '/'))  dest--;
                  if (*source ne '\0') 
                   { dest++; source++; }
                  entries--; continue;
@@ -2836,6 +2854,45 @@ char *s1, *s2;
   *(++temp)='\0';
             /* cat s2, skipping initial / if necessary */
   strcat(temp, (*s2 eq '/') ? &(s2[1]) : s2);
+}
+
+/**
+*** data_offset_ok() checks that an offset from a request's control vector
+*** points into the request's data, which General_Server() has terminated
+*** (the terminator itself counts as an empty string).
+*** request_name() forms the full name of the object at control vector
+*** offset 'which' (the target of a Rename or Link) in 'dest', a buffer of
+*** IOCDataMax bytes, from the request's context and that name, and
+*** flattens it. It fails if an offset is bad or the name does not fit.
+**/
+word data_offset_ok(offset)
+int offset;
+{ return((offset >= 0) && (offset <= (int) mcb->MsgHdr.DataSize));
+}
+
+word request_name(dest, which)
+char *dest;
+int  which;
+{ char *data    = mcb->Data;
+  int  context  = (int) mcb->Control[Context_off];
+  int  name     = (int) mcb->Control[which];
+
+  if (!data_offset_ok(name)) return(false);
+  if ((context ne -1) && !data_offset_ok(context)) return(false);
+
+  if ((context ne -1) && (data[name] ne '/'))
+   { if (strlen(&(data[context])) + strlen(&(data[name])) + 2 > IOCDataMax)
+       return(false);
+     strcpy(dest, &(data[context]));
+     pathcat(dest, &(data[name]));
+   }
+  else
+   { if (strlen(&(data[name])) + 1 > IOCDataMax)
+       return(false);
+     strcpy(dest, &(data[name]));
+   }
+
+  return(flatten(dest));
 }
 
 #if swapping_needed
