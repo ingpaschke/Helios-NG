@@ -735,6 +735,11 @@ Conode *myco;
   if (count eq 0)
    { Request_Return(ReadRc_EOD, 0L, 0L); return; }
 
+  if (mcb->Control[ReadSize_off] < 0L)     /* garbage from the transputer */
+   { Request_Return(EC_Error + SS_IOProc + EG_Parameter + EO_Message, 0L, 0L);
+     return;
+   }
+
   if (mcb->Control[ReadSize_off] > 1024L)
     count = 1024;  /* impose an upper limit */
 

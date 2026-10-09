@@ -1580,6 +1580,11 @@ Conode *myco;
 
   Debug(Read_Flag, ("Supposed to read %ld bytes at %ld in %s.", asked, req_pos, &(myco->name[1])) );
 
+  if ((asked < 0L) || (req_pos < 0L))      /* garbage from the transputer */
+   { Request_Return(EC_Error + SS_IOProc + EG_Parameter + EO_Message, 0L, 0L);
+     return;
+   }
+
   if (req_pos ne curr_pos)          /* Do I have to seek to the current pos ? */
     { Debug(Read_Flag,("Having to seek to %ld from %ld.", req_pos, curr_pos));
 
@@ -2082,6 +2087,11 @@ Conode  *myco;
 
   Debug(Directory_Flag, ("Directory read for %s : %ld bytes at %ld", &(myco->name[1]), count, offset) );
 
+  if ((count < 0L) || (offset < 0L))       /* garbage from the transputer */
+   { Request_Return(EC_Error + SS_IOProc + EG_Parameter + EO_Message, 0L, 0L);
+     return;
+   }
+
   if (count > maxdata) 
     count = maxdata; 
 
@@ -2321,6 +2331,11 @@ Conode *myco;
   asked      = (mcb->Control)[ReadSize_off];
   reply_port = mcb->MsgHdr.Reply;
   req_pos    = (mcb->Control)[ReadPos_off];
+
+  if ((asked < 0L) || (req_pos < 0L))      /* garbage from the transputer */
+   { Request_Return(EC_Error + SS_IOProc + EG_Parameter + EO_Message, 0L, 0L);
+     return;
+   }
 
   forever                          /* Read in data bit by bit and send it off */
     { mcb->MsgHdr.Reply = reply_port;   /* must be saved */
@@ -2663,6 +2678,11 @@ Conode *myco;
   asked      = (mcb->Control)[ReadSize_off];
   req_pos    = (mcb->Control)[ReadPos_off];
 
+  if ((asked < 0L) || (req_pos < 0L))      /* garbage from the transputer */
+   { Request_Return(EC_Error + SS_IOProc + EG_Parameter + EO_Message, 0L, 0L);
+     return;
+   }
+
   if ((req_pos & (Sector_size - 1L)) ne 0L)
    { Debug(HardDisk_Flag, ("R : not on sector boundary") );
      Request_Return(EC_Error + SS_IOProc + EG_WrongSize + EO_File, 0L, 0L);
@@ -2709,6 +2729,11 @@ Conode *myco;
 
   asked      = (mcb->Control)[ReadSize_off];
   req_pos    = (mcb->Control)[ReadPos_off];
+
+  if ((asked < 0L) || (req_pos < 0L))      /* garbage from the transputer */
+   { Request_Return(EC_Error + SS_IOProc + EG_Parameter + EO_Message, 0L, 0L);
+     return;
+   }
 
   if ((req_pos & (Sector_size - 1L)) ne 0L)
    { Debug(HardDisk_Flag, ("W : not on sector boundary") );
@@ -2887,6 +2912,11 @@ Conode *myco;
   req_pos    = (mcb->Control)[ReadPos_off];
 
   Debug(HardDisk_Flag, ("R : @ %ld, %ld bytes ", req_pos, asked) );
+
+  if ((asked < 0L) || (req_pos < 0L))      /* garbage from the transputer */
+   { Request_Return(EC_Error + SS_IOProc + EG_Parameter + EO_Message, 0L, 0L);
+     return;
+   }
 
   Server_errno = EC_Error + SS_IOProc + EG_Broken + EO_File;
   
