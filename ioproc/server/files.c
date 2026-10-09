@@ -1407,6 +1407,7 @@ typedef struct { Node       node;
                  Conode     *conode;
                  word       curr_pos;
                  stream     handle;
+                 int        busy;     /* in a multi-message read or write */
 } File_extra;
 
 word File_InitStream(myco)
@@ -1439,6 +1440,7 @@ Conode *myco;
       return(EC_Warn + SS_IOProc + EG_NoMemory + EO_Server);
   extra->curr_pos = 0L;
   extra->conode   = myco;
+  extra->busy     = 0;
   myco->extra     = (word *) extra;
 
 retry_open:
@@ -1447,15 +1449,20 @@ retry_open:
 
   if (handle eq 0)
    {      /* magic, too many files open */
-          /* Retry once, closing some other file */
+          /* Retry once, closing some other file: the least recently */
+          /* used one that is not in the middle of a transfer.        */
      if ((Server_errno eq EC_Error + SS_IOProc + EG_NoResource + EO_Server) &&
          firsttry)
-	  { File_extra *newextra = (File_extra *) Open_files_list.tail;
-        Conode     *conode   = newextra->conode;
-        firsttry             = 0;
-        conode->type         = CoSuicide;
-        StartCo(conode);
-        goto retry_open;
+      { Node *node;
+        firsttry = 0;
+        for (node = Open_files_list.tail; node ne (Node *) &Open_files_list;
+             node = node->prev)
+         if (!((File_extra *) node)->busy)
+          { Conode *conode = ((File_extra *) node)->conode;
+            conode->type   = CoSuicide;
+            StartCo(conode);
+            goto retry_open;
+          }
       }
 
      iofree(extra);
@@ -1640,15 +1647,15 @@ Conode *myco;
 
       myco->type = CoReady;
       myco->timelimit = MAXINT;
+      extra->busy = 1;
       Multi_nowait++;
       Suspend();
       Multi_nowait--;
+      extra->busy = 0;
                                  /* make sure I get back into waiting list */
       PostInsert(Remove(&(myco->node)), Heliosnode);
       if ((myco->type eq CoSuicide) || (myco->type eq CoTimeout))
-       { word x;
-         x = close_file(extra->handle);
-         iofree(extra);
+       { (void) File_TidyStream(myco);   /* also off Open_files_list */
          Seppuku();
        }
     }
@@ -1773,7 +1780,9 @@ try_again:
   while (actual < asked)
     { myco->timelimit  = Now + time_interval;  /* reset the time limit */
                                               /* for next message to arrive */
+      extra->busy = 1;
       Suspend();                             /* wait for the next lot of data */
+      extra->busy = 0;
 
       if (myco->type eq CoSuicide)
           goto write_fail;
@@ -1807,10 +1816,7 @@ try_again:
   return;
 
 write_fail:
-  { word x;
-    x = close_file(extra->handle);
-  }
-  iofree(extra);
+  (void) File_TidyStream(myco);       /* also off Open_files_list */
   Seppuku();
 #endif   /* DEMONSTRATION VERSION */
 }
