@@ -1618,8 +1618,10 @@ Conode *myco;
      if (!newbuf)
       { buff = (UBYTE *) malloc((uint) count);
         if (buff eq (UBYTE *) NULL)
-         { ServerDebug("WARNING : I/O Server out of memory on write to screen.");
+         { mcb->MsgHdr.Reply = replyport;
+           ServerDebug("WARNING : I/O Server out of memory on write to screen.");
            Request_Return(EC_Error + SS_IOProc + EG_NoMemory + EO_Server, 0L, 0L);
+           Signal(&(window->write_lock));
            return;
          }
         newbuf++;
