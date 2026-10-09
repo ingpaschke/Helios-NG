@@ -1079,7 +1079,7 @@ PRIVATE int char_rdy()
 
   current_char = window_getchar(&Server_window);
 
-  return ((current_char ne 0) ? 1 : 0);
+  return ((current_char >= 0) ? 1 : 0);
 }
 
 PRIVATE int rdch()
