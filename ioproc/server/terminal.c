@@ -1287,9 +1287,9 @@ word   port;
 
   for (temp = 0; temp < cooker->count; temp++)
    if (cooker->buffer[temp] eq '\n')
-    { 
+    {                       /* send no more than up to the newline */
+      if (amount > temp + 1) amount = temp + 1;
       temp = Cooked_Done;
-      if (amount > temp) amount = temp + 1;    
       goto junkgoto;	  /* Sorry can't do it any other way */
     }
 
