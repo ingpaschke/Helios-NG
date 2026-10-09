@@ -1046,9 +1046,8 @@ Conode *myco;
 ***
 *** To extract data from the circular buffer I use a single routine
 *** window_getchar(), which is the opposite of add_key(). The routine
-*** returns 0 if there is no character ready, else the character, on the
-*** reasoning that it is impossible to type '\0' on any normal keyboard and
-*** if it were possible the system would crash anyway.
+*** returns -1 if there is no character ready, else the character (which
+*** may be 0: ctrl-@ is a key like any other in raw mode).
 **/
 
 PRIVATE void fn( raw_Console_read,    (Conode *, int, word, word));
@@ -1060,7 +1059,7 @@ Window *window;
 { int tempch;
 
   if (window->head eq window->tail)   /* is there a character in the buffer ? */
-     return(0);
+     return(-1);
   tempch = (int) window->Table[window->tail];
   window->tail = (window->tail + 1) & Console_limit;
   Debug(Keyboard_Flag, ("Read char 0x%x from window %s", tempch, window->node.direntry.Name));
@@ -1173,7 +1172,7 @@ word   reply_port;
     break;
 
   for ( ; i < count; )
-     { if ((temp = window_getchar(window)) ne 0)
+     { if ((temp = window_getchar(window)) >= 0)
         { buff[i++] = (byte) temp;
           if (echo)       /* Should I echo the character ? */
             outputch(temp, window);
@@ -1402,7 +1401,7 @@ Window *window;
   UBYTE *buffer = (UBYTE *) &(cooker->buffer[0]);
   register int  count   = cooker->count;
 
-  while ((curr_ch = window_getchar(window)) ne 0)
+  while ((curr_ch = window_getchar(window)) >= 0)
     switch(curr_ch)
       { case 0x0A :    /* treat carriage return and newline the same way... */
         case 0x0D : if (count eq Console_limit)
@@ -1725,8 +1724,14 @@ word amount, rawmode;
 Window *window;
 { register byte *newdata = (byte *) &(misc_buffer1[0]);
 
+        /* The result is a C string, so NUL bytes are left out rather */
+        /* than let them end the output of the rest of the chunk.      */
   if (rawmode)
-    while (amount--) *newdata++ = *data++;
+    { while (amount--)
+       { if (*data ne '\0') *newdata++ = *data;
+         data++;
+       }
+    }
   else
     { 
       while (amount--)
@@ -1735,7 +1740,7 @@ Window *window;
          if (((32 <= *data) && (*data <= 255)) ||    /* printable chars */
              (( 0x07 <= *data) && (*data <= 0x0D)))  /* usual control chars */
 #endif
-         *newdata++ = *data;
+         if (*data ne '\0') *newdata++ = *data;
          if (*data eq '\n') *newdata++ = '\r';
          data++;
        }
