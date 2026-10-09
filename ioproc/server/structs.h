@@ -229,6 +229,9 @@ typedef struct Microwave {
 #define Cooked_Done 3               /* Read has been satisfied */
 
 #if use_ANSI_emulator
+#define ANSI_maxargs       5      /* parameters kept per escape sequence */
+#define ANSI_argmax        9999   /* largest parameter value            */
+
 typedef struct Screen { byte          **map;
                         byte          *whole_screen;
                         int           Rows;
@@ -237,7 +240,7 @@ typedef struct Screen { byte          **map;
                         int           Cur_y;
                         int           mode;
                         int           flags;
-                        int           args[5];
+                        int           args[ANSI_maxargs];
                         int           *args_ptr;
                         int           gotdigits;
 } Screen;
@@ -246,6 +249,7 @@ typedef struct Screen { byte          **map;
 #define ANSI_escape_found  0x02
 #define ANSI_firstdigit    0x04
 #define ANSI_dirty         0x08
+#define ANSI_toomany       0x10   /* more than ANSI_maxargs parameters  */
 
 #endif
 
