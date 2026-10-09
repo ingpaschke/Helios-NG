@@ -1782,10 +1782,10 @@ try_again:
   mcb->MsgHdr.Flags = MsgHdr_Flags_preserve; /* must preserve the route here */
   Request_Return(WriteRc_Sizes, 2L, 0L);  
 
+  myco->timelimit = Now + time_interval;     /* time limit for the next */
+                                             /* data message to arrive  */
   while (actual < asked)
-    { myco->timelimit  = Now + time_interval;  /* reset the time limit */
-                                              /* for next message to arrive */
-      extra->busy = 1;
+    { extra->busy = 1;
       Suspend();                             /* wait for the next lot of data */
       extra->busy = 0;
 
@@ -1794,8 +1794,27 @@ try_again:
       elif (myco->type eq CoTimeout)
           break;
 
-      if (getfnrc(mcb) eq FG_Write)
-       goto try_again;
+        /* A data message has no reply port and carries data (FnRc is   */
+        /* just its sequence number, which can look like any function  */
+        /* code). Anything else is a new request on this stream: the    */
+        /* client has given up this write. A new Write restarts, any   */
+        /* other request is handled as General_Stream() would.          */
+      unless((mcb->MsgHdr.Reply eq NullPort) && (mcb->MsgHdr.DataSize > 0))
+       { if (getfnrc(mcb) eq FG_Write)
+          goto try_again;
+         Debug(Write_Flag, ("Write abandoned after %ld of %ld bytes, request %lx",
+                actual, asked, mcb->MsgHdr.FnRc) );
+         if (((mcb->MsgHdr.FnRc & FC_Mask) eq FC_GSP) &&
+             (FG_Read <= getfnrc(mcb)) && (getfnrc(mcb) <= FG_Select))
+          { int handler_off = ((int) (mcb->MsgHdr.FnRc & 0x000000F0L)) >> 4;
+            (*(myco->handlers)[Read_off - 1 + handler_off])(myco);
+          }
+         elif (mcb->MsgHdr.Reply ne NullPort)
+          Request_Return(EC_Error + SS_IOProc + EG_FnCode + EO_Message, 0L, 0L);
+         return;
+       }
+
+      myco->timelimit = Now + time_interval;  /* reset the time limit */
 
       unless(write_error)
        { temp = write_to_file(handle, (word) mcb->MsgHdr.DataSize, mcb->Data);
