@@ -356,6 +356,10 @@ PRIVATE void get_local_name()
         { strcpy(local_name, rubbish_file); return; }
     }
 
+                /* a name too long for local_name cannot exist */
+  if (strlen(local_name) + strlen(tempptr) >= IOCDataMax)
+    { strcpy(local_name, rubbish_file); return; }
+
   destptr = local_name + strlen(local_name);
   for (; *tempptr ne '\0'; )
     *destptr++ = *tempptr++;
@@ -1097,10 +1101,7 @@ void Drive_Rename(myco)
 Conode *myco;
 { char *fromname = (char *) &(misc_buffer2[0]);       /* to store source name */
   char *newname  = (char *) &(misc_buffer1[0]);
-  char *data = mcb->Data;
-  int  context = (int) mcb->Control[Context_off];
-  int  name    = (int) mcb->Control[Pathname_off];
-  int  dest    = (int) mcb->Control[RenameToname_off];
+  char *data;
   int  offset;
 
   Debug(FileIO_Flag, ("Rename request received"));
@@ -1128,30 +1129,15 @@ Conode *myco;
 
   strcpy(fromname, local_name);               /* source name is in local_name */
 
-  if (context ne -1 && data[name] ne '/')
-   { 
-     strcpy(newname, &(data[context]));
-     pathcat(newname, &(data[name]));
-   }
-  else
-   strcpy(newname, &(data[name]));
-
-  unless(flatten(newname))
+  unless(request_name(newname, Pathname_off))
    { Request_Return(EC_Error + SS_IOProc + EG_Name + EO_Message, 0L, 0L);
      return;
    }
 
   offset = strlen(newname) - strlen(IOname);
 
-  if (context ne -1 && data[dest] ne '/')
-   { 
-     strcpy(newname, &(data[context]));
-     pathcat(newname, &(data[dest]));
-   }
-  else
-   strcpy(newname, &(data[dest]));
-
-  unless(flatten(newname))
+  unless(request_name(newname, RenameToname_off) &&
+         (offset >= 0) && (offset <= (int) strlen(newname)))
    { Request_Return(EC_Error + SS_IOProc + EG_Name + EO_Message, 0L, 0L);
      return;
    }
@@ -1278,38 +1264,22 @@ void Drive_Link(myco)
 Conode *myco;
 { char *linkname = (char *) &(misc_buffer1[0]);      /* to store link name */
   char *newname  = (char *) &(misc_buffer2[0]);
-  char *data = mcb->Data;
-  int  context = (int) mcb->Control[Context_off];
-  int  name    = (int) mcb->Control[Pathname_off];
-  int  dest    = (int) mcb->Control[RenameToname_off];
+  char *data;
   int  offset;
 
   get_local_name();
 
   strcpy(linkname, local_name);              /* source name is in local_name */
 
-  if (context ne -1 && data[name] ne '/')
-   { strcpy(newname, &(data[context]));
-     pathcat(newname, &(data[name]));
-   }
-  else
-   strcpy(newname, &(data[name]));
-
-  unless(flatten(newname))
+  unless(request_name(newname, Pathname_off))
    { Request_Return(EC_Error + SS_IOProc + EG_Name + EO_Message, 0L, 0L);
      return;
    }
 
   offset = strlen(newname) - strlen(IOname);
 
-  if (context ne -1 && data[dest] ne '/')
-   { strcpy(newname, &(data[context]));
-     pathcat(newname, &(data[dest]));
-   }
-  else
-   strcpy(newname, &(data[dest]));
-
-  unless(flatten(newname))
+  unless(request_name(newname, RenameToname_off) &&
+         (offset >= 0) && (offset <= (int) strlen(newname)))
    { Request_Return(EC_Error + SS_IOProc + EG_Name + EO_Message, 0L, 0L);
      return;
    }
