@@ -423,7 +423,11 @@ Conode *myco;
 	}
 	
 	if((d = Dir_find_socket(myco)) == (SockEntry *) NULL)
-		e = SS_InterNet|EC_Error|EG_Unknown|EO_Socket;
+	{				/* the loop below needs d */
+		Request_Return(SS_InterNet|EC_Error|EG_Unknown|EO_Socket,
+				0L, 0L);
+		return TRUE;
+	}
 	else
 	{
 		d->connwait = TRUE;		/* waiting for connect */
@@ -446,6 +450,7 @@ Conode *myco;
 		   {
 		   Request_Return(SS_InterNet|EC_Error|EG_NoMemory|EO_Socket,
 				0L, 0L);
+		   PostInsert(Remove(&(myco->node)), Heliosnode);
 		   return TRUE;
 		   }
 
@@ -482,6 +487,7 @@ Conode *myco;
 		   {
 		   Request_Return(SS_InterNet|EC_Recover|EG_Timeout|EO_Socket,
 				0L, 0L);
+		   PostInsert(Remove(&(myco->node)), Heliosnode);
 		   return TRUE;
 		   }
 
@@ -1249,6 +1255,7 @@ try_again:
 	destport = mcb->MsgHdr.Dest;
 	buf = NULL;
 	buf1 = NULL;
+	savebuf1 = NULL;		/* set at dowrite */
 
 	if(size == 0)
 	{
@@ -1435,7 +1442,7 @@ finish:
 	myco->type = CoReady;
 	if(buf)
 	  iofree(buf);
-	if(savebuf1 != mcb->Data)
+	if(savebuf1 != NULL && savebuf1 != mcb->Data)
 	  iofree(savebuf1);
 	return ;
 	
@@ -1455,7 +1462,7 @@ Conode *myco;
 	ReadWrite *rw = (ReadWrite *)mcb->Control;
 	word size = rw->Size;
 	word timeout = ((rw->Timeout == -1) ? 0 : rw->Timeout / time_unit);
-	byte *buf;
+	byte *buf = NULL;
 	byte *data = mcb->Data;
 	word e;
 	Port reply = mcb->MsgHdr.Reply;
@@ -1571,7 +1578,8 @@ retry:
 done:
                                  /* make sure I get back into waiting list */
         PostInsert(Remove(&(myco->node)), Heliosnode);
-	iofree(buf);
+	if(buf)
+	  iofree(buf);
 	return ;
 }
 
