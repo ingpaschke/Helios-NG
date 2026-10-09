@@ -733,7 +733,10 @@ PRIVATE void reread_config()
   if (read_config(configname))
    { 
      ServerDebug("Reread configuration file"); 
-     FreeList(&oldlist);
+        /* The old entries are not freed: box_type, logname and the     */
+        /* etc/tmp/spool directories were taken from them at startup    */
+        /* and still point into them. This hot key is rarely used, so   */
+        /* the few hundred bytes are simply kept.                       */
    }
   else
    { ServerDebug("Failed to reread configuration file");
