@@ -2639,7 +2639,7 @@ int count;
 
   if (terminal_wraps && (Cur_y eq LastRow))
    { for (i = 0; i < (count - 1); i++)
-      { send_ch(' '); map[LastRow][LastCol + i - count] = ' '; }
+      { send_ch(' '); map[LastRow][LastCol + 1 + i - count] = ' '; }
      map[LastRow][LastCol] = ' ';
          /* no need for dirty : it is blank anyway */
      current_screen->flags &= ~ANSI_dirty;
