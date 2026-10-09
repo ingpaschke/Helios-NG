@@ -1298,8 +1298,9 @@ Conode *myco;
    }
 
 #if (!SUN)
-  ServerDebug("link from %s to %s",local_name,linkname);
-  Request_Return(ReplyOK, 0L, 0L);
+        /* No symbolic links here: say so rather than pretend success */
+  Debug(FileIO_Flag, ("link from %s to %s not supported", local_name, linkname));
+  Request_Return(EC_Error + SS_IOProc + EG_WrongFn + EO_Directory, 0L, 0L);
 
 #else
 
