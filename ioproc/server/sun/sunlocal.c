@@ -2367,8 +2367,9 @@ ObjInfo *Heliosinfo;
                                      /* most often mean  */
 
   { char *p = name + strlen(name);
-    while (*p ne '/') p--;
-    strncpy(Heliosinfo->DirEntry.Name, ++p, 31);
+    while ((p > name) && (p[-1] ne '/')) p--;
+    strncpy(Heliosinfo->DirEntry.Name, p, 31);
+    Heliosinfo->DirEntry.Name[31] = '\0';     /* strncpy may not end it */
   }
  
   switch(searchbuffer.st_mode & S_IFMT)
