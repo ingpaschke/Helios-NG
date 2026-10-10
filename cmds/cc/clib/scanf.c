@@ -690,8 +690,7 @@ static long int rd_string(FILE *p, va_list res, int flag, int field)
     return charcount;
 }
 
-/* Ambiguity in Oct 86 ANSI draft: can "%[x]" match a zero-length string?  */
-/* p119 line 19 suggests no, p121 example suggests yes.  Treat as yes here */
+/* "%[x]" matching no character is a matching failure (ANSI C 4.9.6.2).  */
 static long int rd_string_map(FILE *p, va_list res, int flag, int field,
                               int charmap[])
 {   long int charcount = -1;                     /* allow for always ungetc */
@@ -705,6 +704,7 @@ static long int rd_string_map(FILE *p, va_list res, int flag, int field,
         ch = countgetc(p);
     }
     ungetc(ch, p);                               /* OK if ch == EOF         */
+    if (charcount == 0) return CVTFAIL;          /* nothing matched         */
     if (!(flag & NOSTORE)) *s = 0;
     return charcount;
 }
