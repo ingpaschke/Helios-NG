@@ -864,7 +864,11 @@ PMTRACE(0x01);
 
 	IOCArg = (TaskEntry **)NewProcess(IOCStackSize,IOC,sizeof(Task *));
 
-	if( IOCArg == NULL ) goto Fail;
+	if( IOCArg == NULL )
+	{
+		e = EC_Error+SS_ProcMan+EG_NoMemory+EO_Task;
+		goto Fail;
+	}
 
 	*IOCArg = entry;
 	
@@ -887,6 +891,12 @@ IOdebug("%s NewTask failed e = %x %x %x %x",ThisMc->DirNode.Name,e,IOCArg,task,e
 #endif
 
 	if( IOCArg != Null(TaskEntry *) ) ZapProcess((void *)IOCArg);
+	if( task != Null(Task) && entry != Null(TaskEntry) )
+	{
+		/* the ports were made once both blocks were there */
+		if( task->Port != NullPort ) FreePort(task->Port);
+		if( task->IOCPort != NullPort ) FreePort(task->IOCPort);
+	}
 	if( task != Null(Task) ) PFree((void *)task);
 	if( entry != Null(TaskEntry) ) PFree((void *)entry);
 	TaskErr = e;
