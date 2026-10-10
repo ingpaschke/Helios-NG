@@ -25,8 +25,10 @@
 word SelectStream(word nstreams, Stream **streams, word *flags, word timeout)
 {
 	MCB mcb;
-	Port *ports = (Port *)Malloc(nstreams * sizeof(Port));
-	int i;
+	Port *ports = (Port *)Malloc(nstreams * (sizeof(Port)+2*sizeof(word)));
+	word *modes;		/* the mode each entry selects		*/
+	word *first;		/* entry that asks for a repeated stream */
+	int i, j;
 	word selected;
 	word e;	
 	word nfound = 0;
@@ -36,20 +38,34 @@ word SelectStream(word nstreams, Stream **streams, word *flags, word timeout)
 	SysDebug(stream)("Select(%d,%x,%d)",nstreams,streams,timeout);
 #endif
 	if( ports == NULL ) return EC_Error|SS_SysLib|EG_NoMemory;
+	modes = (word *)(ports + nstreams);
+	first = modes + nstreams;
+	for( i = 0; i < nstreams; i++ ) modes[i] = flags[i] & Flags_Mode;
 
 again:	
 	for( i = 0; i < nstreams; i++ )
 	{
 		Stream *stream = streams[i];
+		word mode = modes[i];
 
 		ports[i] = NullPort;
+		first[i] = -1;
 		
-		if( 	(flags[i]&Flags_Mode) == 0 			||
+		if( 	mode == 0 					||
 			CheckStream(stream,C_ReOpen) != Err_Null 	|| 
 			(stream->Flags&Flags_Selectable) == 0 
 		   ) continue;
 
 		flags[i] &= ~O_Selected;
+
+		/* A stream given more than once (dup'ed descriptors) is	*/
+		/* locked and asked only once, by its first entry, for all	*/
+		/* the modes; the reply is shared out below.			*/
+		for( j = 0; j < i; j++ )
+			if( streams[j] == stream && modes[j] != 0 ) break;
+		if( j < i ) { first[i] = j; continue; }
+		for( j = i + 1; j < nstreams; j++ )
+			if( streams[j] == stream ) mode |= modes[j];
 	
 #ifdef SYSDEB
 	SysDebug(stream)("Select %x %S",flags[i],stream);
@@ -57,14 +73,14 @@ again:
 		/* lock the stream for the duration of the select */
 		Wait(&stream->Mutex);
 		
-		if( stream->Type == Type_Pipe )	ports[i] = PipeSelect(stream,flags[i]);
+		if( stream->Type == Type_Pipe )	ports[i] = PipeSelect(stream,mode);
 		else
 		{
 		retry:
 			ports[i] = stream->Reply;
 			
 			InitMCB(&mcb,MsgHdr_Flags_preserve,stream->Server,ports[i],
-				FC_GSP|FG_Select|stream->FnMod|(flags[i]&Flags_Mode));
+				FC_GSP|FG_Select|stream->FnMod|mode);
 			
 			while( (e = PutMsg( &mcb ) ) != Err_Null ) 
 			{
@@ -134,6 +150,31 @@ again:
 			if( timeout != -1 ) timeout -= mcb.Timeout;
 			else e = 0; 
 		}
+	}
+
+	/* share the reply for a repeated stream among its entries,	*/
+	/* each one getting only the modes it selects			*/
+	for( i = 0; i < nstreams; i++ )
+	{
+		if( (j = (int)first[i]) < 0 ) continue;
+		first[j] = j;
+		if( (flags[j] & O_Selected) && (flags[j] & modes[i]) != 0 )
+		{
+			flags[i] &= ~Flags_Mode;
+			flags[i] |= O_Selected|(flags[j] & modes[i]);
+			nfound++;
+		}
+	}
+	for( i = 0; i < nstreams; i++ )
+	{
+		if( first[i] != i || (flags[i] & O_Selected) == 0 ) continue;
+		if( (flags[i] & modes[i]) == 0 )
+		{
+			flags[i] &= ~(O_Selected|Flags_Mode);
+			flags[i] |= modes[i];
+			nfound--;
+		}
+		else flags[i] &= ~Flags_Mode|modes[i];
 	}
 	
 	/* free all the ports and unlock the streams */
