@@ -364,7 +364,7 @@ static MCB *DoPipeWrite( PipeInfo *p, MCB *mcb)
 		m.Data = p->Pending.buf+got;
 		if( e >= 0 ) e = GetMsg(&m);
 
-		if( m.MsgHdr.DataSize != tfr ) e = EC_Error;
+		if( e < 0 || m.MsgHdr.DataSize != tfr ) e = EC_Error;
 		else got += tfr;
 		
 		InitMCB(&m,0,mcb->MsgHdr.Reply,NullPort,WriteRc_Done);
@@ -373,9 +373,14 @@ static MCB *DoPipeWrite( PipeInfo *p, MCB *mcb)
 		m.MsgHdr.ContSize = 1;
 		PutMsg(&m);	
 
+		/* only data that arrived is pending; a write that failed	*/
+		/* may be retried at the same position			*/
 		p->Pending.got = got;
-		p->Pending.size += tfr;
-		p->WritePos = pos;
+		if( e >= 0 )
+		{
+			p->Pending.size += tfr;
+			p->WritePos = pos;
+		}
 				
 		return mcb;
 	}
