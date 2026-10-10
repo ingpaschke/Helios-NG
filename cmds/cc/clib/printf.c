@@ -301,8 +301,13 @@ int __vfprintf(FILE *p, const char *fmt, va_list args, fp_print fp_display_fn)
                 continue;
 
 /* %n assigns the number of chars printed so far to the next arg (which  */
-/* is expected to be of type (int *).                                    */
-    case 'n':   {   int *xp = va_arg(args, int *);
+/* is expected to be of type (int *), or (short *) for %hn.              */
+    case 'n':   if (flags & _SHORTSPEC)
+                {   short *xp = va_arg(args, short *);
+                    *xp = (short)charcount;
+                }
+                else
+                {   int *xp = va_arg(args, int *);
                     *xp = charcount;
                 }
                 continue;
