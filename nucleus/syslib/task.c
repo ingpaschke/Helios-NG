@@ -419,6 +419,7 @@ PUBLIC word GetEnv(Port port, Environ *env)
 	word *control;
 	byte *data;
 	word e = Err_Null;
+	word nomem = Err_Null;
 	bool newenv = true;
 
 #ifdef SYSDEB
@@ -500,6 +501,11 @@ retry:
 		{
 			ObjDesc *o = (ObjDesc *)&data[*control];
 			*control = (word)NewObject(o->Name,&o->Cap);
+			if( *control == 0 )
+			{
+				*control = MinInt;
+				nomem = EC_Error+SS_SysLib+EG_NoMemory+EO_Object;
+			}
 		}
 		control++;
 	}
@@ -520,7 +526,12 @@ retry:
 			{
 				StrDesc *s = (StrDesc *)&data[*control];
 				*control = (word)NewStream(s->Name,&s->Cap,s->Mode);
-				((Stream *)(*control))->Pos = s->Pos;
+				if( *control == 0 )
+				{
+					*control = MinInt;
+					nomem = EC_Error+SS_SysLib+EG_NoMemory+EO_Stream;
+				}
+				else ((Stream *)(*control))->Pos = s->Pos;
 			}
 		}
 		control++;
@@ -532,6 +543,10 @@ retry:
 	InitMCB(&m,0,reply,NullPort,e);
 
 	PutMsg(&m);
+
+	/* an object or stream that could not be made is MinInt (none)	*/
+	/* in its vector; the caller is told				*/
+	if( nomem != Err_Null ) e = nomem;
 done:
 
 #ifdef SYSDEB
