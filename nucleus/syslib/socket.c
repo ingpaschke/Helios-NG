@@ -38,13 +38,18 @@ static void MarshalStruct(MCB *mcb, void *data, word size)
 	}
 }
 
-static word UnMarshalStruct(byte *data, void *str)
+/* Copy a structure from a reply into str, which holds max bytes: no	*/
+/* more than that is copied, and the length copied is returned.		*/
+static word UnMarshalStruct(byte *data, void *str, word max)
 {
 	word size = *(word *)data;
 
 	if( str == NULL ) return 0;
 	
 	data += 4;
+	
+	if( size > max ) size = max;
+	if( size < 0 ) size = 0;
 	
 	memcpy(str,data,(int)size);
 	
@@ -238,7 +243,7 @@ extern Stream *Accept(Stream *stream, byte *addr, word *len)
 	if( SetupStream( stream1, mcb ) ) stream1->Pos = 0;
 	
 	if( addr != NULL )
-		*len = UnMarshalStruct(mcb->Data+rep->Object,addr);
+		*len = UnMarshalStruct(mcb->Data+rep->Object,addr,*len);
 	
 	rc = Err_Null;
 
@@ -420,10 +425,10 @@ extern word RecvMessage(Stream *stream, word flags, ... )
 	dg = (DataGram *)mcb->Control;
 	
 	if( dg->SourceAddr != -1 ) 
-		msg->msg_namelen = (int)UnMarshalStruct(mcb->Data+dg->SourceAddr,msg->msg_name);
+		msg->msg_namelen = (int)UnMarshalStruct(mcb->Data+dg->SourceAddr,msg->msg_name,msg->msg_namelen);
 
 	if( dg->AccRights != -1 )
-		msg->msg_accrightslen = (int)UnMarshalStruct(mcb->Data+dg->AccRights,msg->msg_accrights);
+		msg->msg_accrightslen = (int)UnMarshalStruct(mcb->Data+dg->AccRights,msg->msg_accrights,msg->msg_accrightslen);
 
 	data = mcb->Data+dg->Data;
 	datasize = (int)dg->DataSize;
@@ -481,7 +486,7 @@ extern word GetSocketInfo(Stream *stream, word level, word option, void *optval,
 	e = StreamMsg( mcb, stream );
 
 	if( e >= 0 && mcb->Control[2] != -1 ) 
-		*optlen = UnMarshalStruct(mcb->Data+mcb->Control[2],optval);
+		*optlen = UnMarshalStruct(mcb->Data+mcb->Control[2],optval,*optlen);
 
 #ifdef SYSDEB
 	SysDebug(stream)("GetSocketInfo: %E",e);
