@@ -99,6 +99,7 @@ extern int tcgetattr(int fd, struct termios *p)
 extern int tcsetattr(int fd, int actions, struct termios *p)
 {
 	Stream *s;
+	struct termios t;	/* the caller's structure is not changed */
 
 	fdentry *f;
 	
@@ -109,13 +110,14 @@ extern int tcsetattr(int fd, int actions, struct termios *p)
 	
 	s = f->pstream->stream;
 
-	p->c_lflag ^= ICANNON;
-	p->c_oflag ^= OPOST;
+	t = *p;
+	t.c_lflag ^= ICANNON;
+	t.c_oflag ^= OPOST;
 
-	p->c_min = p->c_cc[VMIN];
-	p->c_time = p->c_cc[VTIME];
+	t.c_min = t.c_cc[VMIN];
+	t.c_time = t.c_cc[VTIME];
 	
-	if( SetAttributes(s,(Attributes *)p) < 0 )
+	if( SetAttributes(s,(Attributes *)&t) < 0 )
 	{ errno = posix_error(Result2(s)); return -1; }
 
 	CHECKSIGS();
