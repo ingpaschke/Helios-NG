@@ -771,7 +771,17 @@ extern int fcntl(int fd, int cmd, ... )
 	switch( cmd )
 	{
 	case F_DUPFD:
-		return dup2(fd,va_arg(a,int));
+	{
+		int newfd = va_arg(a,int);
+		if( newfd < 0 ) { errno = EINVAL; return -1; }
+		if( (newfd = findfd(newfd)) == -1 ) return -1;
+		if( _dup(fd,newfd) == -1 )
+		{
+			freefd(newfd);
+			newfd = -1;
+		}
+		return newfd;
+	}
 	case F_GETFD:
 		return (int)(f->flags & FD_GFDMASK);
 	case F_SETFD:
