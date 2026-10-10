@@ -379,13 +379,12 @@ wctomb(
   if (s == 0)
     return STATE_DEPENDENT_ENCODINGS;
   
-  /* @@@ ANSI ambiguity: what return (and setting for s) if w == 0?           */
+  /* w == 0 stores the NUL, which is one byte (C99 7.20.7.2)               */
   
   if ((unsigned)w > (unsigned char) -1)
     return -1;
   
-  if ((*s = w) == 0)
-    return 0;
+  *s = w;
   
   return 1;
 
