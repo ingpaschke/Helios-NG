@@ -629,9 +629,14 @@ extern int dup(int fd)
 	int newfd;
 	
 	CHECKSIGS();
+	if( checkfd(fd) == NULL ) return -1;	/* errno is EBADF */
 	if( (newfd = findfd(0)) == -1 ) return -1;
 	
-	_dup(fd,newfd);
+	if( _dup(fd,newfd) == -1 )
+	{
+		freefd(newfd);
+		newfd = -1;
+	}
 
 	CHECKSIGS();
 	return newfd;
@@ -640,15 +645,20 @@ extern int dup(int fd)
 extern int dup2(int fd,int fd2)
 {
 	CHECKSIGS();
-	if( fd != fd2 )
+	if( checkfd(fd) == NULL ) fd2 = -1;	/* errno is EBADF */
+	elif( fd2 < 0 ) errno = EBADF, fd2 = -1;
+	elif( fd != fd2 )
 	{
 		fdentry *f;
 		if( (f = checkfd(fd2)) != NULL) _close(f);
 		else fd2 = findfd(fd2);
 		
-		fd2 = _dup(fd,fd2);
+		if( fd2 != -1 && _dup(fd,fd2) == -1 )
+		{
+			freefd(fd2);
+			fd2 = -1;
+		}
 	}
-	elif( checkfd(fd) == NULL ) fd2 = -1;	/* errno is EBADF */
 
 	CHECKSIGS();
 	return fd2;
