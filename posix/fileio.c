@@ -989,7 +989,6 @@ static int posix_error(word e)
 static int findfd(int low)
 {
 	int fd;
-	fdentry *oldfdvec = fdvec;
 	fdentry *newfdv;
 
 	Wait( &fdlock );
@@ -1005,9 +1004,9 @@ again:
 
 	memset(newfdv,0,(fdvecsize+fdvecinc)*sizeof(fdentry));
 	memcpy(newfdv,fdvec,fdvecsize*sizeof(fdentry));
+	Free(fdvec);
 	fdvec = newfdv;
 	fdvecsize += fdvecinc;
-	Free(oldfdvec);
 	goto again;
 	
 gotfd:
