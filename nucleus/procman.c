@@ -2371,6 +2371,8 @@ static Port DefaultAct( char *name, word *data )
 
 	s = Open(server,NULL,O_Execute);
 
+	if( s == NULL ) goto done;
+
 	p = (MPtr)(s->Server);
 
 	ModuleName_(tname,p);
