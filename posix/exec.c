@@ -151,6 +151,24 @@ static void int2hex(int n, char *s)
 	}
 }
 
+/* Point the first NAME=... entry of env at buf (big enough for NAME,	*/
+/* '=', 8 digits and the 0) holding value in hexadecimal.		*/
+static void sethexenv(char **env, char *name, int value, char *buf)
+{
+	int len = (int)strlen(name);
+
+	for( ; *env != NULL; env++ )
+	{
+		if( strncmp(*env,name,len) != 0 || (*env)[len] != '=' ) continue;
+		strcpy(buf,name);
+		buf[len] = '=';
+		int2hex(value,buf+len+1);
+		buf[len+9] = 0;
+		*env = buf;
+		return;
+	}
+}
+
 static int vfork_start(void)
 {
 	int i;
@@ -325,6 +343,8 @@ extern int execve(char *name, char **argv, char **envv)
 	char *    dummy = NULL;
 	char	  uidbuf[14];	/* _UID=01234567 */
 	char	  gidbuf[14];	/* _GID=01234567 */
+	char	  maskbuf[18];	/* _SIGMASK=01234567 */
+	char	  ignbuf[20];	/* _SIGIGNORE=01234567 */
 	bool	  got_newenv	= FALSE;
 
 	if( env == NULL || objv == NULL )
@@ -376,7 +396,9 @@ extern int execve(char *name, char **argv, char **envv)
 		/* add a further two for _UID and _GID, or there are very	*/
 		/* strange effects on protection.				*/
 		/* BLV - even worse, some programs change the environ variable !*/
-	if (envv != MyEnv.Envv)
+		/* The copy is made for the program's own environment too: the	*/
+		/* id strings below are put into it as strings of their own.	*/
+	if (envv != NULL)
 	 { int	count, i;
 	   char	**newenv;
 
@@ -388,19 +410,21 @@ extern int execve(char *name, char **argv, char **envv)
 	    newenv[i] = envv[i];
 	   newenv[i] = NULL;
 
-	   envv = environ;		/* Save the old environment */
-	   environ = newenv;
-	   if (getenv("_UID") == NULL)	/* Check that _UID is not already defined */
-	    { strcpy(uidbuf, "_UID=00000000");
- 	      newenv[i++] = uidbuf;
-	      newenv[i]   = NULL;
+	   if (envv != MyEnv.Envv)
+	    { envv = environ;		/* Save the old environment */
+	      environ = newenv;
+	      if (getenv("_UID") == NULL)	/* Check that _UID is not already defined */
+	       { strcpy(uidbuf, "_UID=00000000");
+	         newenv[i++] = uidbuf;
+	         newenv[i]   = NULL;
+	       }
+	      if (getenv("_GID") == NULL)
+	       { strcpy(gidbuf, "_GID=00000000");
+	         newenv[i++] = gidbuf;
+	         newenv[i]   = NULL;
+	       }
+	      environ = envv;	/* restore old environment		*/
 	    }
-	   if (getenv("_GID") == NULL)
-	    { strcpy(gidbuf, "_GID=00000000");
-	      newenv[i++] = gidbuf;
-	      newenv[i]   = NULL;
-	    }
-	   environ = envv;	/* restore old environment		*/
 	   envv	   = newenv;	/* and use the newly created environment*/
 	   got_newenv = TRUE;
 	 }
@@ -408,18 +432,12 @@ extern int execve(char *name, char **argv, char **envv)
 		/* Try to stop a hacker from overwriting the _UID and	*/
 		/* _GID strings in the environment by resetting these 	*/
 		/* using private variables.				*/
-	{ char	**saveenv;
-	  char	 *ids;
-
-	  saveenv = environ;		/* so that getenv() can be used */
-	  environ = envv;		/* possibly a no-op		*/
-
-	  if((ids = getenv("_UID")) != NULL ) int2hex(UID,ids);
-	  if((ids = getenv("_GID")) != NULL ) int2hex(GID,ids);
-	  if((ids = getenv("_SIGMASK")) != NULL ) int2hex((int)mask.mask,ids);
-	  if((ids = getenv("_SIGIGNORE")) != NULL ) int2hex((int)mask.ignore,ids);
-
-	  environ = saveenv;
+	if (envv != NULL)
+	{
+	  sethexenv(envv,"_UID",UID,uidbuf);
+	  sethexenv(envv,"_GID",GID,gidbuf);
+	  sethexenv(envv,"_SIGMASK",(int)mask.mask,maskbuf);
+	  sethexenv(envv,"_SIGIGNORE",(int)mask.ignore,ignbuf);
 	}
 	
 	env->Argv = argv==NULL?&dummy:argv;
