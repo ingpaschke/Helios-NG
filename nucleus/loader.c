@@ -711,6 +711,7 @@ static void do_open(ServInfo *servinfo)
 	if( d == Null(DirNode) )
 	{
 		ErrorMsg(m,Err_Null);
+		Free(r);
 		return;
 	}
 		
@@ -731,6 +732,7 @@ static void do_open(ServInfo *servinfo)
 	unless( CheckMask(req->Common.Access.Access,(AccMask)(req->Arg.Mode & Flags_Mode)) ) 
 	{
 		ErrorMsg(m,EC_Error+EG_Protected+EO_Program);
+		Free(r);
 		return;
 	}
 
@@ -750,19 +752,20 @@ static void do_open(ServInfo *servinfo)
 	}
 	elif( i->ObjNode.Type == Type_CacheName )
 	{
-		word r;
+		word loaded;
 
 		/* We must do this with the root locked since we may	*/
 		/* need to load some more libraries & do not want to	*/
 		/* clash with other loads.				*/
 
-		r = LoadCache(i);
+		loaded = LoadCache(i);
 
 		Signal(&Root.Lock);
 		
-		if( !r )
+		if( !loaded )
 		{
 			ErrorMsg(m,EC_Error+EG_Create+EO_Program);
+			Free(r);
 			return;
 		}
 	}
