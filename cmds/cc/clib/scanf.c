@@ -1022,8 +1022,7 @@ default:  nptr--;
 /* ??? unary '-' cannot cause arithmetic traps.  Recode to avoid this?       */
         if (errno == ERANGE) return ud;
         errno = errno_saved;
-        if (flag & NUMNEG)
-          return (ud <= LONG_MAX) ? -(unsigned long)ud : (errno = ERANGE, ULONG_MAX);
+        if (flag & NUMNEG) return -(unsigned long)ud;
         else return +(unsigned long)ud;
     }
 }
