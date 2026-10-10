@@ -167,9 +167,9 @@ static void parse(FDB *fdb)
 		
 		splitline(line,argv);
 
-		if( argv[0] == NULL ) continue;
+		if( argv[0] == NULL || argv[0][0] == '#' ) continue;
 		
-		while( argv != NULL )
+		while( argv != NULL && argv[0] != NULL )
 		{
 			for( k = keytab; k->key != 0; k++ )
 			{
@@ -180,6 +180,11 @@ static void parse(FDB *fdb)
 					argv = f(argv,k->arg1);
 					break;
 				}
+			}
+			if( k->key == 0 )
+			{
+				IOdebug("init: unknown command %s",argv[0]);
+				break;
 			}
 		}
 	}
@@ -193,7 +198,7 @@ static char **dorun(char **argv, word dummy)
 
 	argv++;
 	
-	while( **argv == '-' )
+	while( *argv != NULL && **argv == '-' )
 	{
 		char *arg = *argv++;
 		arg++;
@@ -202,6 +207,12 @@ static char **dorun(char **argv, word dummy)
 		case 'w': wait = TRUE; 	  break;
 		case 'e': sendenv = TRUE; break;
 		}
+	}
+
+	if( *argv == NULL )
+	{
+		IOdebug("init: run without a program");
+		return NULL;
 	}
 
 	/* console must have been set if we are to send environment */
@@ -222,7 +233,15 @@ static char **dorun(char **argv, word dummy)
 
 static char **ifabsent(char **argv, bool invert)
 {
-	Object *o = Locate(NULL,argv[1]);
+	Object *o;
+	
+	if( argv[1] == NULL || argv[2] == NULL )
+	{
+		IOdebug("init: %s needs a name and a command",argv[0]);
+		return NULL;
+	}
+
+	o = Locate(NULL,argv[1]);
 	
 	if( o != NULL )
 	{
@@ -242,6 +261,12 @@ static char **autoserver(char **argv, word dummy)
 	info.Matrix = DefDirMatrix;
 	info.LoadData = NULL;
 
+	if( argv[1] == NULL )
+	{
+		IOdebug("init: auto needs a name");
+		return NULL;
+	}
+
 	Create(Root,argv[1]+1,Type_Name,sizeof(NameInfo),(byte *)&info);	
 	
 	return NULL;
@@ -251,6 +276,12 @@ static char **waitfor(char **argv, word dummy)
 {
 	Object *o = NULL;
 	
+	if( argv[1] == NULL )
+	{
+		IOdebug("init: waitfor needs a name");
+		return NULL;
+	}
+
 	do
 	{
 		o = Locate(NULL,argv[1]);
@@ -266,7 +297,15 @@ static char **waitfor(char **argv, word dummy)
 
 static char **setconsole(char **argv, word dummy)
 {
-	Object *server = Locate(NULL,argv[1]);
+	Object *server;
+	
+	if( argv[1] == NULL )
+	{
+		IOdebug("init: console needs a server name");
+		return NULL;
+	}
+
+	server = Locate(NULL,argv[1]);
 	
 	if( server == NULL )
 	{
@@ -340,6 +379,12 @@ static void splitline(char *p, char **argv)
 	{
 		while( *p == ' ' || *p == '\t' ) p++;
 		if( *p == '\n' || *p == 0 ) break;
+		if( i == ARGVMAX - 1 )
+		{
+			IOdebug("init: more than %d words in a line, the rest ignored",
+				ARGVMAX - 1);
+			break;
+		}
 		argv[i++] = p;
 		until( *p == ' ' || *p == '\t' || *p == '\n' || *p == 0) p++;
 		if( *p == 0 ) break;
@@ -349,8 +394,13 @@ static void splitline(char *p, char **argv)
 	argv[i] = NULL;
 }
 
+/* buf holds LINEMAX characters; a longer line is cut, the rest of it	*/
+/* up to the newline is read and dropped.				*/
 static void rdline(FDB *fdb, char *buf)
 {
+	char *end = buf + LINEMAX - 2;		/* room for '\n' and 0	*/
+	bool cut = FALSE;
+
 	forever
 	{
 		int c = rdch(fdb);
@@ -359,10 +409,12 @@ static void rdline(FDB *fdb, char *buf)
 			break;
 		}
 		if( c == '\r' ) continue;
+		if( buf == end && c != '\n' ) { cut = TRUE; continue; }
 		*buf++ = c;
 		if( c == '\n' ) break;	
 	}
 	*buf = 0;
+	if( cut ) IOdebug("init: line longer than %d characters cut",LINEMAX - 2);
 }
 
 static int rdch(FDB *fdb)
