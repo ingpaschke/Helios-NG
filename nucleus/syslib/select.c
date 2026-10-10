@@ -102,6 +102,17 @@ again:
 		}
 	}
 	
+	/* With no port to wait on (no streams, or none selectable)	*/
+	/* MultiWait returns at once: just wait for the timeout.	*/
+	for( i = 0; i < nstreams && ports[i] == NullPort; i++ );
+	if( i == nstreams )
+	{
+		if( timeout == -1 ) forever Delay(RetryTimeout);
+		if( timeout > 0 ) Delay(timeout);
+		Free(ports);
+		return 0;
+	}
+
 	/* all the requests are out, get the replies 			*/
 	/* first we get all those which have replied immediately 	*/
 
