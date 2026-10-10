@@ -50,7 +50,15 @@ PUBLIC Object *Load(Object *loader, Object *obj)
 		return NULL;
 	}
 
-	if( local ) loader = Locate(Null(Object),"/loader");
+	if( local )
+	{
+		loader = Locate(Null(Object),"/loader");
+		if( loader == Null(Object) )
+		{
+			obj->Result2 = EC_Error|SS_SysLib|EG_Unknown|EO_Loader;
+			return NULL;
+		}
+	}
 	elif( CheckObject(loader,C_Locate) != Err_Null ) return NULL;	
 
 	info = (LoadInfo *)Malloc(isize);
@@ -84,6 +92,8 @@ PUBLIC Object *Load(Object *loader, Object *obj)
 
 	if( o != Null(Object) ) o->Result2 = loader->Result2;
 
+	loader->FnMod &= ~FF_Mask;	/* clear subfunction	*/
+
 	if( local )
 	{
 		obj->Result2 = loader->Result2;
@@ -91,8 +101,6 @@ PUBLIC Object *Load(Object *loader, Object *obj)
 	}
 	
 	Free(info);
-
-	loader->FnMod &= ~FF_Mask;	/* clear subfunction	*/
 
 	return o;
 }
@@ -128,7 +136,15 @@ PUBLIC Object *Execute(Object *controller, Object *prog)
 		return NULL;
 	}
 
-	if( local ) controller = Locate(Null(Object),"/tasks");
+	if( local )
+	{
+		controller = Locate(Null(Object),"/tasks");
+		if( controller == Null(Object) )
+		{
+			prog->Result2 = EC_Error|SS_SysLib|EG_Unknown|EO_ProcMan;
+			return NULL;
+		}
+	}
 	elif( CheckObject(controller,C_Locate) != Err_Null ) return NULL;
 
 	info = (TaskInfo *)Malloc(isize);
@@ -160,14 +176,14 @@ PUBLIC Object *Execute(Object *controller, Object *prog)
 		/* BLV - used to be in wrong place */
 	prog->Result2 = controller->Result2;
 	
+	controller->FnMod &= ~FF_Mask;		/* clear subfunction */
+
 	if( local ) 
 	{
 		Close((Stream *)controller);
 	}
 
 	Free(info);
-
-	controller->FnMod &= ~FF_Mask;		/* clear subfunction */
 
 #ifdef SYSDEB
 	SysDebug(process)("Execute: %x %O",rc, o);
