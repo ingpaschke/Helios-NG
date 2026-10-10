@@ -366,11 +366,14 @@ int main()
 		/* not be counted by procsize. */
 
 		c = (Carrier *)AllocMem(sizeof(Carrier),&CodePool);
+		if( c == NULL ) continue;
 		c->Addr = m;
 		c->Size = progsize(m)/sizeof(word);
 		c->Type = 0;
 
 		i = NewImage(&Root,c,name,type,0,-1, 0);
+
+		if( i == Null(Image) ) { FreeMem(c); continue; }
 
 		if( type == Type_Program ) i->UseCount=1;
 		i->Retain = true;
@@ -953,6 +956,13 @@ static void do_create(ServInfo *servinfo)
 			return;
 		}
 		i = NewImage(d,c,name,type,0,info->Matrix, size);
+		if( i == Null(Image) )
+		{
+			ErrorMsg(m,EC_Error+EG_NoMemory);
+			FreeCode(c);
+			if (o != NULL) Close(o);
+			return;
+		}
 		i->Object = o;
 	}
 	
@@ -1865,6 +1875,13 @@ again:
 #endif
 	i = NewImage(&Root, c, name, Type_Module, 0, -1, size);
 
+	if( i == Null(Image) )
+	{
+		FreeCode(c);
+		Close(o);
+		goto done;
+	}
+
 	WaitObj(&i->ObjNode);
 	BindLibraries(image,FALSE);
 	
@@ -2007,6 +2024,12 @@ if( i ) IOdebug("%s: SearchLoad %s already loaded",mcname,name);
 	}
 
 	i = NewImage(&Root,(void *)p,name,type,0,-1, size);
+	if( i == NULL )
+	{
+		FreeMem(p);
+		Close(o);
+		goto done;
+	}
 	i->Object = o;
 /*if( i ) IOdebug("%s: SearchLoad got %s from %O",mcname,i->ObjNode.Name,o);*/
 	
@@ -2232,11 +2255,22 @@ bool RomCreate(ServInfo *servinfo)
         }
 
 	c = (Carrier *)AllocMem(sizeof(Carrier),&CodePool);
+	if( c == NULL )
+	{
+		ErrorMsg(m,EC_Error+EG_NoMemory);
+		return TRUE;
+	}
 	c->Addr = mod;
 	c->Size = 0;
 	
         
 	i = NewImage(&Root, c, name, type, 0, -1, 0);
+	if( i == Null(Image) )
+	{
+		FreeMem(c);
+		ErrorMsg(m,EC_Error+EG_NoMemory);
+		return TRUE;
+	}
 #if 0
 	if( type == Type_Program ) i->UseCount=1;
 #endif
