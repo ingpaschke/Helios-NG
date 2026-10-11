@@ -193,6 +193,7 @@ bool LinkMsg(LinkInfo *link)
 	{
 	case T_Local:
 
+		DropMultiWoken(pte);
 		/* if there is already a transmitter on the port, or	*/
 		/* there is no receiver waiting for a message, buffer it*/
 		if( (pte->TxId != NULL) || (pte->RxId == NULL) ) 
