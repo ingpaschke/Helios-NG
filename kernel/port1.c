@@ -429,6 +429,8 @@ static void TimeoutHandler(void)
 						Resume(*statep);
 						*statep = NULL;
 					}
+					/* woken through another port: not a timeout */
+					else id->rc = MultiUnused;
 				}
 				else Resume(id->state);
 			}

@@ -70,6 +70,7 @@ Code _PutMsg(MCB *mcb)
 	if( pte->Type == T_Local )
 	{
 		root->LocalMsgs += sizeof(MsgHdr) + csize + dsize;
+		DropMultiWoken(pte);
 		/* The order of the next two tests is important.	*/
 		if( pte->TxId != NULL )
 		{

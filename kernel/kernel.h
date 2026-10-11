@@ -91,6 +91,20 @@ typedef struct Id {
 #define	MultiUnused	(EC_Fatal+SS_Kernel+EG_Exception+0xffff)
 #define	MultiWaiting	(EC_Fatal+SS_Kernel+EG_Exception+0xfffe)
 
+/* A MultiWait thread already woken through another of its ports cannot	*/
+/* take a message: drop its ids from the head of the receive queue and	*/
+/* mark them MultiUnused, which MultiWait's cleanup skips.		*/
+#define MultiWoken(id)	((id)->rc == MultiWaiting && \
+			 *(SaveState **)(id)->state == NULL)
+#define DropMultiWoken(pte)						\
+	while( (pte)->RxId != NULL && MultiWoken((pte)->RxId) )	\
+	{								\
+		Id *_d = (pte)->RxId;					\
+		(pte)->RxId = _d->next;					\
+		if( _d->next != NULL ) _d->next->tail = _d->tail;	\
+		_d->rc = MultiUnused;					\
+	}
+
 
 /* Port Table Entries */
 
