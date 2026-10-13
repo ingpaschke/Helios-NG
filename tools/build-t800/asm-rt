@@ -1,0 +1,10 @@
+#!/bin/sh
+# The link step of the build (LINUXHOST.mak): the Helios asm with the
+# compiler-rt builtins (HCC_RTLIB, soft float) as a scanned library after
+# everything else, as the Helios `c` driver puts c.lib last.  Not for
+# resident library links (asm -v -f): a library image is one module and its
+# code reaches no scanned library.
+for a in "$@"; do
+  case "$a" in -f) exec "$HHOSTBIN/asm" "$@";; esac
+done
+exec "$HHOSTBIN/asm" "$@" ${HCC_RTLIB:+-l"$HCC_RTLIB"}
