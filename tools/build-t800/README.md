@@ -20,7 +20,8 @@ tools/build-t800/build.sh /tmp/hb    # or into another directory
 ```
 
 The result is `build-t800/prod/TRAN`, a complete Helios tree (`bin`,
-`lib`, `include`, `etc`, ...). `build-t800/logs` has one log per
+`lib`, `include`, `etc`, ...), with the X server `bin/xhelios` and its
+drivers (`X11/xhelios`). `build-t800/logs` has one log per
 component. The checkout itself is not modified: the build works on a copy
 in `build-t800/src`.
 
@@ -62,6 +63,7 @@ Apart from those parts, the components build and install.
    the SUN4 host make logic is used, with gcc as the host compiler, `hcc`
    as the C compiler, and the host tools built here.
 3. `tools/hosttools` is built into `OUT/host`.
-4. The components are built in the order of the top-level makefile.
+4. The components are built in the order of the top-level makefile,
+   then `X11/xhelios`.
    Programs are linked with the compiler-rt library of llvm-t800
    (`llvmrt-generic.lib`, soft floating point) through `asm-rt`.
