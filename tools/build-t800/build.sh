@@ -10,8 +10,9 @@
 #
 # Environment:
 #   T800    the llvm-t800 installation (default /opt/llvm-t800): its
-#           bin/hcc and bin/clang compile, and the compiler-rt library
-#           sysroots/helios/lib/llvmrt-generic.lib is linked into programs
+#           bin/hcc and bin/clang compile, and the compiler-rt libraries
+#           sysroots/helios/lib/llvmrt-generic.lib (programs) and
+#           llvmrt-t4.lib (the X server) are linked in
 #   JOBS    make -j inside each component (default 1)
 #
 # Needs: gcc and GNU make for the host tools, python3, and llvm-t800 with
@@ -35,8 +36,9 @@ JOBS=${JOBS:-1}
 [ -x "$T800/bin/hcc" ] && [ -x "$T800/bin/clang" ] ||
 	{ echo "build.sh: no llvm-t800 in $T800 (set T800)" >&2; exit 1; }
 RTLIB=$T800/sysroots/helios/lib/llvmrt-generic.lib
-[ -f "$RTLIB" ] ||
-	{ echo "build.sh: no $RTLIB (install llvm-t800-helios)" >&2; exit 1; }
+for f in "$RTLIB" "$T800/sysroots/helios/lib/llvmrt-t4.lib"; do
+	[ -f "$f" ] || { echo "build.sh: no $f (install llvm-t800-helios)" >&2; exit 1; }
+done
 
 export BUILDT800 BUILDOUT=$OUT
 export HPROC=TRAN HHOST=SUN4 HLICENSEE=PERIHELION
@@ -103,6 +105,8 @@ HFS="filesys filesys/fs filesys/cmds filesys/devs/raw filesys/devs/m212
  filesys/devs/he1000 filesys/devs/msc filesys/devs/b422"
 EXTRA="servers/msdosfs demos cmds/public cmds/gnu
  filesys/ufs filesys/ufs/cmds filesys/ufs/fsck filesys/ufs/devs/raw filesys/ufs/devs/he1000"
+# the X server and its drivers, with the libraries above
+X11="X11/xhelios"
 
 mkdir -p "$HPROD"
 (cd "$HSRC" && make MakeProdDir) > "$LOGS/mkprod.txt" 2>&1
@@ -118,6 +122,6 @@ echo "build.sh: nucleus and libraries"
 for d in $CORE; do mk "$d"; done
 (cd "$HSRC" && make Linklibs) >> "$LOGS/linklibs.txt" 2>&1
 echo "build.sh: the rest"
-for d in $LIBS $NET $SERVERS $CMDS $TCPIP $HFS $EXTRA; do mk "$d"; done
+for d in $LIBS $NET $SERVERS $CMDS $TCPIP $HFS $EXTRA $X11; do mk "$d"; done
 
 echo "build.sh: $HPROD ($failed components with errors)"
