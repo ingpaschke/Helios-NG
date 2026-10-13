@@ -1,0 +1,48 @@
+
+Notes on Xapollo for MIT X.V11R4
+--------------------------------
+
+CHANGES SINCE R3:
+
+    --  The driver has, perforce, been rewritten to properly use the R4 data
+        structures and interfaces.  Internally, the driver has been restructured
+        as a result.  For example, the driver now uses a completely different GC
+        validation strategy that allows many GC's to remain validated at any
+        time, rather than only one at a time.
+
+    --  The driver uses the new mi software cursor support.  As a result, the
+        PseudoColor servers (on 4-bit and 8-bit displays) now claim to have 16
+        and 256 color table entries respectively, not 14 and 254 as before.
+
+    --  The broken backing-store support in color has been fixed.
+
+    --  The new Shape extension is incorporated.
+
+    --  The switcher has been removed.  Recent releases of Domain/OS broke the
+        old switcher, and even if fixed, the switcher would be likely to break
+        again since it relied on unsupported interfaces that continue to change
+        from release to release of Domain/OS.  Also, those who used the switcher
+        on color displays know it was never very robust to begin with.  Finally,
+        the existence of the Domain/X11 product removes a lot of the reason for
+        wanting the switcher.
+
+    --  The default driver for monochrome screens has changed.  Xapollo used to
+        support only mfb on monochrome displays, and supported either mfb or the
+        GPR driver (known as "apc") on color displays.  Xapollo now uses the GPR
+        driver by default on both display types, but can optionally use the mfb
+        driver on either type.  See the Xapollo man page for the -D option
+        syntax, which has been changed.
+
+    --  Many bug fixes and graphics optimizations have been made to the GPR
+        driver.
+
+    --  Full up/down keyboard support has been supplied, to eliminate the
+        hackery of the black "mouse modifier keys".  This full support will only
+        work on SR10.2 or later; SR10.1 will continue to work the old way.
+        NOTE:  this support includes full autorepeat support, including control
+        of the autorepeat state of individual keys.
+
+
+NOTES ON BUILDING X11 SOFTWARE:
+
+    --  Please note that the X software must be built in a "bsd4.3" environment.
