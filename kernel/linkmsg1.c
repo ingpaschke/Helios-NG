@@ -397,7 +397,11 @@ bool LinkMsg(LinkInfo *link)
 						*statep = NULL;
 					}
 				}
-				else Resume(rxid->state);
+				else
+				{
+					rxid->rc = id.rc;
+					Resume(rxid->state);
+				}
 			}
 			
 			if( id.rc != Err_Null ) 
