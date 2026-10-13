@@ -94,7 +94,7 @@ growcode()
       /* when an error is detected, longjmp here */
       
       /* Fix: recover() has counted the error already; counting it	*/
-      /* twice stopped asm at 50 errors (ASM-REVIEW-FIXES A11)	*/
+      /* twice stopped asm at 50 errors	*/
       if ( setjmp( error_level ) != 0 )
 	code++;
       
@@ -191,7 +191,7 @@ growcode()
 		  
 		  if ( NullRef( s->module ) ) 
 		    {
-		      /* Fix: an error unless -wu (ASM-REVIEW H3) */
+		      /* Fix: an error unless -wu */
 		      if ( warnflags & warn_undef )
 		        warn( "DATA label %s undefined - module set to zero", s->name );
 		      else
@@ -436,8 +436,8 @@ WORD type,earg,loc;
         etype = s_number;
         s = VMAddr(Symbol,expr.v);
         /* Fix: @ of an undefined symbol inside an expression or a	*/
-        /* word read module NullVMRef: "VM Error: invalid VMRef 0"	*/
-        /* (ASM-REVIEW M7). Handled as at the top level of an		*/
+        /* word read module NullVMRef: "VM Error: invalid VMRef 0".	*/
+        /* Handled as at the top level of an		*/
         /* instruction.							*/
         if( NullRef(s->module) )
         {
@@ -455,7 +455,7 @@ WORD type,earg,loc;
     case s_unbound:     /* undefined - an error!!        */
         s = VMAddr(Symbol,expr.v);
         /* Fix: an error unless -wu; it was a warning and the image	*/
-        /* used 0, e.g. a call to address 0 (ASM-REVIEW H3).		*/
+        /* used 0, e.g. a call to address 0.		*/
         if( warnflags & warn_undef )
 	        warn("Symbol '%s' undefined - set to zero",s->name);
         else
