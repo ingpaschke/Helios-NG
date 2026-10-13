@@ -86,6 +86,7 @@ Code _AbortPort(Port port, Code rc)
 					Resume(*statep);
 					*statep = NULL;
 				}
+				else id->rc = MultiUnused;
 			}
 			else { id->rc = rc; Resume(id->state); }
 		}

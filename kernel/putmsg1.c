@@ -362,6 +362,7 @@ Code _PutReady(Port port)
 	
 	if( pte->Type == T_Local )
 	{
+		DropMultiWoken(pte);
 		/* if there is already a transmitter, or no	*/
 		/* receiver: fail				*/
 		if( pte->TxId != NULL || pte->RxId == NULL ) return Err_NotReady;

@@ -204,6 +204,11 @@ bool LinkMsg(LinkInfo *link)
 			{ setreason(2); goto sink; }
 			else goto buffermsg;
 		}
+		/* A MultiWait receiver must not be claimed across the	*/
+		/* LinkRx of the body: another of its ports could wake	*/
+		/* it meanwhile. Buffer the body, then deliver it whole.*/
+		elif( pte->RxId->rc == MultiWaiting && msgsize != 0 )
+			goto buffermsg;
 		else
 		{
 			Id *rxid = pte->RxId;
