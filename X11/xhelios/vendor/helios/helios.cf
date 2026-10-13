@@ -1,0 +1,63 @@
+/*
+ * SET VERSION NUMBERS BEFORE MAKING MAKEFILES
+ */
+
+#ifdef SYSV
+#define SystemV           YES
+#endif
+
+#define OSName            Helios
+#define OSMajorVersion    1
+#define OSMinorVersion    2.1
+
+
+/**/# vendor:            Perihelion Software
+/**/# platform:          Transputer(s) 
+/**/# operating system:  Helios 1.2.1
+
+
+/*****************************************************************************
+ *			  Platform-specfic parameters                        *
+ *****************************************************************************/
+
+
+#define ExecableScripts		NO
+#define BourneShell		/helios/bin/shell
+/*#define BourneShell		bash */
+#define ConstructMFLAGS		NO
+#define HasLargeTmp		NO
+#define HasSockets		YES
+#define HasVFork		YES
+#define HasVoidSignalReturn	YES
+#define HasBsearch		YES
+#define NeedFunctionPrototypes	YES
+#define DestDir			/helios
+#define UsrLibDir		$(DESTDIR)/lib
+#define IncRoot			$(DESTDIR)/include
+#define UNCOMPRESSPATH		/helios/bin/compress -d
+#define DefaultCCOptions	-T4 -FA -wA
+#define LibraryCCOptions	-T4 -FA -wA
+#define StandardDefines		-DNOSTDHDRS=0 -DSYSV -D_BSD -DSTRINGS_ALIGNED
+#define StandardCppDefines	-DNOSTDHDRS=0 -DSYSV -D_BSD -DSTRINGS_ALIGNED
+#define CcCmd			c
+#define AsCmd			c
+#define CppCmd			/lib/cpp
+#define PreProcessCmd		/lib/cpp
+#define LdCmd			c
+#define LnCmd			cp
+#define MakeCmd			make
+#define ArCmd			c -j -V -o 
+#define RanlibCmd		echo
+#define ExtraLibraries		-lX -lbsd -s20000 -h1000
+#define FilesToClean		emacs.bak *.o core
+#define ManDirectoryRoot	/helios/man
+#define SHELLPATH		-DSHELLPATH=\"/helios/bin/shell\"
+#define BinDir			/helios/bin/X11
+#define LibDir			/helios/lib/X11
+#define AdmDir			/helios/etc
+#define NeedBerklibInXlib	YES
+#define BootstrapCFlags		
+
+      SYSLIBS     = -lXt -lX11 -lregex
+      YACCFLAGS   = -Nm20000
+

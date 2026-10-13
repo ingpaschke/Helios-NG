@@ -1,0 +1,80 @@
+#
+# this is the resource file for the X server
+#
+# keywords must be in UPPER CASE
+#
+#
+#
+#
+
+# Bildschirmparamter, Screen wurde vom Hostsystem initialisiert
+
+
+SCREEN_WIDTH     = 1024
+SCREEN_HEIGHT    = 768
+SCREEN_VSTRIDE   = 1024
+SCREEN_HSTRIDE   = 1
+#Offset, wird  zu VRAM_START_ADRESS (0x80600000) addiert
+#wenn SCREEN_WIDTH und SCREEN_VSTRIDE gleich sind , wird offset
+#nicht beachtet, es wird dann eine Videostart hinter dem
+#Standardscreen (gleiche Auflösung) für X11 und VTG gesetzt
+SCREEN_OFFSET    = 0
+#derzeit ungenutzt
+MONOCHROME       = 0
+#wenn ATW-Info vorhanden, Parameter benutzen
+SCREEN_ATWINFO   = 1
+#
+# Keyboard type currently either UK or GERMAN
+#
+
+KBD_TYPE = GERMAN
+kbd_type = D
+keyboard = PC_GERMAN
+#
+# auto-repeat times in milliseconds
+# resolution is 10 milliseconds
+# auto_repeat_delay is the time before autorepeat starts
+# auto_repeat_interval is the time between autorepeats
+#
+
+AUTO_REPEAT_DELAY    = 500
+AUTO_REPEAT_INTERVAL =  60
+
+#
+# The 'processor' is the name of the node in the transputer
+# network that has video hardware and hence should be running
+# the X server.  The 'progname' is the pathname of the X server
+# The 'init_prog' is the pathname of the video hardware
+# initialisation program
+#
+
+
+#processor     = CGD
+processor      = ATW
+PROGNAME    = /helios/bin/x
+
+#
+# The auto_repeat_filter is a list of keys which should not be
+# allowed to auto-repeat.  This is particularly useful because
+# the keyboard used by X is attached to the host processor and
+# so X can see a key down event, but the corresponding key up
+# event can be delayed by the host processor becoming involved
+# in some i/o, thus causing unwanted auto-repeat.
+# There can be a maximum of 15 keys specified in this field.
+# The numbers represent the (decimal) ASCII values of the keys
+# to be filtered.  (Keys without ASCII values cannot, at the
+# moment be filtered).
+#
+
+AUTO_REPEAT_FILTER   = 13 19 27 122 6
+
+#
+# The hardware device is a piece of code that will initialise the
+# video hardware used by X.  This file is normally found in
+# /helios/lib, but an explicit pathname can be given.
+# This entry must appear in the Xrc file
+#
+
+
+HARDWARE_DEVICE      = newATW.d
+

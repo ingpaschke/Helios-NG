@@ -1,0 +1,80 @@
+--------------------------------------------------------------------------
+--                                                                      --
+--                                                                      --
+--             Copyright (C) 1987 - 1991 Perihelion Software Ltd.        --
+--                        All Rights Reserved.                          --
+--                                                                      --
+-- device.a								--
+--									--
+--	Generic device driver code header.				--
+--                                                                      --
+--------------------------------------------------------------------------
+
+include device.m
+
+
+	Device Disc.Device 1000
+
+	sccsid [%W%	%G% Copyright (C) 1990-1991 Perihelion Software Ltd.]
+
+	-- all code is in mouse.c / keyboard.c / generic.c
+
+	uses	Kernel
+	uses	SysLib
+	uses	Util
+	uses	Clib
+	uses	Posix
+
+	stubs
+	[
+		stub	AbortPort
+		stub	Acknowledge
+		stub	AddAttribute
+		stub	Close
+		stub	CopyStream
+		stub	Delay
+		stub	EnableEvents
+		stub	Fork
+		stub    Free
+		stub	GetAttributes
+		stub	GetMsg
+		stub	GetReady
+		stub    IOdebug
+		stub	InitList
+		stub	InitSemaphore
+		stub	Locate
+		stub	Malloc
+		stub	NegAcknowledge
+		stub	Open
+		stub	Read
+		stub	ReOpen
+		stub	RemoveAttribute
+		stub	SetAttributes
+		stub	Signal
+		stub	TestSemaphore
+		stub	Wait
+		stub	_Trace
+		stub	_fillbuf
+		stub	_sprintf
+		stub	atoi
+		stub	atoi
+		stub	bytblt
+		stub	fcntl
+		stub	fdstream
+		stub	fileno
+		stub	malloc
+		stub	memcpy
+		stub	setvbuf
+		stub 	sscanf
+		stub	strchr
+		stub	strcmp
+		stub	strlen
+		stub	strncmp
+		stub	strstr
+		stub	strtol
+		stub	strtoul
+		stub	toupper
+		stub	write
+	]
+
+-- End of devices.a

@@ -1,0 +1,116 @@
+[
+  {
+    "source": "helios13/local/xsrc/hardware.h",
+    "destination": "vendor/helios/hardware.h",
+    "sha256": "96a0f392ff0d64b6544b94b75497a0adfa9fc4ffa4ee46d21437da81b5c41e86",
+    "normalization": "CRLF to LF; trailing DOS EOF removed; mdkeyboa.h expanded to mdkeyboard.h"
+  },
+  {
+    "source": "helios13/local/xsrc/md.h",
+    "destination": "vendor/helios/md.h",
+    "sha256": "b2f473b0896cd4c6add45032cb7f8c914f45ac6550753f5a8133862a10dc5352",
+    "normalization": "CRLF to LF; trailing DOS EOF removed; mdkeyboa.h expanded to mdkeyboard.h"
+  },
+  {
+    "source": "helios13/local/xsrc/mdutils.c",
+    "destination": "vendor/helios/mdutils.c",
+    "sha256": "b880702593cd92d826b55591297bec37e3f2abae55c8d47f794fe19f2760c74c",
+    "normalization": "CRLF to LF; trailing DOS EOF removed; mdkeyboa.h expanded to mdkeyboard.h"
+  },
+  {
+    "source": "helios13/local/xsrc/mdkeyboa.h",
+    "destination": "vendor/helios/mdkeyboard.h",
+    "sha256": "fa1649f0bac8b458d2e4c25d37e7bc598a37362861cb71c26bf5200f96cec890",
+    "normalization": "CRLF to LF; trailing DOS EOF removed; mdkeyboa.h expanded to mdkeyboard.h"
+  },
+  {
+    "source": "helios13/local/xsrc/mdmouse.h",
+    "destination": "vendor/helios/mdmouse.h",
+    "sha256": "8be211be47558128834af4219a62904f44b4726607cfa448ab163f09e4729c35",
+    "normalization": "CRLF to LF; trailing DOS EOF removed; mdkeyboa.h expanded to mdkeyboard.h"
+  },
+  {
+    "source": "helios13/local/xsrc/helios.cf",
+    "destination": "vendor/helios/helios.cf",
+    "sha256": "f8ec652fa831924361ff9b9474be2aa1379bef23631521d5afebd1d18acfb2c1",
+    "normalization": "CRLF to LF; trailing DOS EOF removed; mdkeyboa.h expanded to mdkeyboard.h"
+  },
+  {
+    "source": "helios13/local/xsrc/devices/device.a",
+    "destination": "vendor/helios/devices/device.a",
+    "sha256": "5b6bc9269231e22c38fc42ffde8c3806251f49face1e50c6fdea04734a259aac",
+    "normalization": "CRLF to LF; trailing DOS EOF removed; mdkeyboa.h expanded to mdkeyboard.h"
+  },
+  {
+    "source": "helios13/local/xsrc/devices/newatw.c",
+    "destination": "vendor/helios/devices/newatw.c",
+    "sha256": "9d676eab96c02da80cf5431b614e1d73849c6df46ff1d1dc87a72a4aa667cd8e",
+    "normalization": "CRLF to LF; trailing DOS EOF removed; mdkeyboa.h expanded to mdkeyboard.h"
+  },
+  {
+    "source": "helios13/local/xsrc/devices/nano_vtg.h",
+    "destination": "vendor/helios/devices/nano_vtg.h",
+    "sha256": "77fe0c26f834e7bf3185029e75e5bd4c26c8c2d4788702a4654f2030ef443b44",
+    "normalization": "CRLF to LF; trailing DOS EOF removed; mdkeyboa.h expanded to mdkeyboard.h"
+  },
+  {
+    "source": "helios13/local/xsrc/devices/atwinfo.h",
+    "destination": "vendor/helios/devices/atwinfo.h",
+    "sha256": "3ddd8d5b6f7dd509be8198e7d684d9ec3853087ca3ec0d2b319b46c07e4dba0e",
+    "normalization": "CRLF to LF; trailing DOS EOF removed; mdkeyboa.h expanded to mdkeyboard.h"
+  },
+  {
+    "source": "helios13/local/xsrc/devices/keyboard.c",
+    "destination": "vendor/helios/devices/keyboard.c",
+    "sha256": "d8d823df47590465c42e401d2d5b3522eb3acdb9c00f5b7e9aff854d2aad0763",
+    "normalization": "CRLF to LF; trailing DOS EOF removed; mdkeyboa.h expanded to mdkeyboard.h"
+  },
+  {
+    "source": "helios13/local/xsrc/devices/mouse.c",
+    "destination": "vendor/helios/devices/mouse.c",
+    "sha256": "efa0c043af1285de05a1e4739735d81be691f51df303d9f068cd03dce3826293",
+    "normalization": "CRLF to LF; trailing DOS EOF removed; mdkeyboa.h expanded to mdkeyboard.h"
+  },
+  {
+    "source": "helios13/local/xsrc/devices/newxrc",
+    "destination": "vendor/helios/devices/newxrc",
+    "sha256": "bf5fae2fb471e43af397f7b60f4d716e521ab108f36a3dcf1f7b7aeabe54ef7f",
+    "normalization": "CRLF to LF; trailing DOS EOF removed; mdkeyboa.h expanded to mdkeyboard.h"
+  },
+  {
+    "source": "helios13/local/xsrc/devices/makefile",
+    "destination": "vendor/helios/devices/makefile",
+    "sha256": "1f0132dbb5c676ab309faf5dc35a3e258ebd89850f2d18e40ef39da6619d1c83",
+    "normalization": "CRLF to LF; trailing DOS EOF removed; mdkeyboa.h expanded to mdkeyboard.h"
+  },
+  {
+    "source": "helios13/include/x11/x.h",
+    "destination": "vendor/include/X11/X.h",
+    "sha256": "36484f0a3396a82497da7fd500aae3a4245847c5a5caec3ee413c2414abd32e6",
+    "normalization": "CRLF to LF; trailing DOS EOF removed; original X11 filename restored"
+  },
+  {
+    "source": "helios13/include/x11/xmd.h",
+    "destination": "vendor/include/X11/Xmd.h",
+    "sha256": "4b5cc465cac6dcc2fd06c5841d568ea050b473922ce83f36b99227c46b59be38",
+    "normalization": "CRLF to LF; trailing DOS EOF removed; original X11 filename restored"
+  },
+  {
+    "source": "helios13/include/x11/keysym.h",
+    "destination": "vendor/include/X11/keysym.h",
+    "sha256": "0b0715782a80bfd4610d0ad46b416c6317e271831102bb1e7136cf47d71b0619",
+    "normalization": "CRLF to LF; trailing DOS EOF removed; original X11 filename restored"
+  },
+  {
+    "source": "helios13/include/x11/keysymde.h",
+    "destination": "vendor/include/X11/keysymdef.h",
+    "sha256": "39002dfe4072bb48290c3cb6588613a298e52fe19901880d32a8d0570d090274",
+    "normalization": "CRLF to LF; trailing DOS EOF removed; original X11 filename restored"
+  },
+  {
+    "source": "Helios-NG/include/xioevents.h",
+    "destination": "vendor/include/xioevents.h",
+    "sha256": "bac48ba8b172c3e61f5e59ef48a0710d0b63d21d62e59b7c958de4f3abff3d09",
+    "normalization": "none"
+  }
+]
