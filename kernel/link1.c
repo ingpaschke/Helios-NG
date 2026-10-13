@@ -38,6 +38,24 @@
 bool LinkMsg(LinkInfo *link);
 void InitDoubleBufferProcess(LinkInfo *link);
 		
+/* Link flags used only here: an Xoff is waiting to own the link, and an	*/
+/* Xon arrived during that wait (the link must then not be stopped).	*/
+#define Link_Flags_xoffwait	0x02
+#define Link_Flags_xonpending	0x01
+
+#define FC_Sleep	102	/* rc value while HandleXoff sleeps	   */
+
+/* Wake the Xoff process only if it sleeps: a second wake-up before	*/
+/* it runs would schedule its workspace twice.			*/
+static void WakeXoff(Id *id)
+{
+	if( id->rc == FC_Sleep )
+	{
+		id->rc = 0;
+		Resume(id->state);
+	}
+}
+
 void LinkGuardian(LinkInfo *link);
 void IntelligentServer(LinkInfo *link);
 bool GetInfo(LinkInfo *link);
@@ -665,7 +683,13 @@ void IntelligentServer(LinkInfo *link)
 		/* to run out of buffer memory, we should not send any	*/
 		/* more messages until we get an Xon.			*/
 		case Proto_Xoff:
-			NewWorker(HandleXoff,link);
+			/* mark the Xoff before its worker runs, so	*/
+			/* that an Xon arriving first is kept		*/
+			if( link->Flags & (Link_Flags_stopped|Link_Flags_xoffwait) )
+				continue;
+			link->Flags |= Link_Flags_xoffwait;
+			unless( NewWorker(HandleXoff,link) )
+				link->Flags &= ~Link_Flags_xoffwait;
 			continue;
 			
 		case Proto_Xon:
@@ -1670,8 +1694,8 @@ void FlowControl(word code)
 			/* tell the Xoff process to send the code	*/
 			if( link->Flags & Link_Flags_stopped )
 			{
-				link->TxUser->rc = code;
-				Resume(link->TxUser->state);
+				link->TxUser->mcb = (MCB *)code;
+				WakeXoff(link->TxUser);
 			}
 			else 
 			{
@@ -1698,8 +1722,7 @@ void HandleXoff(LinkInfo *link)
 {
 	Id id;
 	
-	/* allow for multiple xoffs */
-	if( link->Flags & Link_Flags_stopped ) return;
+	/* the link guardian has set Link_Flags_xoffwait for us	*/
 
 	/* Jump to the HEAD of the TxQueue			*/
 	
@@ -1707,27 +1730,45 @@ void HandleXoff(LinkInfo *link)
 	{
 		_JumpLink(link, &id);
 	} while( id.rc != Err_Null );
+
+	link->Flags &= ~Link_Flags_xoffwait;
+
+	/* an Xon that came while we waited for the link ends the stop */
+	if( link->Flags & Link_Flags_xonpending )
+	{
+		link->Flags &= ~Link_Flags_xonpending;
+		_SignalLink(link);
+		return;
+	}
 		
 	link->Flags |= Link_Flags_stopped;
 	
 	/* and sleep, forever, thereby blocking all transmissions */
+	/* until an Xon. FlowControl may meanwhile ask us to send a	*/
+	/* code (id.mcb, see FlowControl); WakeXoff wakes us only	*/
+	/* while we sleep, so a wake-up is claimed once.		*/
 
-	id.rc = 0;
-	while( id.rc != FC_Xon )
+	id.mcb = NULL;
+	forever
 	{
-		id.rc = 0;
-		id.endtime = -1;
-		Suspend(&id.state, THREAD_LINKXOFF);
-
-		/* if rc != FC_Xon we have been woken by FlowControl	*/
-		/* to send an Xon or Xoff byte through the link 	*/
-		if( id.rc != FC_Xon )
+		if( id.mcb != NULL )
 		{
-			word code = id.rc;
+			word code = (word)id.mcb;
+			id.mcb = NULL;
 			id.rc = FC_LinkTx;
 			id.endtime = AddTimes(LinkTxTimeout,Timer());
 			LinkTx(sizeof(ProtoPrefix), link, &code);
+			id.rc = 0;
+			continue;
 		}
+		if( link->Flags & Link_Flags_xonpending )
+		{
+			link->Flags &= ~Link_Flags_xonpending;
+			break;
+		}
+		id.rc = FC_Sleep;
+		id.endtime = -1;
+		Suspend(&id.state, THREAD_LINKXOFF);
 	}
 
 	link->Flags &= ~Link_Flags_stopped;
@@ -1739,9 +1780,16 @@ void HandleXon(LinkInfo *link)
 {
 	Id *id;
 
-	unless( link->Flags & Link_Flags_stopped ) return;
+	unless( link->Flags & Link_Flags_stopped )
+	{
+		/* the Xoff is still waiting for the link: keep the Xon	*/
+		if( link->Flags & Link_Flags_xoffwait )
+			link->Flags |= Link_Flags_xonpending;
+		return;
+	}
 
 	id = link->TxUser;
+	link->Flags |= Link_Flags_xonpending;
 	
 	/* if the Xoff process is in the middle of a link Tx abort it */
 	/* here. This will only happen if the link is jammed and the  */
@@ -1753,15 +1801,11 @@ void HandleXon(LinkInfo *link)
 		if( !NullStateP(s) )
 		{
 			CheckState(s);
-			id->rc = FC_Xon;
+			id->rc = 0;
 			Resume(s);
 		}		
 	}
-	else
-	{
-		id->rc = FC_Xon;
-		Resume(id->state);
-	}
+	else WakeXoff(id);
 }
 #endif
 
