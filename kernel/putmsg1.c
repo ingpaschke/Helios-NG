@@ -209,6 +209,13 @@ Code _PutMsg(MCB *mcb)
 			}
 			Suspend(&id.state, THREAD_LINKWRITEQ);
 
+			/* A killed sender may have been granted the link before
+			 * it ran. Release that ownership before stopping. */
+			if( id.rc == Err_Kill && link->TxUser == &id )
+			{
+				_SignalLink(link);
+				StopProcess();
+			}
 			if( id.rc != Err_Null ) goto done;
 			/* wakeup having reached head of queue	*/
 		}
