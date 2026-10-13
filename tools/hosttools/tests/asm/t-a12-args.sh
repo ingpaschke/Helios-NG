@@ -1,4 +1,4 @@
-# A12: @file and option edge cases
+# Fix 20: @file and option edge cases
 # an option as the last word of an @file takes the next outer word
 printf -- '-N\n-o\n' > a12.args
 expect a12-optarg 0 "$ASM" @a12.args a12.out base.s

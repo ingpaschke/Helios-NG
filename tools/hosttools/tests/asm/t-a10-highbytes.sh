@@ -1,4 +1,4 @@
-# A10: bytes >= 0x80 in text input are never .p tokens
+# Fix 18: bytes >= 0x80 in text input are never .p tokens
 # the euro sign e2 82 ac: e2 is a valid .p directive code
 printf '\tmodule -1\n\tldc 1 \342\202\254\n' > a10.s
 expect a10-euro 10 "$ASM" -p -o a10.out a10.s

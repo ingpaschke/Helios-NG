@@ -1,4 +1,4 @@
-# A4: -wd covers every duplicate definition across modules, in both orders
+# Fix 15: -wd covers every duplicate definition across modules, in both orders
 printf '\tmodule -1\n\tglobal _f\n_f:\n\tldc 1\n' > a4code.s
 printf '\tmodule -1\n\tglobal _f\n\tdata _f 4\n' > a4data.s
 printf '\tmodule -1\n\tglobal _f\n\tcommon _f 4\n' > a4comm.s

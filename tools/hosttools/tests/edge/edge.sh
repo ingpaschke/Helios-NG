@@ -1,8 +1,8 @@
 #!/bin/bash
-# edge.sh BINDIR OUTDIR [--update] -- regression tests on the edge cases of
-# the 2026-10-08 review (REVIEW-HOSTTOOLS64.md): over-long tokens, paths,
-# lines and messages, bad image sizes, broken module chains, a '%' in a
-# _report, classless code lines, a zero class mask.
+# edge.sh BINDIR OUTDIR [--update] -- regression tests on edge cases of
+# the tools other than asm (see tools/hosttools/PORT.md): over-long
+# tokens, paths, lines and messages, bad image sizes, broken module
+# chains, a '%' in a _report, classless code lines, a zero class mask.
 #
 # Each case records its exit status, stdout+stderr and output files under
 # OUTDIR/CASE/, with OUTDIR replaced by OUT; these are compared with
@@ -64,7 +64,7 @@ for i in good zerosize noterm pastend negsize longname short; do
   run objed-$i $B/objed -i -m $G/ob-$i
 done
 
-# ---- c, with stub compiler/assembler (see ../run.sh)
+# ---- c, with the stub compiler/assembler/ampp of ../c-stub
 export C_COMPILER=$D/nc ASSEMBLER=$D/asm LINKER=$D/asm AMPP=$D/ampp MACRO=$D/ampp
 export C_INCDIR=$LONG/include/ MACDIR=$LONG/include/ampp/ VERIFY_OUT=$O VERIFY_CTREE=$LONG
 export PATH=$D:$PATH
@@ -75,7 +75,7 @@ crun() {	# crun NAME LIBDIR ARGS...
 }
 mkdir -p $LONG/lib $LONG/lib2
 touch $LONG/lib/helioslib.def $LONG/lib/helios.lib $LONG/lib/c.lib $LONG/lib/cstart.o $LONG/lib2/foo.lib
-crun c-longlibdir $LONG/lib/ -c foo.c			# H1: every run did AddLibrary
+crun c-longlibdir $LONG/lib/ -c foo.c			# every run calls AddLibrary
 crun c-longL $LONG/lib/ -o prog bar.o -L$LONG/lib2 -lfoo	# -L<long> -lfoo
 I10=""; for k in 0 1 2 3 4 5 6 7 8 9; do I10="$I10 -I$LONG/inc$k"; done
 crun c-manyI $LONG/lib/ -c $I10 foo.c			# -i list over 1024 characters

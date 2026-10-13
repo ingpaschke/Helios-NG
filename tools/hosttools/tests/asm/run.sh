@@ -1,7 +1,7 @@
 #!/bin/sh
-# Regression tests for the fixes in README.md (Fixes).
+# Regression tests for the asm fixes in tools/hosttools/PORT.md (Fixes).
 #
-#   tests/run.sh [ASM]          default: the asm beside this directory
+#   tests/asm/run.sh [ASM]      default: the asm beside this directory
 #   make check
 #
 # Each t-*.sh file here is sourced in a fresh temporary directory that
@@ -9,7 +9,7 @@
 # Prints one line per failure and a summary; exits 1 if a test failed.
 
 D=$(cd "$(dirname "$0")" && pwd)
-ASM=${1:-$D/../asm}
+ASM=${1:-$D/../../build/asm}
 case $ASM in /*) ;; *) ASM=$(pwd)/$ASM ;; esac
 T=$(mktemp -d "${TMPDIR:-/tmp}/asmtest.XXXXXX") || exit 2
 trap 'rm -rf "$T"' EXIT

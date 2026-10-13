@@ -1,4 +1,4 @@
-# A3: an ignored signal stays ignored (nohup, background jobs).
+# Fix 11: an ignored signal stays ignored (nohup, background jobs).
 # asm reads base.s from a pipe that stays open for 2 s, so the signal
 # comes while it runs with its temporary file open.
 slowin() { { cat base.s; sleep 2; } }

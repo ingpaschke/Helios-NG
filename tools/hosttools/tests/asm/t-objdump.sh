@@ -1,4 +1,4 @@
-# objdump: a CODE record cut off at the end of the file is an error
+# Fix 21, objdump: a CODE record cut off at the end of the file is an error
 OBJDUMP=${ASM%/*}/objdump
 if [ -x "$OBJDUMP" ]; then
 	printf '\325' > od1.p

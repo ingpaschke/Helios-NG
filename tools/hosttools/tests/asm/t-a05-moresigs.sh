@@ -1,6 +1,6 @@
-# A5: SIGQUIT, SIGPIPE and SIGXFSZ remove the temporary file too
+# Fix 12: SIGQUIT, SIGPIPE and SIGXFSZ remove the temporary file too
 # A background job of sh starts with SIGINT and SIGQUIT ignored (and
-# asm keeps them so, A3): env --default-signal resets them, if it can.
+# asm keeps them so, fix 11): env --default-signal resets them, if it can.
 slowin() { { cat base.s; sleep 2; } }
 dfl=
 env --default-signal=QUIT true 2>/dev/null && dfl="env --default-signal=INT,QUIT"
@@ -16,7 +16,7 @@ for s in $sigs; do
 	if [ $rc -gt 128 ]; then ok; else bad "a5-$s: exit $rc"; fi
 	if ls a5$s.out* >/dev/null 2>&1; then bad "a5-$s: output or temporary file left"; else ok; fi
 done
-# ignored, they stay ignored (A3): with SIGPIPE ignored a closed pipe
+# ignored, they stay ignored (fix 11): with SIGPIPE ignored a closed pipe
 # is a write error instead
 (
 	trap '' PIPE

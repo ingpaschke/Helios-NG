@@ -1,6 +1,6 @@
-# A6: a signal at any point, also while the output is renamed or the
+# Fix 13: a signal at any point, also while the output is renamed or the
 # temporary file removed, leaves either the complete output or nothing.
-# (The race of A6 itself cannot be hit on purpose; this is a smoke test.)
+# (The race of fix 13 itself cannot be hit on purpose; this is a smoke test.)
 awk 'BEGIN { print "\tmodule -1"; for (i = 0; i < 8000; i++) printf "l%d: ldc l%d - l0\n", i, i }' > a6.s
 "$ASM" -N -o a6ref.out a6.s
 mkdir a6d

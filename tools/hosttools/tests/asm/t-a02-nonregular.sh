@@ -1,4 +1,4 @@
-# A2: -o and -d to a symbolic link, a pipe or a device are written directly
+# Fix 10: -o and -d to a symbolic link, a pipe or a device are written directly
 "$ASM" -N -o ref.img base.s
 expect a2-stdout-file 0 sh -c "\"$ASM\" -N -o /dev/stdout base.s > a2.out"
 same a2-stdout-file-img ref.img a2.out

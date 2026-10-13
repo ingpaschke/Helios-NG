@@ -1,4 +1,4 @@
-# A1: a token the parser does not expect is an error, not dropped
+# Fix 9: a token the parser does not expect is an error, not dropped
 printf '\tmodule -1\n\tldc 0x7fffffff\n' > a1x.s
 expect a1-hex 10 "$ASM" -N -o a1x.out a1x.s
 nofile a1-hex-out a1x.out

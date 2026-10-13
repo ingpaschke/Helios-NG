@@ -1,4 +1,4 @@
-# A8: -N with N > 0x80000000 is an error (was clamped or wrapped)
+# Fix 16: -N with N > 0x80000000 is an error (was clamped or wrapped)
 for v in -2147483649 -4294967295 -#80000001 -#ffffffff; do
 	printf '\tmodule -1\n\tldc %s\n' "$v" > a8.s
 	expect "a8$v" 10 "$ASM" -p -o a8.out a8.s

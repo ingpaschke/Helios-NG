@@ -1,4 +1,4 @@
-# A9: operands that were truncated or ignored silently
+# Fix 17: operands that were truncated or ignored silently
 for v in 300 256 0 -1 -2; do
 	printf '\tmodule -1\n\tsize %s\n\tj .l\n.l:\n' "$v" > a9.s
 	expect "a9-size$v" 10 "$ASM" -p -o a9.out a9.s
