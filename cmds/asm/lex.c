@@ -25,9 +25,9 @@ PUBLIC struct keyentry *tokkey;
 PUBLIC INT toksize;
 PUBLIC Value tokval;
 PUBLIC WORD tempval = 0;
-/* Fix: for the range check of a negated number (ASM-REVIEW-FIXES A8)	*/
+/* Fix: for the range check of a negated number	*/
 /* Fix: TRUE when the current input is assembler text (.s), where a	*/
-/* byte >= 0x80 is never a .p token (ASM-REVIEW-FIXES A10): set by	*/
+/* byte >= 0x80 is never a .p token: set by	*/
 /* assemble() for a file named *.s, and here by the first keyword	*/
 /* (instruction or directive spelt out), which a .p file never has.	*/
 PUBLIC bool textinput = FALSE;
@@ -197,7 +197,7 @@ nextsym()
 	if ( c == c_minus )
 	  {
 	    /* Fix: stop at EOF too; a comment on the last line without	*/
-	    /* a newline made asm loop for ever (ASM-REVIEW M3).		*/
+	    /* a newline made asm loop for ever.		*/
 	    while ( (ch = asm_rdch()) != c_nl && ch != EOF )
 	      ;
 	    if ( ch == EOF ) unrdch( ch );
@@ -341,7 +341,7 @@ WORD ch;
                 /* Fix: a number that does not fit in 32 bits wrapped	*/
                 /* silently, and the digits were stored without a	*/
                 /* bound: 1040 digits or more overran token[] and	*/
-                /* crashed asm (ASM-REVIEW M5).				*/
+                /* crashed asm.				*/
                 if( uval > (0xffffffffU - digit) / radix ) overflow = TRUE;
                 uval = uval * radix + digit;
                 val = val * radix + digit;
@@ -359,7 +359,7 @@ WORD ch;
         symb = s_number;
         tokval.w = (sign==c_minus?-val:val);
         /* Fix: unary minus is applied by the parser; -N fits in 32	*/
-        /* bits only for N <= 0x80000000 (A8)				*/
+        /* bits only for N <= 0x80000000				*/
         toknegovf = !overflow && uval > 0x80000000U;
 
 	trace("readnumber: %d",tokval.w);

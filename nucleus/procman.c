@@ -4090,8 +4090,7 @@ static void SocketServer(SockEntry *s)
 		/* client neither uses nor closes this socket again.  If the	*/
 		/* client also sends FG_Close (or still uses the socket),	*/
 		/* Users is decremented twice and the entry is freed while	*/
-		/* referenced.  Missing break or deliberate: undecided, see	*/
-		/* tools/llvm-t800/research/SP1-TRIAGE.md section 4.		*/
+		/* referenced.  Missing break or deliberate: undecided.	*/
 		case FG_Close:
 		case FG_Close|RemoteBit:
 			s->Users--;

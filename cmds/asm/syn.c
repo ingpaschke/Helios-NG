@@ -22,7 +22,7 @@ PRIVATE WORD primary(ellipsis);
 PRIVATE WORD combine(ellipsis);
 
 /* Fix: a symbol type that a DATA or COMMON directive redefines: a	*/
-/* code label, data or common (A4)					*/
+/* code label, data or common					*/
 #define dupsym(t) ((t) == s_codesymb || (t) == s_datasymb || (t) == s_commsymb)
 
 /********************************************************/
@@ -57,7 +57,7 @@ PUBLIC void assemble()
 	
 	newfile();
 
-	/* Fix: a file named *.s is text from its first byte (A10) */
+	/* Fix: a file named *.s is text from its first byte */
 	{
 		size_t l = strlen(infile);
 		textinput = l >= 2 && strcmp(infile + l - 2, ".s") == 0;
@@ -85,8 +85,7 @@ PUBLIC void assemble()
 			case s_bss:
 			case s_labdef:
 			/* Fix: stop at the end of the file; an error in	*/
-			/* the last statement made asm loop for ever		*/
-			/* (ASM-REVIEW M2).					*/
+			/* the last statement made asm loop for ever.		*/
 			case s_eof:
  				recovering = FALSE;
 #ifdef NEVER
@@ -128,14 +127,14 @@ PUBLIC void assemble()
 
                 case s_datasymb:
                 case s_commsymb:
-			/* Fix: an error outside a library unless -wd (H8) */
+			/* Fix: an error outside a library unless -wd */
 			if( inlib || (warnflags & warn_dup) )
 				warn("Code symbol re-defined as data symbol '%s' - ignored",token);
 			else
 				linkerror("Data symbol '%s' re-defined as a code label",token);
 			nextsym();		
 			/* Fix: skip the label's colon, now that an		*/
-			/* unexpected ':' is an error (A1)			*/
+			/* unexpected ':' is an error			*/
 			if( symb == s_colon ) nextsym();
                         break;
 
@@ -145,7 +144,7 @@ PUBLIC void assemble()
                         {
 			    /* Fix: an error outside a library unless -wd: the	*/
 			    /* second module's own references went to the first	*/
-			    /* module's label (ASM-REVIEW H8). In a library the	*/
+			    /* module's label. In a library the	*/
 			    /* first definition silently wins, as before.	*/
 			    if( !inlib )
 			    {
@@ -249,8 +248,7 @@ PUBLIC void assemble()
 			    WORD n;
 			    Value e; e.w = exp1();
                             n = e.w;
-                            /* Fix: a negative size gave an empty block	*/
-                            /* (A9)						*/
+                            /* Fix: a negative size gave an empty block.	*/
                             if( etype == s_number && n < 0 )
                                 asmerror("Negative size %d in BLKB directive",n);
                             while ( symb == s_comma && n > 0 )
@@ -273,9 +271,9 @@ PUBLIC void assemble()
                                     else
                                     {
                                             /* Fix: a string longer than the rest	*/
-                                            /* of the block was cut short, silently	*/
-                                            /* (A9); an excess number item was	*/
-                                            /* already an error (A1)		*/
+                                            /* of the block was cut short, silently;	*/
+                                            /* an excess number item was	*/
+                                            /* already an error.		*/
                                             if( symb == s_string && toksize > n )
                                                 asmerror("String '%s' longer than the rest of the BLKB block (%d)",token,n);
                                             if( symb == s_string ) gencode((UBYTE *)token,min(n,toksize));
@@ -352,7 +350,7 @@ PUBLIC void assemble()
 					if( toksym->type == s_datasymb )
 					{
 					     /* Fix: recover() is an error now; -wd	*/
-					     /* makes it a warning again (H8)		*/
+					     /* makes it a warning again		*/
 					     if( !inlib && (warnflags & warn_dup) )
 					      recoverwarn("Duplicate definition of symbol '%s' - ignored",token);
 					     else if( !inlib ) 
@@ -369,7 +367,7 @@ PUBLIC void assemble()
 					     }
 					}
 					/* Fix: a code label or common of this name	*/
-					/* (ASM-REVIEW-FIXES A4) is a duplicate	*/
+					/* is a duplicate	*/
 					/* definition like the others: a warning in	*/
 					/* a library or with -wd (as 1.3 reported	*/
 					/* it), else an error. -wd did not cover a	*/
@@ -406,7 +404,7 @@ PUBLIC void assemble()
 					VMDirty(toksymref);
 				}
                                 else { 
-					/* Fix: as for DATA (A4) */
+					/* Fix: as for DATA */
 					if( toksym->type == s_commsymb )
 						;
 					else if( dupsym(toksym->type) && (inlib || (warnflags & warn_dup)) )
@@ -436,7 +434,7 @@ PUBLIC void assemble()
                         /* Fix: the size is stored in a byte: size 300	*/
                         /* became 44, size -1 was ignored and size -2	*/
                         /* became 254, silently; size 0 failed only at	*/
-                        /* link time (ASM-REVIEW-FIXES A9).		*/
+                        /* link time.		*/
                         if( expr.w < 1 || expr.w > 255 )
                                asmerror("SIZE %d out of range 1..255",expr.w);
                         gensize(expr.w);
@@ -468,7 +466,7 @@ PUBLIC void assemble()
                 }
                         break;
                 default:
-                        /* Fix: an error (ASM-REVIEW-FIXES A1). It was a	*/
+                        /* Fix: an error. It was a	*/
                         /* warning, and the token was dropped: "ldc 0x10"	*/
                         /* assembled as "ldc 0" (x10 ignored), "ldc 1.5" as	*/
                         /* "ldc 1", a misspelt instruction vanished, exit 0.	*/
@@ -650,7 +648,7 @@ PRIVATE WORD primary()
         {
                 /* Fix: the number in -N must be at most 0x80000000;	*/
                 /* -2147483649 became 2147483647 and -4294967295 1,	*/
-                /* silently (ASM-REVIEW-FIXES A8). Checked when the	*/
+                /* silently. Checked when the	*/
                 /* operand is the number alone: an expression such as	*/
                 /* -(#ffffffff+2) is 32-bit arithmetic as before.	*/
                 WORD n, v;

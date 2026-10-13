@@ -115,8 +115,8 @@ if(traceflags&db_kludge)
 			}
 			else if( pf > code->size ) 
 			{
-				/* Fix: name the symbol and the module (ASM-	*/
-				/* REVIEW M9); it only said "Code size error"	*/
+				/* Fix: name the symbol and the module;	*/
+				/* it only said "Code size error"	*/
 				/* after a trace line with the raw numbers.	*/
 				char *name = exprlabel((WORD)code->vtype,code->value.w);
 				error("Code size error: %s %d needs %d bytes, size is %d"

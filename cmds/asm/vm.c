@@ -93,8 +93,8 @@ int pagesize;
 #ifdef __HELIOS
 	VMmaxpages = 30000;
 #else
-	/* Fix: every page stays resident on a Unix host (ASM-REVIEW H5,	*/
-	/* H6, H7, M10). asm swapped out pages beyond 256 (2 MB) to the	*/
+	/* Fix: every page stays resident on a Unix host.	*/
+	/* asm swapped out pages beyond 256 (2 MB) to the	*/
 	/* fixed file /helios/tmp/vmfile, which does not exist on Linux,	*/
 	/* is shared by parallel runs, and whose victim choice could evict	*/
 	/* the new, empty page. A NetHack link needs about 15 MB. The page	*/

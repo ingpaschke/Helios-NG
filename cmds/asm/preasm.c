@@ -50,11 +50,11 @@ WORD ch;
         /* other byte (binary garbage, or a stray non-ASCII character	*/
         /* in a .s file) became a symbol type that the parser did not	*/
         /* expect: directive codes 0xe0 and 0xed-0xff made asm loop	*/
-        /* for ever (ASM-REVIEW M1), symbol codes used stale token	*/
+        /* for ever, symbol codes used stale token	*/
         /* data. It is an error now.					*/
         /* Fix: and in text input (.s) no byte >= 0x80 is a token:	*/
         /* a stray UTF-8 character such as the euro sign (e2 82 ac)	*/
-        /* was read as a directive with binary operands (A10).		*/
+        /* was read as a directive with binary operands.		*/
         if( textinput ||
             !( (s_direct <= ch && ch <= (s_direct+15)) ||
                ch == s_code || ch == s_bss ||
@@ -276,7 +276,7 @@ WORD type,earg;
         /* Fix: a negative number inside an expression is printed as	*/
         /* (0-N): "x - -4" came out as (x--4), where -- starts a	*/
         /* comment, and "(-4+x)" read back as -(4+x), as unary minus	*/
-        /* takes a whole expression (ASM-REVIEW M4). The reader folds	*/
+        /* takes a whole expression. The reader folds	*/
         /* (0-N) back into the number -N. At the top level of an	*/
         /* operand -N reads back correctly and is kept as it was.	*/
         if( inexpr && expr.w < 0 )

@@ -59,7 +59,7 @@ PRIVATE WORD heap_size = -1;
 
 /* Fix: infile and outfile were BYTE [128] arrays filled by strcpy from	*/
 /* argv and from stored file names, so a path of 128 characters or more	*/
-/* overflowed them (ASM-REVIEW H1, H2). They point at the name now:	*/
+/* overflowed them. They point at the name now:	*/
 /* argv strings, the file names stored in the code, or a malloc'ed copy.*/
 PUBLIC  char *infile = "";
 PRIVATE char *outfile = "";
@@ -90,7 +90,7 @@ PRIVATE void tidyup(ellipsis);
 
 /* Fix: the output (-o) and the .def file (-d) are written to a	*/
 /* temporary file beside the target and renamed to it only when the	*/
-/* run ends without an error (ASM-REVIEW M8). asm used to create the	*/
+/* run ends without an error. asm used to create the	*/
 /* output while it parsed the arguments, so any error left a 0-byte or	*/
 /* truncated file with a fresh time stamp, which make then took as up	*/
 /* to date; write errors (a full disk) were not checked.		*/
@@ -98,7 +98,7 @@ typedef struct OutFile
 {
 	char	*name;		/* the target				*/
 	/* Fix: volatile, the signal handler reads it; changed only	*/
-	/* with the caught signals blocked (ASM-REVIEW-FIXES A6)	*/
+	/* with the caught signals blocked	*/
 	char	*volatile tmp;	/* temporary file, NULL if none		*/
 	FILE	*fd;
 } OutFile;
@@ -334,7 +334,7 @@ main( argc, argv )
 }
 
 /* Fix: the word after *argv, continuing in the outer argument list	*/
-/* at the end of an @file (A12)						*/
+/* at the end of an @file						*/
 PRIVATE char **nextword(char **argv)
 {
 	int argc;
@@ -356,7 +356,7 @@ char ***aargv;
 	char *optword = arg;		/* Fix: for the message of _ARG_ */
 
 /* Fix: an option that takes an argument as the last word of the	*/
-/* command line passed NULL on (ASM-REVIEW L1). As the last word of an	*/
+/* command line passed NULL on. As the last word of an	*/
 /* @file its argument is the next word of the outer list (it was	*/
 /* "needs an argument", A12).						*/
 #define _ARG_ if( *++arg == '\0' && (arg = *(argv = nextword(argv))) == NULL ) \
@@ -372,7 +372,7 @@ char ***aargv;
                     if( *++arg != '\0' )
                     {
                         FILE *vfd = fopen(arg,"w");
-                        /* Fix: the message printed arg+2 (L1) */
+                        /* Fix: the message printed arg+2 */
                         if( vfd == 0 ) error("Cannot open %s for output",arg);
                         verfd = vfd;
                     }
@@ -450,7 +450,7 @@ char ***aargv;
 #else
 			deffd = fopen(arg,"w");
 #endif
-			/* Fix: the message printed arg+2 (L1) */
+			/* Fix: the message printed arg+2 */
 			if(deffd == NULL ) error("Cannot open %s for output",arg);
 			break;
 
@@ -593,7 +593,7 @@ openedfile:
 
 /* Fix: the file a message is about: errors raised while the options	*/
 /* are read, before any input, printed an empty name ("Fatal Error:  :	*/
-/* Cannot open ..."), ASM-REVIEW-FIXES A12.				*/
+/* Cannot open ...").				*/
 PRIVATE char *msgfile()
 {
 	return infile != NULL && *infile != '\0' ? infile : "asm";
@@ -704,7 +704,7 @@ PUBLIC void recover(BYTE *str, ...)
         putc('\n',verfd);
 	/* Fix: recover() reports an error: the statement is dropped, so	*/
 	/* no output may be written and the exit status must say so. It	*/
-	/* only warned, and asm exited 0 (ASM-REVIEW H4).			*/
+	/* only warned, and asm exited 0.			*/
 	errors++;
 	maxerr = max(maxerr,10);
 	/* Fix: a binary file would give one message per byte */
@@ -777,7 +777,7 @@ PRIVATE void tidyup()
 #ifndef __HELIOS
 
 /* Fix: remove the temporary files on sig, unless sig is ignored	*/
-/* (ASM-REVIEW-FIXES A3): under nohup, or as a background job of a	*/
+/* under nohup, or as a background job of a	*/
 /* shell without job control (SIGINT, SIGQUIT ignored), the handler	*/
 /* made asm die on a signal that the i386 build ignored.		*/
 PRIVATE void catchsig(int sig)
@@ -792,7 +792,7 @@ PRIVATE void catchsig(int sig)
 /* Fix: the handler rmtemps_sig() unlinks outf.tmp and deff.tmp. They	*/
 /* are set and cleared with the caught signals blocked, so that the	*/
 /* handler never sees a name that is being freed (a signal between	*/
-/* free() and "= NULL" unlinked a garbage path, ASM-REVIEW-FIXES A6) or	*/
+/* free() and "= NULL" unlinked a garbage path) or	*/
 /* misses a temporary file that mkstemp() has just created.		*/
 PRIVATE void holdsigs()
 {
@@ -839,7 +839,7 @@ PRIVATE FILE *openout(OutFile *o, char *name, char *mode)
 		catchsig(SIGTERM);
 		catchsig(SIGHUP);
 		/* Fix: these left the temporary file behind too	*/
-		/* (ASM-REVIEW-FIXES A5): SIGQUIT (^\), SIGPIPE		*/
+		/* SIGQUIT (^\), SIGPIPE		*/
 		/* (asm -v ... | head) and SIGXFSZ (ulimit -f).		*/
 		catchsig(SIGQUIT);
 		catchsig(SIGPIPE);
@@ -852,7 +852,7 @@ PRIVATE FILE *openout(OutFile *o, char *name, char *mode)
 	o->name = strdup(name);
 	if( o->name == NULL ) error("Out of memory");
 
-	/* Fix: lstat, not stat (ASM-REVIEW-FIXES A2). stat follows a	*/
+	/* Fix: lstat, not stat. stat follows a	*/
 	/* symbolic link: with stdout redirected to a regular file,	*/
 	/* /dev/stdout looked like a regular file, so asm unlinked the	*/
 	/* name (as root: the /dev/stdout link) and created its		*/
@@ -868,7 +868,7 @@ PRIVATE FILE *openout(OutFile *o, char *name, char *mode)
 	/* Fix: the temporary file is the target's name plus ".XXXXXX";	*/
 	/* for a file name (the last component) of 249-255 characters	*/
 	/* that was longer than NAME_MAX, and the output failed ("Cannot	*/
-	/* open", ASM-REVIEW-FIXES A7). The name is shortened to fit.	*/
+	/* open"). The name is shortened to fit.	*/
 	{
 		char *base = strrchr(name,'/');
 		size_t dl = base == NULL ? 0 : (size_t)(base + 1 - name);
@@ -974,7 +974,7 @@ PRIVATE void rmtemps()
 
 #ifndef __HELIOS
 /* Fix: the same when asm is interrupted (make on ^C). Only		*/
-/* async-signal-safe calls: unlink, signal, raise (A6).			*/
+/* async-signal-safe calls: unlink, signal, raise.			*/
 PRIVATE void rmtemps_sig(int sig)
 {
 	rmtemps();

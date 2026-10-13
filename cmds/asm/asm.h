@@ -79,7 +79,7 @@ extern WORD warnflags;
 #define warn_unref	0x0001
 #define warn_undef	0x0002
 /* Fix: undefined symbols and duplicate definitions are errors; -wu	*/
-/* and -wd make them warnings again, as in 1.3 (ASM-REVIEW H3, H8).	*/
+/* and -wd make them warnings again, as in 1.3.	*/
 #define warn_dup	0x0004
 
 /* Host port: "ellipsis" stays empty (old-style declarations) for the	*/
@@ -468,9 +468,9 @@ extern VMRef 	toksymref;
 extern struct keyentry *	tokkey;
 extern INT 	toksize;
 extern Value 	tokval;
-extern bool 	textinput;	/* Fix: the input is .s text (A10) */
-extern WORD 	tokcount;	/* Fix: tokens read so far (A8) */
-extern bool 	toknegovf;	/* Fix: number > 0x80000000 (A8) */
+extern bool 	textinput;	/* Fix: the input is .s text */
+extern WORD 	tokcount;	/* Fix: tokens read so far */
+extern bool 	toknegovf;	/* Fix: number > 0x80000000 */
 extern WORD 	tempval;
 /* Host port: keytab.c (written by keyform) defines the table as	*/
 /* UWORD words; it was declared UBYTE here, a type mismatch between	*/

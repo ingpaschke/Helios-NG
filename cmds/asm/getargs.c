@@ -59,7 +59,7 @@ char **getargs(char *name, int *rargc)
         if (l < size) break;
         size *= 2;
         {
-            /* Fix: a failed realloc leaked the buffer (A12) */
+            /* Fix: a failed realloc leaked the buffer */
             char *nch = (char *)realloc(ch, size + 1);
             if (nch == NULL) {
                 free(ch);
@@ -167,7 +167,7 @@ char **getargs(char *name, int *rargc)
  * This routine is used to push the arguments onto an ArgStack
  */
 /* Fix: returns 0 if out of memory, so that the caller can stop; the	*/
-/* rest of the outer arguments was dropped silently (A12).		*/
+/* rest of the outer arguments was dropped silently.		*/
 int     pushargs(ArgStack **argstack, int argc, char **argv)
 {
     ArgStack    *newitem;
