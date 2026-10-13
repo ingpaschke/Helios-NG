@@ -155,15 +155,14 @@ Code _KillTask(Task *task)
 void EvictPortTable(Pool *pool, Task *task)
 {
     RootStruct	*root = GetRoot();
-    PTE **basetab = root->PortTable;
     word btindex, ptindex;
 	    
     /* loop over port tables */
-    for( btindex = 0 ; basetab[btindex] != NULL; btindex++ )
+    for( btindex = 0 ; root->PortTable[btindex] != NULL; btindex++ )
     {
 	Id *id;
 	Id *prev;
-	PTE *ptab = basetab[btindex];
+	PTE *ptab = root->PortTable[btindex];
 
 	if( ptab == (PTE *)MinInt ) continue;
 
@@ -203,12 +202,21 @@ _Trace1(0xffff1111,id,id->state);
 			dq(&pte->TxId,prev,id);
 		}
 
+		/* receivers of this task never run again: take them	*/
+		/* off every port, so that nothing is delivered to them	*/
+		for(id = pte->RxId,prev=NULL; id != NULL; id=id->next)
+		{
+			if( !inpool(id,pool) ) { prev = id; continue; }
+			dq(&pte->RxId,prev,id);
+		}
+
 		/* If this task owns the port, kill all	*/
 		/* receivers and abort all transmitters.*/
 		/* We can also free the port.		*/
 		if( pte->Owner == (word)task )
 		{
-			Port port;
+			Port port = MinInt | ((uword)pte->Cycle << Port_Cycle_shift)
+				| (btindex << 8) | ptindex;
 
 #ifndef __TRAN
 			/* kill all receivers */
@@ -228,26 +236,12 @@ _Trace1(0xffff1111,id,id->state);
 				dq(&pte->RxId,prev,id);
 			}
 			pte->RxId = NULL ;
-#else
-	/*****************************************************************
-	 * this just detaches the Rx process... it does not kill them... *
-	 * theoretically they should never be re-started (since they	 *
-	 * are only referenced by this value)...			 *
-	 *****************************************************************/
-			pte->RxId = NULL;
 #endif
-			/* and abort all transmitters		*/
-			for(id = pte->TxId; id != NULL; id=id->next )
-			{
-				id->rc = Err_Abort;
-_Trace1(0xffff2222,id,id->state);
-				Resume(id->state);
-			}
-			pte->TxId = NULL;
+			/* abort the remaining waiters, transmitters and	*/
+			/* receivers of other tasks (MultiWait ones too)	*/
+			_AbortPort(port,Err_Abort);
 				
 			/* now free the port */
-			port = MinInt | ((uword)pte->Cycle << Port_Cycle_shift)
-				| (btindex << 8) | ptindex;
 			_FreePort(port);
 		}
 			
