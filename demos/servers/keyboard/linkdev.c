@@ -85,8 +85,8 @@ static word	startup_hardware(KeyboardDCB *dcb)
   if (LinkData(KeyboardLink, &info) < Err_Null)
    return(EC_Error + EG_Invalid + EO_Link);
 
-  conf.Flags	= info.Config.Flags;
-  conf.Id	= info.Config.Id;
+  conf.Flags	= info.Flags;
+  conf.Id	= info.Id;
   conf.Mode 	= Link_Mode_Dumb;
   conf.State	= Link_State_Dumb;
   if (Configure(conf) < Err_Null)
