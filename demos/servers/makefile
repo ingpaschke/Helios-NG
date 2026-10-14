@@ -81,7 +81,7 @@ default : Xdefault
 	
 
 install	: Xinstall $(TARGETS)
-	-$(RM) -r $(DEMO)/*
+	-$(RM) -r $(addprefix $(DEMO)/,$(TARGETS))
 	test -d $(HPROD)/users/guest/examples/servers || mkdir $(HPROD)/users/guest/examples/servers
 	$(foreach SUBTARGET, $(TARGETS), $(MAKE) -C ../$(SUBTARGET)/$(HPROC) install;)
 	$(TOUCH) install
