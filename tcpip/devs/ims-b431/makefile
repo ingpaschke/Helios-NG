@@ -72,7 +72,7 @@ TARGETS = in-b431.d imsb431.b2h
 default : $(TARGETS) Xdefault
 
 install	:  $(TARGETS) Xinstall
-	$(CP) $(TARGETS) $(LIB)
+	$(CP) $(filter-out Xinstall installsources,$^) $(LIB)
 	$(TOUCH) install
 
 clean	: Xclean

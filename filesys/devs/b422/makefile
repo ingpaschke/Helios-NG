@@ -71,7 +71,7 @@ TARGETS = b422.d b422_dvr.d b422dvr.b2u
 default : $(TARGETS) Xdefault
 
 install	:  $(TARGETS) Xinstall installsources
-	$(CP) $(TARGETS) $(HPROD)/lib
+	$(CP) $(filter-out Xinstall installsources,$^) $(HPROD)/lib
 	$(TOUCH) install
 
 clean	: Xclean
