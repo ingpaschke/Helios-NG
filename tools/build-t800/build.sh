@@ -73,9 +73,9 @@ printf '#!/bin/sh\necho "nc: Helios C is not part of this build (hcc is)" >&2\ne
 chmod +x "$HHOSTBIN/nc"
 
 failed=0
-mk() {	# mk DIR [target]
+mk() {	# mk DIR [target [log suffix]]
 	local d=$1 t=${2:-install}
-	local log=$LOGS/$(echo "$d" | tr / _)${2:+-$2}.txt
+	local log=$LOGS/$(echo "$d" | tr / _)${2:+-$2}${3:+-$3}.txt
 	[ -f "$HSRC/$d/TRAN/makefile" ] || return 0
 	if make -k -j"$JOBS" -C "$HSRC/$d/TRAN" $t > "$log" 2>&1; then
 		echo "  $d $t"
@@ -88,11 +88,13 @@ mk() {	# mk DIR [target]
 # the order of the top-level makefile (LibHdrs Nucleus Libraries Network
 # Commands ...), expanded to directories
 DEFDIRS="kernel util nucleus fault posix fplib cmds/cc/clib"
-CORE="fault kernel util posix cmds/cc/clib fplib nucleus servers/servtask nucleus"
+CORE="fault kernel util posix cmds/cc/clib fplib"
 LIBS="scanlibs scanlibs/bsd scanlibs/termcap scanlibs/curses scanlibs/vectlib"
 NET="network network/packages/farmlib network/packages/tftests network/packages/hwtests1"
-SERVERS="servers servers/common servers/ttyserv servers/ttyserv/devs
+SERVERS="servers servers/ttyserv servers/ttyserv/devs
  servers/ttyserv/ttyserv servers/lock servers/include servers/logger servers/familiar"
+# servers/common is left out: its modend.o and trace.o are for the ARM
+# servers (serial, codec)
 CMDS="cmds/support cmds/shell cmds/com cmds/textutil cmds/private cmds/ampp cmds/asm
  cmds/cc/compiler sa cmds/cdl cmds/make cmds/help cmds/emacs cmds/emacs.311
  cmds/gnu/gmake cmds/gnu/tar cmds/gnu/gtar cmds/debugger cmds/debugger/lib"
@@ -120,6 +122,13 @@ for d in $DEFDIRS; do mk "$d" installdef; done
 (cd "$HSRC" && make Linklibs) > "$LOGS/linklibs.txt" 2>&1
 echo "build.sh: nucleus and libraries"
 for d in $CORE; do mk "$d"; done
+# the nucleus needs servtask and servtask the nucleus's libraries: a first
+# pass for those (it fails on the rest, so it is not counted), then the
+# real one
+make -k -j"$JOBS" -C "$HSRC/nucleus/TRAN" install > "$LOGS/nucleus-pass1.txt" 2>&1 || true
+echo "  nucleus install (first pass)"
+mk servers/servtask
+mk nucleus
 (cd "$HSRC" && make Linklibs) >> "$LOGS/linklibs.txt" 2>&1
 echo "build.sh: the rest"
 for d in $LIBS $NET $SERVERS $CMDS $TCPIP $HFS $EXTRA $X11; do mk "$d"; done

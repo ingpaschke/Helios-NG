@@ -37,22 +37,16 @@ Keep `JOBS` at 1: some of the 1992 makefiles do not declare every
 dependency inside a component, so a parallel make can link before a
 library of the same directory exists.
 
-## Components that report errors
+## Errors
 
-`build.sh` uses `make -k`, so a component builds as much as it can. These
-report errors (the build prints them; their logs say why):
+`build.sh` uses `make -k`, so a component builds as much as it can, and
+counts the components whose make failed; their logs say why. A complete
+build reports none.
 
-| Component | Why |
-| --- | --- |
-| `nucleus` | built twice in the order of the top-level makefile: the first pass misses parts the second one finds |
-| `tcpip`, `tcpip/devs/in-ether`, `tcpip/devs/ims-b431` | the firmware of Ethernet boards of the time (`b407.b2h`, `imsb431.b2h`) is not in Helios-NG |
-| `filesys`, `filesys/devs/msc`, `filesys/devs/b422` | the same for disk controllers (`msc02.gen`, `b422dvr.b2u`) |
-| `servers/common` | its makefile names some sources through a variable that is empty here |
-| `filesys/ufs/cmds` | includes `/hsrc/include/dirent.h`, a path of Perihelion's machines |
-| `filesys/ufs/devs/raw` | its install directory is not created |
-| `demos` | the keyboard demo uses a `LinkInfo` member that no longer exists |
-
-Apart from those parts, the components build and install.
+Two passes are expected and not counted: the nucleus is built once before
+`servers/servtask` (log `nucleus-pass1.txt`, which shows errors for the
+parts that need servtask) and once after it. `servers/common` is not
+built: it holds `modend.o` and `trace.o` for the ARM servers.
 
 ## How it works
 
