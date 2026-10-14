@@ -45,7 +45,7 @@ static char sccsid[] = "@(#)chown.c	5.18 (Berkeley) 3/9/91";
 #include <sys/stat.h>
 #include <sys/errno.h>
 #ifdef __HELIOS
-#include </hsrc/include/dirent.h>
+#include <dirent.h>
 #else
 #include <dirent.h>
 #endif

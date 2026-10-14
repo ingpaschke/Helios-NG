@@ -45,7 +45,7 @@ static char sccsid[] = "@(#)fts.c	5.19 (Berkeley) 5/9/91";
 #include "fts.h"
 #include <stdlib.h>
 #ifdef __HELIOS
-#include </hsrc/include/dirent.h>
+#include <dirent.h>
 #define	dirfd(dirp)	((dirp)->dd_fd)
 #include <syslib.h>
 #else

@@ -70,8 +70,9 @@ TARGETS = raw.d
 
 default : $(TARGETS) Xdefault
 
+# raw.d is not installed in lib: it would replace the file system's
+# raw.d (filesys/devs/raw). As with ufs/devs/he1000, only the sources are.
 install	:  $(TARGETS) Xinstall installsources
-	$(CP) $(TARGETS) $(HPROD)/lib
 	$(TOUCH) install
 
 clean	: Xclean
@@ -134,8 +135,9 @@ raw.d : discdevs.p discdev.p modend.p
 	$(LINK) $(LINKFLAGS) -n raw.d -o $@ $^ $(LIBDEFS)
 
 installsources : $(SOURCES.c) $(SOURCES.a) $(HEADERS.c)
+	mkdir -p $(HPROD)/local/src/ufs/devs/raw
 	$(CP) $^ $(HPROD)/local/src/ufs/devs/raw
-	$(CP) example.mkf $(HPROD)/local/src/ufs/devs/raw/makefile
+	$(CP) $(HSRC)/$(COMPONENT)/example.mkf $(HPROD)/local/src/ufs/devs/raw/makefile
 	$(TOUCH) $@
 
 #-----------------------------------------------------------------------------
