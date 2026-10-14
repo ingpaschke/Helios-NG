@@ -75,7 +75,7 @@ install	:  $(TARGETS) Xinstall installsources
 	$(CP) msc.d $(HPROD)/lib
 	$(CHMOD) ug+rw $(HPROD)/lib/msc.d
 	-$(RM) $(HPROD)/lib/msc02.gen
-	$(CP) msc02.gen $(HPROD)/lib
+	$(CP) $(HSRC)/$(COMPONENT)/msc02.gen $(HPROD)/lib
 	$(CHMOD) gu+rw $(HPROD)/lib/msc02.gen
 	$(TOUCH) install
 

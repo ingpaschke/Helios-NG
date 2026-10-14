@@ -72,7 +72,7 @@ TARGETS = in-ether.d b407.b2h #in-ether0.d in-ether1.d in-ether2.d in-ether3.d
 default : $(TARGETS) Xdefault
 
 install	:  $(TARGETS) Xinstall
-	$(CP) $(TARGETS) $(LIB)
+	$(CP) $(filter-out Xinstall installsources,$^) $(LIB)
 	$(TOUCH) install
 
 clean	: Xclean
