@@ -137,6 +137,13 @@ PUBLIC void growdata()
 			WORD dsize = s->def.w;
 			s->def.w = dataoffset;
 			s->type = s_datadone;
+			/* Fix: the word lives in this module, the first	*/
+			/* linked one that declares it. The parser gave it	*/
+			/* the first module in the input that does, which	*/
+			/* can be a library module linked after this one:	*/
+			/* @sym then named that module with this one's	*/
+			/* offset, a word of another module.			*/
+			s->module = curmod;
 			trace("COMMON: %s at %d size %d",s->name,dataoffset,dsize);
 			dataoffset += dsize;
 			VMDirty(c->value.v);
