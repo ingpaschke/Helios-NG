@@ -55,10 +55,10 @@
 
 /* The following signals may be delivered asyncronously by default */
 #define DFL_ASYNC	(S(SIGABRT)|S(SIGHUP)|\
-			S(SIGINT)|S(SIGKILL)|S(SIGQUIT)|S(SIGTERM)|S(SIGSIB))
+			S(SIGINT)|S(SIGKILL)|S(SIGQUIT)|S(SIGTERM)|S(SIGSIB)|S(SIGWINCH))
 
 /* The following signals are ignored by default			  */
-#define DFL_IGNORE	(S(SIGCHLD))
+#define DFL_IGNORE	(S(SIGCHLD)|S(SIGWINCH))
 
 /* The following signals will be passed on to the children	  */
 #define DFL_PROPAGATE	(S(SIGINT)|S(SIGKILL)|S(SIGTERM)|S(SIGHUP)|S(SIGABRT))
@@ -295,6 +295,14 @@ extern void _posix_exception_handler(void)
 			/* to prevent multiple calls to tcsetpgrp() upsetting	*/
 			/* things. Unfortunately there could still be race	*/
 			/* conditions.						*/
+        elif (index == 1 && mcb.MsgHdr.DataSize == 0 &&
+              e == (ErrBit | EG_Exception | EE_Signal | SIGWINCH))
+        {
+            SetPriority(StandardPri);
+            inner_raise(SIGWINCH,TRUE,FALSE);
+            SetPriority(HighServerPri);
+            continue;
+        }
 		elif (index == 1)
 		{
 #ifdef SYSDEB
