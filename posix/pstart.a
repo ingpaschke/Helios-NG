@@ -25,7 +25,7 @@ Resident
 [
 	name	Posix 
 	slot	6 
-	version	1000
+	version	1001
 
 	static
 	[
@@ -201,6 +201,8 @@ Resident
 		extern	func	wait3		-- BSD
 		extern	func	lstat		-- BSD
 		extern	func	fderror		-- Helios extension
+
+		extern	func	hu_spawn_native	-- POSIX ABI 1001: append only
 
 		-- additions MUST go just before this comment !!!
 

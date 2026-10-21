@@ -160,3 +160,12 @@ extern void	restoresigmasks(void);
 extern void	savesigmasks(void);
 
 #endif /* __pposix_h */
+
+struct hu_fd_snapshot {
+    Stream **streams,**owned;
+    word *flags;
+    int count,used,capacity;
+};
+struct hu_spawn_actions;struct hu_spawn_attr;
+extern int hu_snapshot(struct hu_fd_snapshot *,int,const struct hu_spawn_actions *,const struct hu_spawn_attr *);
+extern void hu_snapshot_free(struct hu_fd_snapshot *);

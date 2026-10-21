@@ -1235,3 +1235,5 @@ static void init_fileio(Environ *env)
 
 /* -- End of fileio.c */
 
+
+#include "hu-spawn-fileio.h"

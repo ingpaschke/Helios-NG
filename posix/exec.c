@@ -782,3 +782,5 @@ extern Environ *getenviron(void)
 }
 
 /* end of exec.c */
+
+#include "hu-spawn-exec.h"

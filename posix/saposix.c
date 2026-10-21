@@ -285,3 +285,8 @@ extern int utime(char *path, struct utimbuf *times) { errno = EINVAL; return -1;
 
 extern void find_file(char *path, char *file ) { strcpy(path,file); }
 
+
+#include "hu-spawn.h"
+int hu_spawn_native(pid_t *p,const char *n,const struct hu_spawn_actions *a,
+                    const struct hu_spawn_attr *t,char *const v[],char *const e[])
+{return EOPNOTSUPP;}
