@@ -81,6 +81,7 @@ struct sigmask
 #ifndef __in_signal
 extern struct sigmask mask;
 extern void raise_sync(void);
+extern int _posix_empty_select(word timeout);
 #define CHECKSIGS()	if(mask.pending) raise_sync()
 #endif
 

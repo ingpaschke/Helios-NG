@@ -28,6 +28,10 @@ int select(
 	int nfound = -1;
 		
 	CHECKSIGS();
+	if( nfds < 0 || (tv && (tv->tv_sec < 0 || tv->tv_usec < 0 ||
+	                       tv->tv_usec >= OneSec)) )
+	{ errno = EINVAL; return -1; }
+	if( nfds == 0 ) return _posix_empty_select(timeout);
 	streams = (Stream **)Malloc((word)nfds * sizeof(Stream *));
 	flags   = (word *)Malloc((word)nfds * sizeof(word));
 	
@@ -64,7 +68,8 @@ int select(
 		if( exceptfds ) exceptfds[i] = 0;
 	}
 
-	nfound = (int)SelectStream(s,streams,flags,timeout);
+	nfound = s ? (int)SelectStream(s,streams,flags,timeout) :
+	            _posix_empty_select(timeout);
 
 	if( nfound <= 0 ) goto fail;
 		

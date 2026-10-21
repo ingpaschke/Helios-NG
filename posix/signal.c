@@ -102,6 +102,13 @@ STATIC struct sigaction sigactions[sizeof(sigset_t)*8];
 static bool		Async;		/* are we in sync or async mode? */
 
 static Semaphore	siglock;
+/* Each empty select owns its port. Freeing it on signal also interrupts a
+ * receive that has not entered GetMsg yet; AbortPort alone loses that race. */
+typedef struct EmptySelect {
+	struct EmptySelect *next;
+	Port port;
+} EmptySelect;
+static EmptySelect *empty_selects;
 STATIC Port		PausePort;
 static Port		SignalPort;
 static Port		EventPort;
@@ -777,6 +784,12 @@ static void _raise_pending_sigs(bool async, bool locked)
 
 	if( Async && (~mask.mask & mask.pending) ) 
 	{
+		EmptySelect *w;
+		for(w = empty_selects; w != NULL; w = w->next)
+		{
+			if(w->port != NullPort) FreePort(w->port);
+			w->port = NullPort;
+		}
 _Trace(0xCCCC000b,MyTask,0);
 		/* abort any I/O operations */
 		abortfdv();
@@ -945,6 +958,45 @@ extern unsigned int alarm(unsigned int sec)
 
 /*}}}*/
 /*{{{  pause() */
+
+int _posix_empty_select(word timeout)
+{
+	EmptySelect w, **p;
+	MCB m;
+	word rc;
+	int interrupted;
+	if(timeout == 0) { raise_sync(); return 0; }
+	w.port = NewPort();
+	if(w.port == NullPort) { errno = ENOMEM; return -1; }
+	InitMCB(&m,0,w.port,NullPort,0);
+	m.Timeout = timeout;
+	Wait(&siglock);
+	w.next = empty_selects;
+	empty_selects = &w;
+	if(~mask.mask & mask.pending) {
+		FreePort(w.port);
+		w.port = NullPort;
+	}
+	Signal(&siglock);
+	/* The port sweeper runs once a second. Keep short timer waits precise;
+	 * signals still invalidate the registered port during this bounded
+	 * delay, so the caller sees EINTR (at most 100 ms later). */
+	if(timeout > 0 && timeout <= OneSec/10) {
+		Delay(timeout);
+		rc = EK_Timeout;
+	} else rc = GetMsg(&m);
+	Wait(&siglock);
+	for(p = &empty_selects; *p != &w; p = &(*p)->next);
+	*p = w.next;
+	interrupted = w.port == NullPort;
+	if(w.port != NullPort) FreePort(w.port);
+	Signal(&siglock);
+	raise_sync();
+	if(interrupted) { errno = EINTR; return -1; }
+	if(rc == EK_Timeout) return 0;
+	errno = posix_error(rc);
+	return -1;
+}
 
 extern int pause(void)
 {
