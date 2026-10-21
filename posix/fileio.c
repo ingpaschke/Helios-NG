@@ -1,3 +1,6 @@
+#ifndef _BSD
+#define _BSD 1
+#endif
 /*------------------------------------------------------------------------
 --                                                                      --
 --                     P O S I X    L I B R A R Y			--
@@ -29,6 +32,9 @@
 #include <syslib.h>
 #include <codes.h>
 #include <gsp.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/ioctl.h>
 #include <string.h>
 
 #include <posix.h>
@@ -105,10 +111,13 @@ extern int open(char *name, int oflag, ... )
 	p->type = Type_File;
 	p->refs = 1;
 	p->stream = s;
+	p->status = (s->Flags & (O_ACCMODE|O_APPEND)) | ((s->Flags & HU_STREAM_NONBLOCK)?O_NONBLOCK:0);
 
 	f = checkfd(fd);
 	f->pstream = p;
 	f->flags |= oflag;
+	p->status = oflag & FD_GFLMASK;
+    if(oflag & O_NONBLOCK)s->Flags |= HU_STREAM_NONBLOCK;
 
 	if( oflag & O_APPEND ) lseek(fd, 0, 2);
 
@@ -591,10 +600,12 @@ extern int pipe(int fildes[2])
 	p0->type   = Type_Pipe;
 	p0->refs   = 1;
 	p0->stream = s0;
+	p0->status = O_RDONLY;
 
 	p1->type   = Type_Pipe;
 	p1->refs   = 1;
 	p1->stream = s1;
+	p1->status = O_WRONLY;
 
 	f = checkfd(fildes[0]);
 	
@@ -697,9 +708,10 @@ read(
   if ((f = checkfd( fd )) == NULL)
     return -1;
   
+  if (nbyte == 0) return 0;
   s = f->pstream->stream;
   
-  timeout = f->flags & O_NONBLOCK ? 0 : setuptimeout();
+  timeout = f->pstream->status & O_NONBLOCK ? 0 : setuptimeout();
 
   res = Read( s, buf, nbyte, timeout );
 
@@ -745,8 +757,10 @@ extern int write(int fd, char *buf, int nbyte)
 	if((f = checkfd(fd)) == NULL) return -1;
 	
 	s = f->pstream->stream;
-	timeout = f->flags & O_NONBLOCK ? 0 : setuptimeout();
+	timeout = f->pstream->status & O_NONBLOCK ? 0 : setuptimeout();
 		
+	if(nbyte < 0) { errno=EINVAL; return -1; }
+	if(nbyte == 0) return 0;
 	res = Write(s,buf,nbyte,timeout);
 	
 	if( res < 0 )
@@ -789,11 +803,23 @@ extern int fcntl(int fd, int cmd, ... )
 		f->flags |= FD_SFDMASK & va_arg(a,word);
 		return 0;
 	case F_GETFL:
-		return (int)(f->flags & FD_GFLMASK);
+		return (int)(f->pstream->status & FD_GFLMASK);
 	case F_SETFL:
-		f->flags &= ~FD_SFLMASK;
-		f->flags |= FD_SFLMASK & va_arg(a,word);
-		return 0;
+    {
+        Pstream *p=f->pstream;
+        word status=(p->status & ~FD_SFLMASK)|(va_arg(a,word)&FD_SFLMASK);
+        int nonblock=(status & O_NONBLOCK)!=0;
+        word e;
+        /* Commit local state only after the server accepts the change.
+         * SetSocketInfo is deliberately used directly (no ioctl recursion). */
+        if((p->stream->Type & ~Type_Flags)==Type_Socket) {
+            e=SetSocketInfo(p->stream,SOL_IOCTL,FIONBIO,&nonblock,sizeof(nonblock));
+            if(e<0){errno=posix_error(e);return -1;}
+        }
+        p->status=status;
+        p->stream->Flags=(p->stream->Flags & ~(Flags_Append|HU_STREAM_NONBLOCK))|(status & O_APPEND)|(nonblock?HU_STREAM_NONBLOCK:0);
+        return 0;
+    }
 	case F_GETLK:
 	case F_SETLK:
 	case F_SETLKW:
@@ -871,6 +897,7 @@ extern int sopen(Stream *s)
 	p->type = Type_File;
 	p->refs = 1;
 	p->stream = s;
+	p->status = (s->Flags & (O_ACCMODE|O_APPEND)) | ((s->Flags & HU_STREAM_NONBLOCK)?O_NONBLOCK:0);
 
 	f = checkfd(fd);
 	f->pstream = p;
@@ -902,6 +929,7 @@ extern int svopen(Stream *s, int fd)
 		p->type = Type_File;
 		p->refs = 1;
 		p->stream = s;
+	p->status = (s->Flags & (O_ACCMODE|O_APPEND)) | ((s->Flags & HU_STREAM_NONBLOCK)?O_NONBLOCK:0);
 	
 		f = checkfd(fd);
 		f->pstream = p;
@@ -933,6 +961,7 @@ static int _dup(int fd, int fd2)
 	if( (f2 = checkfd(fd2)) == NULL ) goto done;
 	
 	f2->pstream = f->pstream;
+	f2->flags &= ~FD_CLOEXEC;
 
 	f->pstream->refs++;
 

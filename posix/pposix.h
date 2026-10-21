@@ -1,3 +1,4 @@
+#define HU_STREAM_NONBLOCK 0x00100000 /* allocated application stream flag */
 
 /* pposix.h : private header for posix library implementation	*/
 
@@ -31,6 +32,7 @@ typedef struct Pstream
   {
     word	type;
     word	refs;
+    word status; /* shared open-description flags, private ABI */
     Stream *	stream;
   }
 Pstream;
