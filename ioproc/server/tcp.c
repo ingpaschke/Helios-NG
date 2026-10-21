@@ -1969,7 +1969,19 @@ Conode *myco;
 	result = clearselect(myco, d);
 
 	if(myco -> type == CoAbortSelect)
+	{
+		/* The replacement request is already in the shared MCB.
+		 * Finish the old reply route before discarding the select:
+		 * otherwise every cancellation leaves forwarding ports on
+		 * the processors between this server and the client. */
+		MCB pending = *mcb;
+		mcb->MsgHdr.Flags = 0;
+		mcb->MsgHdr.Dest = NullPort;
+		mcb->MsgHdr.Reply = replyport;
+		Request_Return(EC_Error+SS_IOProc+EG_Exception+EE_Abort,0L,0L);
+		*mcb = pending;
 		return;
+	}
 		
 	mcb->MsgHdr.Reply = replyport;
 	mcb->MsgHdr.Dest = NullPort;
