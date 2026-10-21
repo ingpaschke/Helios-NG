@@ -118,7 +118,7 @@ SOURCES.c	= dir.c env.c exec.c fileio.c pwd.c saposix.c scandb.c \
 SOURCES.a	=  pstart.a posixasm.a modend.a saposasm.a
 
 # C header files
-HEADERS.c	= pposix.h
+HEADERS.c	= pposix.h hu-spawn-fileio.h hu-spawn-exec.h dns-resolver.h
 
 # AMPP macro files
 HEADERS.m	=
@@ -163,6 +163,11 @@ LIBDEFS	:= $(LIB)/kernel.def $(LIB)/syslib.def $(LIB)/util.def
 
 OBJECTS = pstart.p posixasm.p fileio.p dir.p pwd.p env.p exec.p signal.p \
 	termios.p socket.p scandb.p modend.p
+
+$(filter %.p,$(OBJECTS)): pposix.h
+fileio.p: hu-spawn-fileio.h
+exec.p: hu-spawn-exec.h
+scandb.p: dns-resolver.h
 
 posix.i : $(OBJECTS) $(LIBDEFS)
 	$(LINK.LIBRARY) -nPosix $^ -oposix.i
