@@ -695,8 +695,7 @@ bool LinkMsg(LinkInfo *link)
 			}
 
 #ifdef FLOWCONTROL
-			if( FlowControlHiWater ) 
-					NewWorker(FlowControl,Proto_Xoff);
+			FlowControlCheck();
 #endif	
 			result = TRUE; goto done;
 		}
@@ -812,8 +811,7 @@ static void DeliverMCB(MCB *mcb, LinkInfo *link)
 	}
 
 #ifdef FLOWCONTROL
-	if( (root->Flags & Root_Flags_xoffed) && FlowControlLoWater ) 
-		NewWorker(FlowControl,Proto_Xon);
+	FlowControlCheck();
 #endif
 }
 
@@ -830,6 +828,10 @@ static void DeliverMsg(MsgBuf *msgbuf, LinkInfo *link)
 	DeliverMCB(&msgbuf->MCB, link);
 
 	FreeBuf((Buffer *)msgbuf);
+#ifdef FLOWCONTROL
+	/* The final message may be the one whose release permits XON. */
+	FlowControlCheck();
+#endif
 }
 
 #if DOUBLE_BUFFER

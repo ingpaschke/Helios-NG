@@ -346,6 +346,13 @@ static void TimeoutHandler(void)
 	    
 	    root->Time++;
 
+#ifdef FLOWCONTROL
+	    /* Freeing tasks or worker stacks can cross the resume threshold
+	     * without another message delivery. Also retry a failed sender
+	     * allocation. The check only queues work; it cannot wait on a link. */
+	    FlowControlCheck();
+#endif
+
 #ifdef __TRAN
 	    if( !testerr_() ) root->Errors++;
 #endif

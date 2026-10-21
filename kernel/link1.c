@@ -1660,6 +1660,8 @@ void Terminate(void)
 #define FC_Xon		100	/* rc value HandleXon -> HandleXoff 	   */
 #define FC_LinkTx	101	/* rc value for HandleXoff while in LinkTx */
 
+#include "flowcontrol.inc"
+
 void FlowControl(word code)
 {
 	RootStruct *root = GetRoot();
@@ -1677,6 +1679,9 @@ void FlowControl(word code)
 		root->Flags &= ~Root_Flags_xoffed;
 	}
 	
+	/* Retain the reason in the kernel trace without console/link I/O. */
+	_Trace(0xfc000000 | code,root->BufferCount,root->FreePool->Size);
+
 	for( i = 0; root->Links[i] != NULL ; i++ )
 	{
 		LinkInfo *link = root->Links[i];

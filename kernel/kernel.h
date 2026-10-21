@@ -275,6 +275,10 @@ void _Free(Memory *block, Pool *pool);
 
 void LinkInit(Config *config, Task *procman);
 void FlowControl(word code);
+void FlowControlCheck(void);
+/* Private root flags; no structure layout or exported ABI change. */
+#define Root_Flags_flowworker 0x00000400
+#define Root_Flags_flowoff    0x00000800
 void EventInit(Config *config);
 
 bool NewWorker(VoidFnPtr fn, ... );
