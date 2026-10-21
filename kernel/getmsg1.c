@@ -303,9 +303,20 @@ cleanup:
 			/* unhook from port queue */
 			
 			pte = GetPTE( ports[i], root );
-			for( iid = pte->RxId,prev=NULL; iid != id; 
+			/* Never follow a freed/recycled port or an absent Id.
+			 * Teardown normally marks detached entries MultiUnused.
+			 * A broken queue must return an error, not spin at high
+			 * priority and starve the entire processor.
+			 */
+			if( NotSameCycle_(ports[i],pte) || pte->Type != T_Local )
+			{
+				e = mcb->MsgHdr.FnRc = Err_BadPort;
+				continue;
+			}
+			for( iid = pte->RxId,prev=NULL; iid != NULL && iid != id;
 					prev=iid,iid=iid->next);
-			dq(&pte->RxId,prev,id);
+			if( iid == id ) dq(&pte->RxId,prev,id);
+			else e = mcb->MsgHdr.FnRc = Err_BadPort;
 			continue;
 		}
 		

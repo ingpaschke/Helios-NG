@@ -37,6 +37,7 @@ void EvictTimerQ(Pool *pool);
 bool IsLinkIOThread(SaveState *p);
 void EvictKnownThreadList(Pool *pool);
 #endif
+void EvictPortWaiters(Pool *pool);
 void EvictPortTable(Pool *pool, Task *task);
 void EvictLinks(Pool *pool);
 #if 0
@@ -132,12 +133,21 @@ Code _KillTask(Task *task)
 	EvictLinks(pool);
 #endif
 #ifdef __TRAN
-	while( EvictTimerQ(pool) || EvictRunQs(pool) );
+	while( EvictTimerQ(pool) );
 #else
 	EvictTimerQ(pool);
-	EvictRunQs(pool);
 	EvictKnownThreadList(pool);
 #endif
+
+	/* Detach ALL message waiters before the first yielding port cleanup.
+	 * A MultiWait can have Ids in different port-table blocks. Removing
+	 * just one and yielding lets another port wake it during teardown.
+	 * Then remove runnable threads, including kernel continuations at
+	 * high priority. Neither operation may yield between these steps.
+	 * EvictLinks/TimerQ precede them because those operations can sleep.
+	 */
+	EvictPortWaiters(pool);
+	EvictRunQs(pool);
 
 	/* Clean up and free any ports owned by task */
 	EvictPortTable(pool, task);
@@ -150,6 +160,48 @@ Code _KillTask(Task *task)
 	return Err_Null;
 }
 
+
+/* Runs at executive priority without yielding. Do not free ports here:
+ * surrogate release can block and local aborts can wake other tasks.
+ */
+void EvictPortWaiters(Pool *pool)
+{
+    RootStruct *root = GetRoot();
+    word btindex, ptindex;
+
+    for (btindex = 0; root->PortTable[btindex] != NULL; btindex++)
+    {
+        PTE *ptab = root->PortTable[btindex];
+        if (ptab == (PTE *)MinInt) continue;
+        for (ptindex = 0; ptindex < 64; ptindex++)
+        {
+            PTE *pte = ptab + ptindex;
+            Id *id, *prev;
+            if (pte->Type != T_Local) continue;
+		/* start by checking the transmitters	*/
+		for(id = pte->TxId,prev=NULL; id != NULL; id=id->next)
+		{
+			if( !inpool(id,pool) ) { prev = id; continue; }
+			/* kill this process */
+			id->rc = Err_Kill;
+#ifndef __TRAN
+			KnownThreadRm(id->state);
+#endif
+_Trace1(0xffff1111,id,id->state);
+			dq(&pte->TxId,prev,id);
+		}
+
+		/* Detach receives on owned AND foreign ports. */
+		for(id = pte->RxId,prev=NULL; id != NULL; id=id->next)
+		{
+			if( !inpool(id,pool) ) { prev = id; continue; }
+			id->rc = id->rc == MultiWaiting ? MultiUnused : Err_Kill;
+			dq(&pte->RxId,prev,id);
+		}
+
+        }
+    }
+}
 
 /* Clean and free any ports owned by task (inpool(pool)) in the port table */
 void EvictPortTable(Pool *pool, Task *task)
@@ -189,26 +241,6 @@ void EvictPortTable(Pool *pool, Task *task)
 
 		/* here we have an allocated local port	*/
 			
-		/* start by checking the transmitters	*/
-		for(id = pte->TxId,prev=NULL; id != NULL; id=id->next)
-		{
-			if( !inpool(id,pool) ) { prev = id; continue; }
-			/* kill this process */	
-			id->rc = Err_Kill;
-#ifndef __TRAN
-			KnownThreadRm(id->state);
-#endif
-_Trace1(0xffff1111,id,id->state);
-			dq(&pte->TxId,prev,id);
-		}
-
-		/* receivers of this task never run again: take them	*/
-		/* off every port, so that nothing is delivered to them	*/
-		for(id = pte->RxId,prev=NULL; id != NULL; id=id->next)
-		{
-			if( !inpool(id,pool) ) { prev = id; continue; }
-			dq(&pte->RxId,prev,id);
-		}
 
 		/* If this task owns the port, kill all	*/
 		/* receivers and abort all transmitters.*/
@@ -565,14 +597,14 @@ _Trace1(0xeeee2222,p,runq.tail);
 		}
 	}
 
-	return evicted;
-
-#if 0
-	/* now do the high priority queue 			*/
-	/* this is potentially dangerous and I am not sure yet	*/
-	/* whether it is necessary				*/
+	/* A suspended System() call resumes at high priority. EvictLinks
+	 * has already completed any task-owned hardware transfer; the port
+	 * waiters are detached before this scan. Such continuations must not
+	 * run when EvictPortTable subsequently yields, or after FreePool.
+	 */
 	
 	atfront = TRUE;
+	prev = NULL;
 	
 	saveh_(&runq);
 
@@ -619,7 +651,6 @@ _Trace1(0xeeee4444,p,runq.tail);
 	}
 
 	return evicted;
-#endif
 }
 
 #else
