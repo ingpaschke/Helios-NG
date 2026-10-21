@@ -1932,6 +1932,9 @@ extern word DoWrite(MCB *m, Buffer *(*GetBuffer)(), void *info)
 
 	MarshalWord(m,buf->Max - offset);
 	MarshalWord(m,buf->Max);
+	/* A bounded FIFO can accept less than the original request. SysLib
+	 * needs this limit before it sends the subsequent data messages. */
+	MarshalWord(m,size);
 
 	if( (e = PutMsg(m)) < Err_Null) return false;
 

@@ -33,6 +33,7 @@
 #include <stdarg.h>
 #include <nonansi.h>
 #include <servlib.h>
+#define HU_O_HANGUP 0x08 /* private FG_Select close/error subscription */
 
 /*--------------------------------------------------------
 --		Private Data Definitions 		--
@@ -50,6 +51,9 @@ typedef struct Fifo {
 	Port		RDelayPort;	/* port for Read to wait on	*/
 	Port		WDelayPort;	/* port for Write to wait on	*/
 	Port		SelectPort;	/* port for select		*/
+	Port		WriteSelectPort;
+	Port		ReadException, WriteException;
+	word		ReadExceptionMode, WriteExceptionMode;
 } Fifo;
 #define Users		ObjNode.Account	/* number of open streams	*/
 #define Upb 		ObjNode.Size	/* use ObjNode size field	*/
@@ -58,6 +62,7 @@ typedef struct Fifo {
 #define data_available(f) ((f)->Upb - (f)->CreadPos)
 
 #define FifoMax		1024		/* byte in each block		*/
+#define FifoCapacity (16*1024)
 
 DirNode		Root;			/* root of fifo directory	*/
 
@@ -233,8 +238,8 @@ static void do_open(ServInfo *servinfo)
 
 	f->Users++;
 
-	if( (mode&O_ReadOnly) ) f->Readers++;
-	if( (mode&O_WriteOnly) ) f->Writers++; 
+	if( (mode&O_ReadOnly) ) { f->Readers++; f->Read = true; }
+	if( (mode&O_WriteOnly) ) { f->Writers++; f->Written = true; }
 
 	UnLockTarget(servinfo);
 	
@@ -247,7 +252,8 @@ static void do_open(ServInfo *servinfo)
 
 		e = GetMsg(m);
 
-		if( e == EK_Timeout ) break;
+		/* Idle descriptors still own their reader/writer references. */
+		if( e == EK_Timeout ) continue;
 
 		if( e < Err_Null ) continue;
 
@@ -264,6 +270,13 @@ static void do_open(ServInfo *servinfo)
 			{
 				FreePort(f->SelectPort);
 				f->SelectPort = NullPort;
+			}
+			AbortPort(f->WDelayPort,EC_Error|EG_Exception|EE_Abort);
+			if( f->WriteSelectPort != NullPort &&
+			    data_available(f) < FifoCapacity )
+			{
+				SendException(f->WriteSelectPort,O_WriteOnly);
+				f->WriteSelectPort=NullPort;
 			}
 			break;
 
@@ -285,6 +298,12 @@ static void do_open(ServInfo *servinfo)
 		case FG_GetSize:
 			InitMCB(m,0,m->MsgHdr.Reply,NullPort,Err_Null);
 			MarshalWord(m,data_available(f));
+			/* Optional second word: hu_poll readiness, no data consumed. */
+			MarshalWord(m,
+				((data_available(f)>0 || (f->Written && f->Writers==0))?1:0) |
+				((data_available(f)<FifoCapacity)?2:0) |
+				((f->Read && f->Readers==0)?8:0) |
+				((f->Written && f->Writers==0)?16:0));
 			PutMsg(m);
 			break;
 
@@ -296,18 +315,35 @@ static void do_open(ServInfo *servinfo)
 		case FG_Select:
 		{
 			int reply = 0;
+			if((e & (O_Exception|HU_O_HANGUP)) &&
+			   (((mode&O_ReadOnly) && f->Written && f->Writers==0) ||
+			    ((mode&O_WriteOnly) && f->Read && f->Readers==0)))
+				reply |= e & (O_Exception|HU_O_HANGUP);
 			if( e & O_ReadOnly ) 
 			{
-				if( data_available(f) > 0 ) reply |= O_ReadOnly;
+				if( data_available(f) > 0 || (f->Written && f->Writers==0) )
+					reply |= O_ReadOnly;
 			}
-			/* write select succeeds immediately */
-			if( e & O_WriteOnly ) reply |= O_WriteOnly;
+			if( (e & O_WriteOnly) &&
+			    (data_available(f)<FifoCapacity || (f->Read && f->Readers==0)) )
+				reply |= O_WriteOnly;
 			if( reply ) ErrorMsg(m,reply);
 			else 
 			{
-				/* we only set up here for read selects	*/
-				FreePort(f->SelectPort);
-				f->SelectPort = m->MsgHdr.Reply;
+				if(e & O_ReadOnly) {
+					FreePort(f->SelectPort);
+					f->SelectPort = m->MsgHdr.Reply;
+				}
+				if(e & O_WriteOnly) {
+					FreePort(f->WriteSelectPort);
+					f->WriteSelectPort = m->MsgHdr.Reply;
+				}
+				if(e & (O_Exception|HU_O_HANGUP)) {
+					Port *p=(mode&O_ReadOnly)?&f->ReadException:&f->WriteException;
+					FreePort(*p);*p=m->MsgHdr.Reply;
+					if(mode&O_ReadOnly) f->ReadExceptionMode=e & (O_Exception|HU_O_HANGUP);
+					else f->WriteExceptionMode=e & (O_Exception|HU_O_HANGUP);
+				}
 			}
 			break;
 		}
@@ -542,6 +578,7 @@ void FifoWrite(MCB *m, Fifo *f)
 {
 	ReadWrite *rw = (ReadWrite *)m->Control;
 	word pos = rw->Pos;
+	word timeout=rw->Timeout, available;
 
 /*dbg("FifoWrite f %x pos %d size %d",f,pos,size);*/
 
@@ -550,12 +587,38 @@ void FifoWrite(MCB *m, Fifo *f)
 		ErrorMsg(m,EC_Error|EG_Parameter|1);
 		return;
 	}
+	while((available=FifoCapacity-(pos-f->CreadPos))<=0)
+	{
+		MCB wait;
+		word e;
+		if(f->Read && f->Readers==0) break;
+		if(timeout==0) {
+			ErrorMsg(m,EC_Recover|EG_Timeout|EO_Fifo);
+			return;
+		}
+		InitMCB(&wait,0,f->WDelayPort,NullPort,0);
+		wait.Timeout=timeout;
+		Signal(&f->ObjNode.Lock);
+		e=GetMsg(&wait);
+		Wait(&f->ObjNode.Lock);
+		if((e&EG_Mask)!=EG_Exception) {
+			ErrorMsg(m,EC_Recover|EG_Timeout|EO_Fifo);
+			return;
+		}
+	}
+	if(f->Read && f->Readers==0) {
+		/* POSIX maps the pipe object code to EPIPE and SIGPIPE. */
+		ErrorMsg(m,EC_Error|EG_Broken|EO_Pipe);
+		return;
+	}
+	if(rw->Size>available) rw->Size=available;
+	/* DoWrite must never see more immediate data than its bounded request. */
+	if(m->MsgHdr.DataSize>rw->Size) m->MsgHdr.DataSize=rw->Size;
 	
 	f->WritePos = pos;
-	f->Upb = pos+rw->Size;
 
 	/* re-arrange the buffers in the fifo */
-	if( !AdjustBuffers(&f->Buffers,f->ReadPos<f->WritePos ? f->ReadPos : f->WritePos,f->Upb,FifoMax) )
+	if( !AdjustBuffers(&f->Buffers,f->ReadPos<f->WritePos ? f->ReadPos : f->WritePos,pos+rw->Size,FifoMax) )
 	{
 		ErrorMsg(m,EC_Error|EG_NoMemory|EO_Fifo);
 		return;
@@ -563,7 +626,9 @@ void FifoWrite(MCB *m, Fifo *f)
 
 	/* we now know the fifo has enough buffers to contain our write */
 
-	DoWrite(m,GetWriteBuffer,&f->Buffers);
+	if(!DoWrite(m,GetWriteBuffer,&f->Buffers)) return;
+	/* Publish only bytes actually committed, never the requested capacity. */
+	f->Upb=pos+rw->Size;
 		
 	f->ObjNode.Dates.Modified = GetDate();
 
@@ -584,9 +649,7 @@ void FifoClose(Fifo *f, word mode)
 
 	f->Users--;
 
-	if( (f->Read    && f->Readers == 0) &&
-	    (f->Written && f->Writers == 0) &&
-	     f->Users == 0 )
+	if( f->Users == 0 )
 	{
 		f->ReadPos = f->WritePos = f->Upb + FifoMax;
 		AdjustBuffers(&f->Buffers,0,0,FifoMax);
@@ -596,13 +659,25 @@ void FifoClose(Fifo *f, word mode)
 		Free(f);
 		return;
 	}
-	else Signal(&f->ObjNode.Lock);
 
 	/* abort the delay port so both Readers & Writers will have a   */
 	/* chance to respond to this event.				*/
 
 	AbortPort(f->RDelayPort,EC_Error|EG_Exception|0xaaaa);
 	AbortPort(f->WDelayPort,EC_Error|EG_Exception|0xaaaa);
+	if(f->Written && f->Writers==0 && f->SelectPort) {
+		SendException(f->SelectPort,O_ReadOnly);f->SelectPort=NullPort;
+	}
+	if(f->Read && f->Readers==0 && f->WriteSelectPort) {
+		SendException(f->WriteSelectPort,O_WriteOnly);f->WriteSelectPort=NullPort;
+	}
+	if(f->Written && f->Writers==0 && f->ReadException) {
+		SendException(f->ReadException,f->ReadExceptionMode);f->ReadException=NullPort;
+	}
+	if(f->Read && f->Readers==0 && f->WriteException) {
+		SendException(f->WriteException,f->WriteExceptionMode);f->WriteException=NullPort;
+	}
+	Signal(&f->ObjNode.Lock);
 }
 
 
