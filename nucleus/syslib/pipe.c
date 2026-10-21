@@ -1024,7 +1024,17 @@ PRIVATE word PipeClose(Stream *s)
 			Signal(&PipeLock);
 		}
 
-		FreePort(s->Server);
+		/* Server names the peer's receive port. When both ends are
+		 * local, FreePort can destroy that port (same task) or abort
+		 * its waiter (another task), losing the EOF just sent above.
+		 * Only dismantle a remote trail; the peer owns a local port.
+		 */
+		{
+			PortInfo info;
+			if( GetPortInfo(s->Server,&info) == Err_Null &&
+			    info.Type != T_Local )
+				FreePort(s->Server);
+		}
 
 		return true;
 	}
