@@ -39,6 +39,7 @@ void PortInit(Config *config)
 	RootStruct *root = GetRoot();
 
 	root->Time = config->Date;
+	root->Timer = Timer();
 	root->Errors = 0;
 			
 	root->PTFreeq = MinInt;

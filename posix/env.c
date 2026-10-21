@@ -162,7 +162,8 @@ extern clock_t times(struct tms *t)
 extern int gettimeofday(struct timeval *tv, struct timezone *tz)
 {
 	RootStruct *root = GetRoot();
-	word systime = 0;
+	word systime, seconds, ptime;
+	unsigned long diff;
 	
 	CHECKSIGS();
 	
@@ -172,18 +173,15 @@ extern int gettimeofday(struct timeval *tv, struct timezone *tz)
 		tz->tz_dsttime = 3;  /* western europe */
 	}
 	
-	while( systime != root->Timer )
+	do
 	{
-		word ptime = _ldtimer(0);
-		unsigned long diff;
-
 		systime = root->Timer;
-		
-		diff = (unsigned long)ptime - (unsigned long)systime;
-		
-		tv->tv_sec = root->Time;
-		tv->tv_usec = diff;
-	}
+		seconds = root->Time;
+		ptime = _ldtimer(0);
+	} while( systime != root->Timer || seconds != root->Time );
+	diff = (unsigned long)ptime - (unsigned long)systime;
+	tv->tv_sec = seconds + diff / OneSec;
+	tv->tv_usec = diff % OneSec;
 
 	return 0; /* always succeeds */
 }
