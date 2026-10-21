@@ -155,7 +155,18 @@ bool LinkMsg(LinkInfo *link)
 	if( hdr.Reply != NullPort )
 	{
 		Port reply = _NewPort();
-		PTE *rpte = GetPTE( reply, root );
+		PTE *rpte;
+
+		/* No local route can represent the remote reply port. Drain
+		 * this request and let its sender time out and retry. Never
+		 * interpret that remote descriptor as a local exception port. */
+		if( reply == NullPort )
+		{
+			hdr.Reply = NullPort;
+			e = Err_NoMemory;
+			goto sink;
+		}
+		rpte = GetPTE( reply, root );
 
 		rpte->TxId = (Id *)hdr.Reply;
 		rpte->Owner = pte->Owner;

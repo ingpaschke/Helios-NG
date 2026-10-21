@@ -882,6 +882,11 @@ static WORD IOCMsg(MCB *m, void *data)
 	MCB t;
 	word time;
 
+	/* A failed NewPort cannot receive a reply. Retrying such a request
+	 * just creates more IOC workers while the port table is full. */
+	if( m->MsgHdr.Reply == NullPort )
+		return EC_Error|SS_SysLib|EG_NoMemory;
+
 	t = *m;			/* struct copy of MCB */
 
 	t.Timeout = OneSec;	/* tx should finish v. fast */

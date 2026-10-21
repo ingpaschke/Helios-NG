@@ -1833,6 +1833,16 @@ PMTRACE(0x07);
 
 	reply = NewPort();
 
+	if( reply == NullPort )
+	{
+		PFree(m);
+		DbInfo.MsgBufs--;
+#ifndef __TRAN
+		PFree(used);
+#endif
+		return NULL;
+	}
+
 	/* fire off a search request to each active link */
 	for( i = 0; i < maxlinks ; i++ )
 	{

@@ -22,7 +22,7 @@
 #include <message.h>
 #include <root.h>
 
-static void ExtendTable(void);
+static bool ExtendTable(void);
 static void TimeoutHandler(void);
 
 /*--------------------------------------------------------
@@ -74,7 +74,7 @@ Port _NewPort(void)
 	Port port;
 	RootStruct *root = GetRoot();
 	
-	if( root->PTFreeq == MinInt ) ExtendTable();
+	if( root->PTFreeq == MinInt && !ExtendTable() ) return NullPort;
 	
 	port = root->PTFreeq;
 	
@@ -227,7 +227,7 @@ void ClearPorts(LinkInfo *link)
 --							--
 --------------------------------------------------------*/
 
-static void ExtendTable(void)
+static bool ExtendTable(void)
 {
 	PTE **basetab;
 	RootStruct *root = GetRoot();
@@ -238,7 +238,12 @@ static void ExtendTable(void)
 	ptsize = root->PTSize;
 
 	/* look for a free slot in the table */
-	for( btindex = 0; basetab[btindex] != (PTE *)MinInt ; btindex++ )
+	/* The port descriptor has only eight bits for this index.
+	 * Block 256 would alias block zero in GetPTE and turn the
+	 * owner of a live port into the allocator's free-list head. */
+	for( btindex = 0;
+	     btindex < 256 && basetab[btindex] != (PTE *)MinInt;
+	     btindex++ )
 	{
 		/* see if we have reached the end of the table.	*/
 		if( basetab[btindex] == NULL )
@@ -249,6 +254,7 @@ static void ExtendTable(void)
 			
 			/* allocate a new table twice the size of old one */
 			basetab = (PTE **)LowAllocate(newsize,root->FreePool,&root->SysPool);
+			if( basetab == NULL ) return FALSE;
 
 			/* clear it out */
 			for( i = 0; i < newsize/sizeof(PTE *) ; i++ )
@@ -269,6 +275,7 @@ static void ExtendTable(void)
 		}
 
 	}
+	if( btindex == 256 ) return FALSE;
 
 	/* here btindex is the index of a free slot in the base	*/
 	/* port table.						*/
@@ -276,6 +283,7 @@ static void ExtendTable(void)
 	{
 		PTE *newtab = (PTE *)LowAllocate(PTBlockSize,root->FreePool,&root->SysPool);
 		int ptindex;
+		if( newtab == NULL ) return FALSE;
 		
 		basetab[btindex] = newtab;
 		
@@ -297,6 +305,7 @@ static void ExtendTable(void)
 			root->PTFreeq = btindex | ptindex;
 		}
 	}
+	return TRUE;
 }
 
 /*--------------------------------------------------------
@@ -539,7 +548,9 @@ Port NewPort(void)
 {
 	RootStruct *root = GetRoot();
 	Port port = (Port)System((WordFnPtr)_NewPort);
-	PTE *pte = GetPTE( port, root );
+	PTE *pte;
+	if( port == NullPort ) return NullPort;
+	pte = GetPTE( port, root );
 	pte->Owner = (word)_Task_;
 	return port;
 }
