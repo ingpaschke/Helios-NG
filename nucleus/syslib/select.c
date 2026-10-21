@@ -25,7 +25,7 @@
 word SelectStream(word nstreams, Stream **streams, word *flags, word timeout)
 {
 	MCB mcb;
-	Port *ports = (Port *)Malloc(nstreams * (sizeof(Port)+2*sizeof(word)));
+	Port *ports = (Port *)Malloc((nstreams ? nstreams : 1) * (sizeof(Port)+2*sizeof(word)));
 	word *modes;		/* the mode each entry selects		*/
 	word *first;		/* entry that asks for a repeated stream */
 	int i, j;
@@ -33,6 +33,7 @@ word SelectStream(word nstreams, Stream **streams, word *flags, word timeout)
 	word e;	
 	word nfound = 0;
 	word delayed = 0;
+	word retries;
 	
 #ifdef SYSDEB
 	SysDebug(stream)("Select(%d,%x,%d)",nstreams,streams,timeout);
@@ -42,7 +43,8 @@ word SelectStream(word nstreams, Stream **streams, word *flags, word timeout)
 	first = modes + nstreams;
 	for( i = 0; i < nstreams; i++ ) modes[i] = flags[i] & Flags_Mode;
 
-again:	
+again:
+	for( i = 0; i < nstreams; i++ ) ports[i] = NullPort;
 	for( i = 0; i < nstreams; i++ )
 	{
 		Stream *stream = streams[i];
@@ -76,6 +78,9 @@ again:
 		if( stream->Type == Type_Pipe )	ports[i] = PipeSelect(stream,mode);
 		else
 		{
+			/* Reopening changes both ports. Bound setup retries even
+			 * for an infinite select: a broken server must not spin. */
+			retries = 3;
 		retry:
 			ports[i] = stream->Reply;
 			
@@ -87,16 +92,19 @@ again:
 #ifdef SYSDEB
 				SysDebug(error)("Select Request Error %E",e);
 #endif
-				if( (e & EC_Mask) >= EC_Error )
+				if( (e & EC_Mask) >= EC_Error || --retries == 0 )
 				{ 
 					Signal(&stream->Mutex); 
 					ports[i] = NullPort; 
-					break; 
+					goto cleanup;
 				}
 				if( (e & EC_Mask) == EC_Warn ) 
 				{ 
-					if( (e = ReOpen(stream)) < Err_Null )
-					goto retry; 
+					if( (e = ReOpen(stream)) >= Err_Null )
+						goto retry;
+					Signal(&stream->Mutex);
+					ports[i] = NullPort;
+					goto cleanup;
 				}
 			}
 		}
@@ -159,7 +167,7 @@ again:
 		elif( e == EK_Timeout )
 		{
 			if( timeout != -1 ) timeout -= mcb.Timeout;
-			else e = 0; 
+			e = 0;
 		}
 	}
 
@@ -189,6 +197,7 @@ again:
 	}
 	
 	/* free all the ports and unlock the streams */
+cleanup:
 	for( i = 0; i < nstreams; i++ )
 	{
 		if( ports[i] != NullPort ) 
