@@ -63,6 +63,7 @@ ifdef RSRC
 endif
 
 vpath %.h $(HVPATH)
+vpath %.inc $(HVPATH)
 vpath %.c $(HVPATH)
 vpath %.a $(HVPATH)
 
@@ -148,7 +149,7 @@ HEADERS.c =	kernel.h mcdep.h gexec.h sml.h
 HEADERS.m =     gexec.m
 
 
-SOURCES.odd = makefile
+SOURCES.odd = makefile flowcontrol.inc
 
 #-----------------------------------------------------------------------------
 # Generic targets and their dependencies:
@@ -203,6 +204,8 @@ endif
 # Normal Helios Kernel
 #
 # The list of objects must always be terminated with "kend.p"
+
+link1.p: flowcontrol.inc
 
   STDKERNEL.OBJECTS = 	kmodule.p kstart.p queue1.p sem1.p port1.p \
 			putmsg1.p getmsg1.p kill1.p link1.p linkmsg1.p \
