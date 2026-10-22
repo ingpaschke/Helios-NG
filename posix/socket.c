@@ -23,7 +23,8 @@ int select(
 	   int * exceptfds,
 	   struct timeval * tv )
 {
-	word timeout = (tv==0)?-1:(tv->tv_sec*OneSec+tv->tv_usec);
+	word timeout, seconds = tv ? tv->tv_sec : 0, micros = tv ? tv->tv_usec : 0;
+	word *requested;
 	Stream **streams = NULL;
 	word *flags = NULL;
 	word maskwords = ((word)nfds + (word)bpw - 1)/bpw;
@@ -35,9 +36,9 @@ int select(
 	if( nfds < 0 || (tv && (tv->tv_sec < 0 || tv->tv_usec < 0 ||
 	                       tv->tv_usec >= OneSec)) )
 	{ errno = EINVAL; return -1; }
-	if( nfds == 0 ) return _posix_empty_select(timeout);
+	if( nfds == 0 ) goto wait_for_events;
 	streams = (Stream **)Malloc((word)nfds * sizeof(Stream *));
-	flags   = (word *)Malloc((word)nfds * sizeof(word));
+	flags   = (word *)Malloc((word)nfds * 2 * sizeof(word));
 	
 	if( flags == 0 || streams == 0 )
 	{ errno = ENOMEM; goto fail; }
@@ -65,15 +66,31 @@ int select(
 		}
 	}
 	
-	for( i = 0; i < maskwords ; i++ ) 
+	requested = flags + nfds;
+	memcpy(requested,flags,s*sizeof(word));
+wait_for_events:
+	/* Kernel intervals are signed 32-bit microseconds. Keep the remainder
+	 * in seconds/useconds, so a long select does not expire after one chunk. */
+	for(;;)
+	{
+		timeout = tv==0 ? -1 :
+			(seconds > (MaxInt-micros)/OneSec ? MaxInt : seconds*OneSec+micros);
+		if( s ) memcpy(flags,requested,s*sizeof(word));
+		nfound = s ? (int)SelectStream(s,streams,flags,timeout) :
+		            _posix_empty_select(timeout);
+		if( (nfound != 0 && nfound != EK_Timeout) || tv==0 ) break;
+		seconds -= timeout/OneSec;
+		micros -= timeout%OneSec;
+		if( micros < 0 ) { micros += OneSec; seconds--; }
+		if( seconds==0 && micros==0 ) break;
+		CHECKSIGS();
+	}
+	for( i = 0; i < maskwords ; i++ )
 	{
 		if( readfds ) readfds[i] = 0;
 		if( writefds ) writefds[i] = 0;
 		if( exceptfds ) exceptfds[i] = 0;
 	}
-
-	nfound = s ? (int)SelectStream(s,streams,flags,timeout) :
-	            _posix_empty_select(timeout);
 
 	if( nfound <= 0 ) goto fail;
 		
@@ -663,8 +680,9 @@ extern int shutdown(int fd, int how)
     return 0;
 }
 
-extern unsigned long swap_long(unsigned long a,unsigned long b)
+extern unsigned long swap_long(unsigned long a)
 {	
+	unsigned long b;
 	((char *)&b)[0] = ((char *)&a)[3];
 	((char *)&b)[1] = ((char *)&a)[2];
 	((char *)&b)[2] = ((char *)&a)[1];
@@ -672,8 +690,9 @@ extern unsigned long swap_long(unsigned long a,unsigned long b)
 	return b;
 }
 
-extern unsigned short swap_short(unsigned short a,unsigned long b)
+extern unsigned short swap_short(unsigned short a)
 {	
+	unsigned long b;
 	b = 0;
 	((char *)&b)[0] = ((char *)&a)[1];
 	((char *)&b)[1] = ((char *)&a)[0];
