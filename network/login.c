@@ -846,8 +846,8 @@ done:
 ***   SESSION - the login name. This may be the same as the user name,
 ***	        or it may have had a magic number added by the Session
 ***	        Manager
-***   PATH - /helios/bin
-***   TERM - ANSI
+***   PATH - /helios/local/bin:/helios/bin:/helios/bin/x11
+***   TERM - inherited terminal type, or ansi when absent/empty
 ***   CONSOLE - Heliosno(stdin)->Name
 ***   PROCTYPE - T800, T414, ...
 ***
@@ -902,6 +902,7 @@ nomemory:
 static char **build_environ(char *login_name, struct passwd *pwd_entry)
 { static char buf[256];
   char	 **my_environ;
+  const char *term = getenv("TERM");
   static char *known_strings[] =
     { "_UID=", "_GID=", "HOME=", "SHELL=", "USER=", "SESSION=",
       "PATH=", "TERM=", "CONSOLE=", "PROCTYPE=",
@@ -928,10 +929,10 @@ static char **build_environ(char *login_name, struct passwd *pwd_entry)
   strncat(buf, login_name, 200);
   add_env(buf);
   strcpy(buf, known_strings[6]);
-  strncat(buf, "/helios/bin", 200);
+  strncat(buf, "/helios/local/bin:/helios/bin:/helios/bin/x11", 200);
   add_env(buf);
   strcpy(buf, known_strings[7]);
-  strncat(buf, "ansi", 200);
+  strncat(buf, (term != NULL && term[0] != '\0') ? term : "ansi", 200);
   add_env(buf);
   strcpy(buf, known_strings[8]);
   strncat(buf, Heliosno(stdin)->Name, 200);
