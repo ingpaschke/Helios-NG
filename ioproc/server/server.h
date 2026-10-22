@@ -123,7 +123,11 @@ char        IOname[IOCDataMax];
 char        *Heliosdir;
 word        maxdata;
 char        err_buff[256];
+#if LINUX
+char        system_image[512];
+#else
 char        system_image[80];
+#endif /* LINUX */
 
 #if SOLARIS
 jmp_buf *   exit_jmpbuf;

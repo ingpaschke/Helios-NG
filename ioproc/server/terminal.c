@@ -155,14 +155,26 @@ void restart_windowing()
 #if multiple_windows
 #if SOLARIS
   /* last 0 argument a dummyvalue to keep the C++ compiler happy */
+#if LINUX
+  AddMultiwait(Multi_WindowInput, &(Server_window.any_data), (hostword)(Server_window.handle), (hostword)(0));
+#else
   AddMultiwait(Multi_WindowInput, &(Server_window.any_data),
 	       Server_window.handle, 0);
+#endif /* LINUX */
+#else
+#if LINUX
+  AddMultiwait(Multi_WindowInput, &(Server_window.any_data), (hostword)(Server_window.handle), (hostword)0);
 #else
   AddMultiwait(Multi_WindowInput, &(Server_window.any_data),
 	       Server_window.handle);
+#endif /* LINUX */
 #endif
 #else
+#if LINUX
+  AddMultiwait(Multi_WindowInput, &(Server_window.any_data), (hostword)0, (hostword)0);
+#else
   AddMultiwait(Multi_WindowInput, &(Server_window.any_data));
+#endif /* LINUX */
 #endif
 
 #endif
@@ -240,7 +252,11 @@ Window *window;
                   return;
                 else if /* is the event handler active ? */
                  (IsAnAttribute(&(window->attr), ConsoleBreakInterrupt))
+#if LINUX
+                 { if (window->break_handler.port ne 0)
+#else
                  { if (window->break_handler.port ne (word) NULL)
+#endif /* LINUX */
                      send_break_event(window->break_handler.port);
                    if (window->readerco ne (Conode *) NULL)
                     { (window->readerco)->flags |= CoFlag_CtrlCed;
@@ -468,7 +484,11 @@ Port port;
   copy_event(event, event);   /* This does all the swapping and conversions */
 
   mcb->MsgHdr.Reply = port;
+#if LINUX
+  mcb->MsgHdr.Dest  = 0;
+#else
   mcb->MsgHdr.Dest  = (word) NULL;
+#endif /* LINUX */
   mcb->MsgHdr.Flags = MsgHdr_Flags_preserve;
 
   Request_Return(EventRc_IgnoreLost, 0L, (word) sizeof(IOEvent));
@@ -540,7 +560,11 @@ Conode *myco;
       return;
     }
 
+#if LINUX
+  NewStream(Type_File, Flags_Selectable + Flags_Closeable + Flags_Interactive, (hostword) &Server_window,
+#else
   NewStream(Type_File, Flags_Selectable + Flags_Closeable + Flags_Interactive, (word) &Server_window, 
+#endif /* LINUX */
             Console_Handlers);
   use(myco)
 }
@@ -615,7 +639,11 @@ void fn( delete_window, (Window *));
 void Window_TidyServer(myco)
 Conode *myco;
 { 
+#if LINUX
+  WalkList(&(Window_List.list), (VoidNodeFnPtr)delete_window, (hostword)0, (hostword)0);
+#else
   WalkList(&(Window_List.list), (VoidNodeFnPtr)delete_window);
+#endif /* LINUX */
  
   use(myco)
 }
@@ -692,7 +720,11 @@ char *window_name;
 
   if (!real_windows)
    { sprintf(misc_buffer1, "%c1;%2dH%c7m%s%c0m\r\n", 0x009B,
+#if LINUX
+          ((int)cols + 1) - (int)strlen(window_name), 0x009B, window_name, 0x009B);
+#else
           ((int)cols + 1) - strlen(window_name), 0x009B, window_name, 0x009B);
+#endif /* LINUX */
      window_output(misc_buffer1, window);
    }
 #endif
@@ -700,9 +732,17 @@ char *window_name;
 #if multi_tasking
 #if SOLARIS
   /* last 0 argument a dummyvalue to keep the C++ compiler happy */
+#if LINUX
+  AddMultiwait(Multi_WindowInput, &(window->any_data), (hostword)(window->handle), (hostword)(0));
+#else
   AddMultiwait(Multi_WindowInput, &(window->any_data), window->handle, 0); 
+#endif /* LINUX */
+#else
+#if LINUX
+  AddMultiwait(Multi_WindowInput, &(window->any_data), (hostword)(window->handle), (hostword)0);
 #else
   AddMultiwait(Multi_WindowInput, &(window->any_data), window->handle); 
+#endif /* LINUX */
 #endif
 #endif
   return(window);
@@ -714,9 +754,17 @@ Window *window;
 #if multi_tasking
 #if SOLARIS
   /* last 0 argument a dummyvalue to keep the C++ compiler happy */
+#if LINUX
+  ClearMultiwait(Multi_WindowInput, (hostword)(window->handle), (hostword)(0));
+#else
   ClearMultiwait(Multi_WindowInput, window->handle, 0);
+#endif /* LINUX */
+#else
+#if LINUX
+  ClearMultiwait(Multi_WindowInput, (hostword)(window->handle), (hostword)0);
 #else
   ClearMultiwait(Multi_WindowInput, window->handle);
+#endif /* LINUX */
 #endif
 #endif
 
@@ -746,7 +794,11 @@ Conode *myco;
 
                                          /* check the device we are opening */
   if (!strcmp(IOname, "window") )        /* Opening the directory ? */
+#if LINUX
+    { NewStream(Type_Directory, Flags_Closeable, (hostword) &Window_List,
+#else
     { NewStream(Type_Directory, Flags_Closeable, (word) &Window_List,  
+#endif /* LINUX */
               WindowDir_Handlers);
       return;
     }
@@ -754,7 +806,11 @@ Conode *myco;
   window = (Window *) Dir_find_node(myco);
   if (window ne (Window *) NULL)
    { NewStream(Type_File, Flags_Closeable + Flags_Interactive + Flags_Selectable,
+#if LINUX
+              (hostword) window, Console_Handlers);
+#else
               (word) window, Console_Handlers);
+#endif /* LINUX */
      return;
    }
 
@@ -769,7 +825,11 @@ Conode *myco;
   if (openmode & O_Create)
    { if ((window = new_window(window_name)) ne (Window *) NULL)
       NewStream(Type_File, Flags_Closeable + Flags_Interactive + Flags_Selectable,
+#if LINUX
+                (hostword) window, Console_Handlers);
+#else
                 (word) window, Console_Handlers);
+#endif /* LINUX */
    }
   else
    Request_Return(EC_Error + SS_IOProc + EG_Unknown + EO_Window, 0L, 0L);
@@ -898,9 +958,17 @@ Conode *myco;
      window->break_handler.port    = NullPort;
      window->break_handler.ownedby = (word *) NULL;
            /* Clear out the message trail, if any */
+#if LINUX
+     if ((oldport ne 0) && !(Special_Reboot | Special_Exit))
+#else
      if ((oldport ne (word) NULL) && !(Special_Reboot | Special_Exit))
+#endif /* LINUX */
       {
+#if LINUX
+        mcb->MsgHdr.Dest = 0;
+#else
         mcb->MsgHdr.Dest = (word) NULL;
+#endif /* LINUX */
         mcb->MsgHdr.Reply = oldport;
         Request_Return( EC_Error + SS_Kernel + EG_Exception + EE_Abort, 0L, 0l);
       }
@@ -1013,8 +1081,13 @@ Conode *myco;
   word oldport = handler->port;
   
   if (mask eq 0L)       /* disable a break handler */
+#if LINUX
+    { if (handler->port ne 0)    /* is there a break handler ? */
+       { handler->port = 0;
+#else
     { if (handler->port ne (word)NULL)    /* is there a break handler ? */
        { handler->port = (word) NULL;
+#endif /* LINUX */
          handler->ownedby = (word *) NULL;
        }
       mcb->Control[Reply1_off] = 0L;
@@ -1029,9 +1102,17 @@ Conode *myco;
     }
 
       /* if there was a previous events port send an AbortPort message */
+#if LINUX
+  if (oldport ne 0)
+#else
   if (oldport ne (word) NULL)
+#endif /* LINUX */
    {
+#if LINUX
+     mcb->MsgHdr.Dest  = 0;
+#else
      mcb->MsgHdr.Dest  = (word) NULL;
+#endif /* LINUX */
      mcb->MsgHdr.Reply = oldport;
      Request_Return( EC_Error + SS_Kernel + EG_Exception + EE_Abort, 0L, 0l);
    }
@@ -1509,7 +1590,11 @@ Conode *myco;
      return;
    }
 
+#if LINUX
+  if ((count > 0x7FFF) || (count < 0L))   /* silly */
+#else
   if ((count > 0x7FFFL) || (count < 0L))   /* silly */
+#endif /* LINUX */
    { Request_Return(EC_Error + SS_IOProc + EG_WrongSize + EO_File, 0L, 0L);
      return;
    }
@@ -2245,20 +2330,32 @@ PUBLIC int    Cur_x, Cur_y, LastRow, LastCol, Screen_mode;
 PUBLIC byte   **map;
 PUBLIC Window *current_window;
 PUBLIC Screen *current_screen;
+#if LINUX
+PUBLIC hostword handle;
+#else
 PUBLIC word   handle;
+#endif /* LINUX */
 #else
 #if (MSWINDOWS)
 int    Cur_x, Cur_y, LastRow, LastCol, Screen_mode;
 byte   **map;
 Window *current_window;
 Screen *current_screen;
+#if LINUX
+hostword handle;
+#else
 word   handle;
+#endif /* LINUX */
 #else
 PRIVATE int    Cur_x, Cur_y, LastRow, LastCol, Screen_mode;
 PRIVATE byte   **map;
 PRIVATE Window *current_window;
 PRIVATE Screen *current_screen;
+#if LINUX
+PRIVATE hostword handle;
+#else
 PRIVATE word   handle;
+#endif /* LINUX */
 #endif
 #endif
 /**

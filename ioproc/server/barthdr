@@ -18,7 +18,12 @@
 /* RcsId: $Id: barthdr,v 1.6 1994/07/06 10:44:59 mgun Exp $ */
 /* Copyright (C) 1987, Perihelion Software Ltd.         		*/
 
+#if LINUX
+typedef int32_t *ptr;
+typedef intptr_t hostword;
+#else
 typedef long *ptr;
+#endif /* LINUX */
 /* RTE : may not be required */
 #if (ST || PC || AMIGA || ARMBSD || MEIKORTE || HELIOS)
 typedef unsigned int uint;
@@ -162,10 +167,17 @@ extern void fn(memset, (char *dest, int val, int count));
 #endif
 #endif
 
+#if LINUX
+#if i486V4 && !LINUX
+#define bcopy(x, y, l) memcpy(y, x, l)
+#define bzero(x, l) memset(x, 0, l)
+#endif
+#else
 #if i486V4
 #define bcopy(x, y, l) memcpy(y, x, l)
 #define bzero(x, l) memset(x, 0, l)
 #endif
+#endif /* LINUX */
 
 #if (PC)
 extern long fn( divlong, (long, long));

@@ -98,7 +98,11 @@ word event_type;
   copy_event(event, event);   /* This does all the swapping and conversions */
 
   mcb->MsgHdr.Reply = port;
+#if LINUX
+  mcb->MsgHdr.Dest  = 0;
+#else
   mcb->MsgHdr.Dest  = (word) NULL;
+#endif /* LINUX */
   mcb->MsgHdr.Flags = MsgHdr_Flags_preserve;
 
   Request_Return(EventRc_IgnoreLost, 0L, (word) sizeof(IOEvent));
@@ -653,7 +657,11 @@ Port_node *node;
 void Port_TidyServer(myco)
 Conode *myco;
 { List *list = (List *) myco->extra;
+#if LINUX
+  WalkList(list, func(port_tidy), (hostword)0, (hostword)0);
+#else
   WalkList(list, func(port_tidy));
+#endif /* LINUX */
   FreeList(list);
 }
   
@@ -700,13 +708,21 @@ Conode *myco;
 { Port_node *node;
 
   if (!strcmp(IOname, myco->name))    /* is it for the server ? */
+#if LINUX
+   NewStream(Type_Directory, Flags_Closeable, (hostword) myco->extra,
+#else
    NewStream(Type_Directory, Flags_Closeable, (word) myco->extra,
+#endif /* LINUX */
              PortDir_Handlers);
   elif ( (node = (Port_node *) Dir_find_node(myco) ) eq (Port_node *) NULL)
    Request_Return(EC_Error + SS_IOProc + EG_Unknown + EO_File, 0L, 0L);
   else
    { node->objnode.account++;
+#if LINUX
+     NewStream(Type_File, Flags_Closeable + Flags_Interactive, (hostword) node,
+#else
      NewStream(Type_File, Flags_Closeable + Flags_Interactive, (word) node,
+#endif /* LINUX */
              node->handlers );
    }
 }
@@ -853,7 +869,11 @@ Conode *myco;
      return;
    }
 
+#if LINUX
+  if (count > 0x7fff)   /* limit of 32K on writes */
+#else
   if (count > 0x7fffL)   /* limit of 32K on writes */
+#endif /* LINUX */
    { Request_Return(EC_Error + SS_IOProc + EG_WrongSize + EO_Stream, 0L, 0L);
      return;
    }
@@ -1099,7 +1119,11 @@ Conode *myco;
   RS232_list.entries = RS232_initlist(&RS232_list.list,
      &(node->port) ) + 1L;
 
+#if LINUX
+  WalkList(&RS232_list.list, func(RS232_init_port), (hostword)0, (hostword)0);
+#else
   WalkList(&RS232_list.list, func(RS232_init_port));
+#endif /* LINUX */
 }
 
 void RS232_TidyServer(myco)
@@ -1185,7 +1209,11 @@ Conode *myco;
   Centronics_list.entries = 
     Centronics_initlist(&(Centronics_list.list), &(node->port) ) + 1L;
 
+#if LINUX
+  WalkList(&Centronics_list.list, func(Centronics_init_port), (hostword)0, (hostword)0);
+#else
   WalkList(&Centronics_list.list, func(Centronics_init_port));
+#endif /* LINUX */
 }
 
 #endif /* Centronics_supported */
@@ -1241,7 +1269,11 @@ Conode *myco;
   Printer_list.entries = Printer_initlist(&Printer_list.list,
      &(node->port) ) + 1L;
 
+#if LINUX
+  WalkList(&Printer_list.list, func(Printer_init_port), (hostword)0, (hostword)0);
+#else
   WalkList(&Printer_list.list, func(Printer_init_port));
+#endif /* LINUX */
 }
 
 #endif /* Printer_supported */
@@ -1284,7 +1316,11 @@ Conode *myco;
 
   Midi_list.entries = Midi_initlist(&Midi_list.list, &(node->port)) + 1L;
 
+#if LINUX
+  WalkList(&Midi_list.list, func(Midi_init_port), (hostword)0, (hostword)0);
+#else
   WalkList(&Midi_list.list, func(Midi_init_port));
+#endif /* LINUX */
 }
 
 #endif    /* Midi_supported */
@@ -1316,7 +1352,11 @@ Conode *myco;
   Mouse_tail  = 0;
   Mouse_count = 0L;
   Mouse_ack   = -1L;
+#if LINUX
+  mouse_handler.port = 0;
+#else
   mouse_handler.port = (word) NULL;
+#endif /* LINUX */
   initialise_mouse();
   use(myco)
 }
@@ -1392,7 +1432,11 @@ PRIVATE void poll_the_mouse()
 #endif
           /* Are there any mouse events outstanding, and is there a handler */
           /* for the mouse events (i.e. has there been an enable_events) ?  */
+#if LINUX
+  if ((mouse_handler.port ne 0) && (Mouse_tail ne Mouse_head))
+#else
   if ((mouse_handler.port ne (word) NULL) && (Mouse_tail ne Mouse_head))
+#endif /* LINUX */
     send_mouse_events();
 }
 
@@ -1490,17 +1534,28 @@ Conode *myco;
 { word mask = mcb->Control[EnableEventsMask_off] & Event_Mouse;
 
   if (mask eq 0L)                             /* disable a mouse handler */
+#if LINUX
+    { if (mouse_handler.port ne 0)  /* is there a mouse handler ? */
+       { mouse_handler.port = 0;
+         *mouse_handler.ownedby = 0;
+#else
     { if (mouse_handler.port ne (word) NULL)  /* is there a mouse handler ? */
        { mouse_handler.port = (word) NULL;
          *mouse_handler.ownedby = (word) NULL;
+#endif /* LINUX */
          stop_mouse();
        }
       mcb->Control[Reply1_off] = 0L;
       Request_Return(ReplyOK, 1L, 0L);
     }
   else                                       /* install an event handler */
+#if LINUX
+    { if (mouse_handler.port ne 0) /* disable an existing handler */
+         *mouse_handler.ownedby = 0;
+#else
     { if (mouse_handler.port ne (word) NULL) /* disable an existing handler */
          *mouse_handler.ownedby = (word) NULL;
+#endif /* LINUX */
       else
         start_mouse();
       mouse_handler.port = mcb->MsgHdr.Reply;
@@ -1602,7 +1657,11 @@ Conode *myco;
   Keyboard_tail  = 0;
   Keyboard_count = 0L;
   Keyboard_ack   = -1L;
+#if LINUX
+  keyboard_handler.port = 0;
+#else
   keyboard_handler.port = (word) NULL;
+#endif /* LINUX */
 
   initialise_keyboard();
   use(myco)
@@ -1611,7 +1670,11 @@ Conode *myco;
 void Keyboard_TidyServer(myco)
 Conode *myco;
 { tidy_keyboard();
+#if LINUX
+  keyboard_handler.port = 0;
+#else
   keyboard_handler.port = (word) NULL;
+#endif /* LINUX */
   use(myco)
 }
  
@@ -1664,7 +1727,11 @@ PRIVATE int poll_the_keyboard()
   }
 #endif
 
+#if LINUX
+  if (keyboard_handler.port ne 0)
+#else
   if (keyboard_handler.port ne (word) NULL)
+#endif /* LINUX */
     { if (Keyboard_tail ne Keyboard_head)
         send_keyboard_events();
       return(0);
@@ -1754,17 +1821,31 @@ Conode *myco;
 { word mask = mcb->Control[EnableEventsMask_off] & Event_Keyboard;
 
   if (mask eq 0L)       /* disable a keyboard handler */
+#if LINUX
+    { if (keyboard_handler.port ne 0)  /* is there a keyboard handler ? */
+#else
     { if (keyboard_handler.port ne (word)NULL)  /* is there a keyboard handler ? */
+#endif /* LINUX */
        { stop_keyboard();
+#if LINUX
+         keyboard_handler.port = 0;
+         *keyboard_handler.ownedby = 0;
+#else
          keyboard_handler.port = (word) NULL;
          *keyboard_handler.ownedby = (word) NULL;
+#endif /* LINUX */
        }
       mcb->Control[Reply1_off] = 0L;
       Request_Return(ReplyOK, 1L, 0L);
     }
   else                 /* install an event handler */
+#if LINUX
+    { if (keyboard_handler.port ne 0) /* disable an existing handler */
+        *keyboard_handler.ownedby = 0;
+#else
     { if (keyboard_handler.port ne (word) NULL) /* disable an existing handler */
         *keyboard_handler.ownedby = (word) NULL;
+#endif /* LINUX */
       else
        start_keyboard();
       keyboard_handler.port = mcb->MsgHdr.Reply;

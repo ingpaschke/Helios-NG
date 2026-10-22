@@ -112,6 +112,13 @@
 #define TR5 0
 #endif
 
+#ifdef LINUX
+#undef LINUX
+#define LINUX 1
+#else
+#define LINUX 0
+#endif
+
 #ifdef i486V4
 #undef i486V4
 #define i486V4 1

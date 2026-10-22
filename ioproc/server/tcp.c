@@ -38,6 +38,10 @@
 
 #include "helios.h"
 #include <stdlib.h>
+#if LINUX
+#include "linux/net_compat.h"
+#else
+#endif /* LINUX */
 
 #if internet_supported
 
@@ -55,6 +59,13 @@
 #endif
 
 #include <sys/uio.h>
+#if LINUX
+#if LINUX
+#define msg_accrights    msg_control
+#define msg_accrightslen msg_controllen
+#endif
+#else
+#endif /* LINUX */
 
 #if !SOLARIS
 typedef struct sockaddr		sockaddr;
@@ -66,6 +77,10 @@ typedef struct SockEntry
 {
 	ObjNode		ObjNode;	/* Object Node info */
 	Port		Server;		/* Stream for socket */
+#if LINUX
+    int stream_open;
+#else
+#endif /* LINUX */
 	int		Protocol;	/* Socket protocol and type */
 	
 	/* Select stuff */
@@ -152,7 +167,13 @@ int fn (InternetDoRecvMessage, (Conode *));
 extern "C"
 {
 #endif
+#if LINUX
+#if !LINUX
 int fn (gethostname, (char *, int));
+#endif
+#else
+int fn (gethostname, (char *, int));
+#endif /* LINUX */
 #ifdef __cplusplus
 }
 #endif
@@ -160,13 +181,20 @@ int fn (gethostname, (char *, int));
 void Internet_InitServer(myco)
 Conode *myco;
 { 
+#if LINUX
+#else
   struct hostent *h;
+#endif /* LINUX */
   myco->extra      = (ptr) &Internet_extra;
   InitList(&Internet_extra.list);
   Internet_extra.entries = 0L;
+#if LINUX
+  ios_net_identity(MyName, sizeof(MyName), &MyAddr);
+#else
   gethostname(MyName, NameMax);		/* get unix host name */
   h = gethostbyname(MyName);		/* and local name */
   memcpy (&MyAddr, h->h_addr_list[0], h->h_length);
+#endif /* LINUX */
 }
 
 /************************************************************************/
@@ -178,7 +206,17 @@ Conode *myco;
 
 void Internet_TidyServer(myco)
 Conode *myco;
+#if LINUX
+{ Node *node;
+  for (node = Internet_extra.list.head; node->next != NULL; node = node->next) {
+    SockEntry *d = (SockEntry *)node;
+    if (d->fd >= 0) ios_net_close(d->fd);
+  }
+  FreeList(&Internet_extra.list);
+  Internet_extra.entries = 0;
+#else
 { FreeList(&Internet_extra.list);
+#endif /* LINUX */
   use(myco)
 }
 
@@ -189,6 +227,19 @@ Conode *myco;
 /*                                                                      */
 /************************************************************************/
 
+#if LINUX
+static void Internet_OpenSocket(SockEntry *d)
+{
+    if (d->stream_open) {
+        word size = FormOpenReply(Type_Socket,Flags_Closeable|Flags_Selectable,-1L,-1L);
+        mcb->MsgHdr.Dest = d->Server;
+        Request_Return(ReplyOK,open_reply,size);
+    } else
+        NewStream(Type_Socket,Flags_Closeable|Flags_Selectable,(WORD)0,Internet_Handlers);
+}
+
+#else
+#endif /* LINUX */
 void Internet_Open(myco)
 Conode *myco;
 { 
@@ -197,14 +248,22 @@ Conode *myco;
   /* ServerDebug ("Internet_Open (%s)", myco->name); */
   
   if (!strcmp(IOname, myco->name))    /* is it for the server ? */
+#if LINUX
+   NewStream(Type_Directory, Flags_Closeable, (hostword) myco->extra,
+#else
    NewStream(Type_Directory, Flags_Closeable, (WORD) myco->extra,
+#endif /* LINUX */
              InternetDir_Handlers);
 
   elif ( (node = (ObjNode *) Dir_find_node(myco) ) eq (ObjNode *) NULL)
    Request_Return(EC_Error + SS_InterNet + EG_Unknown + EO_Socket, 0L, 0L);
   else
+#if LINUX
+     Internet_OpenSocket((SockEntry *)node);
+#else
      NewStream(Type_Socket, Flags_Closeable|Flags_Selectable, (WORD) 0,
              Internet_Handlers );
+#endif /* LINUX */
 }
 
 /************************************************************************/
@@ -229,6 +288,12 @@ Conode *myco;
 	
 	if((d = Dir_find_sockname(myco, IOname)) != (SockEntry *) NULL)
 	{
+#if LINUX
+        if (d->stream_open)
+            return SS_InterNet|EC_Error|EG_InUse|EO_Socket;
+        d->stream_open = 1;
+#else
+#endif /* LINUX */
 	    d -> Server = (Port) myco -> id;
 	    mcb->MsgHdr.Dest = d->Server;
 	    mcb->MsgHdr.DataSize = strlen(mcb->Data) + 1;
@@ -241,10 +306,18 @@ Conode *myco;
 	          *((WORD *) mcb) = (hdr & ~0xFFFF) + offset;
     
 #if SOLARIS
+#if LINUX
+		  memcpy (&mcb->Data[mcb->MsgHdr.DataSize], myco -> extra, 4 + swap (*(myco->extra)));
+#else
 		  memcpy (&mcb->Data[mcb->MsgHdr.DataSize], myco -> extra, swap (*(myco->extra)));
+#endif /* LINUX */
 #else
 	          bcopy(myco -> extra, &mcb->Data[mcb->MsgHdr.DataSize],
+#if LINUX
+			        4 + swap(*(myco->extra)));
+#else
 			        swap(*(myco->extra)));
+#endif /* LINUX */
 #endif
     
 	          Request_Return(ReplyOK, open_reply,
@@ -314,6 +387,23 @@ Conode *myco;
 /*                                                                      */
 /************************************************************************/
 
+#if LINUX
+word Internet_TidyStream(Conode *myco)
+{
+    SockEntry *d = Dir_find_socket(myco);
+    if (d != NULL && myco->type == CoTimeout) return TRUE;
+    if (d != NULL) {
+        clearselect(myco, d);
+        ios_net_close(d->fd);
+        listRemove((Node *)d);
+        iofree(d);
+        if (Internet_extra.entries) Internet_extra.entries--;
+    }
+    return FALSE;
+}
+
+#else
+#endif /* LINUX */
 void Internet_Close(myco)
 Conode *myco;
 {
@@ -335,11 +425,23 @@ Conode *myco;
 		DoShutdown(d->fd, mcb->MsgHdr.FnRc);
 	else
 	{
+#if LINUX
+		int last_user = (--d->ObjNode.account == 0);
+#else
 		d->ObjNode.account--;		/* one less user */
+#endif /* LINUX */
 
+#if LINUX
+		if(last_user)		/* all done */
+#else
 		if(d->ObjNode.account == 0)		/* all done */
+#endif /* LINUX */
 			{
+#if LINUX
+			ios_net_close(d->fd);		/* close socket */
+#else
 			close(d->fd);		/* close socket */
+#endif /* LINUX */
 			listRemove((Node *)d);		/* remove name */
 			iofree(d);
 			if(Internet_extra.entries)
@@ -349,7 +451,11 @@ Conode *myco;
 		if(mcb->MsgHdr.Reply)		/* if client wants a reply */
 			Request_Return(ReplyOK, 0L, 0L);
 
+#if LINUX
+		if(last_user)
+#else
 		if(d->ObjNode.account == 0)
+#endif /* LINUX */
 			Seppuku();		/* die now */
 	}
 
@@ -375,7 +481,11 @@ int sfd, fncode;
 			how = 1;
 		}
 
+#if LINUX
+	if(ios_tls_shutdown(sfd,how) == -1)
+#else
 	if(shutdown(sfd,how) == -1)
+#endif /* LINUX */
 		{
 		convert_errno();
 		Request_Return(SS_InterNet|EC_Error|EG_Errno|errno, 0L, 0L);
@@ -433,9 +543,15 @@ Conode *myco;
 		d->connwait = TRUE;		/* waiting for connect */
 		e = connect(d->fd, (sockaddr *)addr,sizeof(struct sockaddr_in));
 	}
+#if LINUX
+#if (TR5 || (i486V4 && !LINUX))
+	if ( (e == -1) && (errno == EAGAIN) ) errno = EISCONN;
+#endif
+#else
 #if (TR5 || i486V4)
 	if ( (e == -1) && (errno == EAGAIN) ) errno = EISCONN;
 #endif
+#endif /* LINUX */
                                  /* I might have to poll later */
         AddTail(Remove(&(myco->node)), PollingCo);
 
@@ -493,15 +609,30 @@ Conode *myco;
 
 		e = connect(d->fd, (sockaddr *)addr,sizeof(struct sockaddr_in));
 	}
+#if LINUX
+#if (TR5 || (i486V4 && !LINUX))
+	if ( (e == -1) && (errno == EAGAIN) ) errno = EISCONN;
+#endif
+#else
 #if (TR5 || i486V4)
 	if ( (e == -1) && (errno == EAGAIN) ) errno = EISCONN;
 #endif
+#endif /* LINUX */
                                  /* make sure I get back into waiting list */
         PostInsert(Remove(&(myco->node)), Heliosnode);
 	
 	if( e != 0 && errno == EISCONN && d->connwait)	/* finally OK */
 		e = 0;					/* clear error */
 
+#if LINUX
+#if (TR5 || (i486V4 && !LINUX))
+	if( e == 0 && ((d->Protocol & 0xf) == SOCK_DGRAM ))
+	    /* Unix 5 4.0 : DGRAM  = 0 STREAM = 1 */
+	    /* Unix BSD   : DGRAM  = 1 STREAM = 0 */
+#else
+	if( e == 0 && ((d->Protocol & 0xf) == SOCK_STREAM ))
+#endif
+#else
 #if (TR5 || i486V4)
 	if( e == 0 && ((d->Protocol & 0xf) == SOCK_DGRAM ))
 	    /* Unix 5 4.0 : DGRAM  = 0 STREAM = 1 */
@@ -509,6 +640,7 @@ Conode *myco;
 #else
 	if( e == 0 && ((d->Protocol & 0xf) == SOCK_STREAM ))
 #endif
+#endif /* LINUX */
 	{
 		WORD temp;
 		
@@ -613,9 +745,15 @@ Conode *myco;
 	}
 
 	e = accept(d->fd,(sockaddr *)&addr,&addrlen);
+#if LINUX
+#if (TR5 || (i486V4 && !LINUX))
+	if ( (e == -1) && (errno == EAGAIN) ) errno = EWOULDBLOCK;
+#endif
+#else
 #if (TR5 || i486V4)
 	if ( (e == -1) && (errno == EAGAIN) ) errno = EWOULDBLOCK;
 #endif
+#endif /* LINUX */
 	
 	if( e == -1 )
 	   {
@@ -635,6 +773,10 @@ Conode *myco;
 	       Request_Return(EC_Error|EG_Errno|SS_InterNet|errno, 0L, 0L);
 	       }
 
+#if LINUX
+	   iofree(l);
+#else
+#endif /* LINUX */
 	   return FALSE;
 	   }
 
@@ -666,17 +808,26 @@ Conode *myco;
 	strcpy(IOname, pathname);	/* saved name */
 	pathcat(IOname, newname);
 
+#if LINUX
+     	NewStream(Type_Socket, Flags_Closeable|Flags_Selectable, (hostword) l,
+#else
      	NewStream(Type_Socket, Flags_Closeable|Flags_Selectable, (WORD) l,
+#endif /* LINUX */
              Internet_Handlers );
 		
 	return FALSE;
 	
 killsocket:
+#if LINUX
+	ios_net_close(e);
+	iofree(l);
+#else
 	close(d->fd);
 	listRemove((Node *)d);
 	iofree(d);
 	if(Internet_extra.entries)
 		Internet_extra.entries--;
+#endif /* LINUX */
 	Request_Return(SS_InterNet|EC_Error|EG_NoMemory|EO_Socket, 0L, 0L);
 	return FALSE;
 }
@@ -751,6 +902,17 @@ Conode *myco;
 isroot:
 	switch( bindreq->Protocol & 0xf )
 	{
+#if LINUX
+#if (TR5 || (i486V4 && !LINUX))		/* No compability between BSD and 4.0 */
+		case 3: 		dirname = "raw"; break;
+		case 1:		 	dirname = "tcp"; break;
+		case 2:
+#else
+		case SOCK_RAW: 		dirname = "raw"; break;
+		case SOCK_STREAM: 	dirname = "tcp"; break;
+		case SOCK_DGRAM:
+#endif
+#else
 #if (TR5 || i486V4)		/* No compability between BSD and 4.0 */
 		case 3: 		dirname = "raw"; break;
 		case 1:		 	dirname = "tcp"; break;
@@ -760,6 +922,7 @@ isroot:
 		case SOCK_STREAM: 	dirname = "tcp"; break;
 		case SOCK_DGRAM: 
 #endif
+#endif /* LINUX */
 		default:	 	dirname = "udp"; break;
 	}
 	
@@ -798,6 +961,21 @@ isroot:
 		}
 
 		setsu(TRUE);
+#if LINUX
+#if (TR5 || (i486V4 && !LINUX))
+		{ int prot = 0;
+		  if ( (d->Protocol&0x0f) == 1) prot = SOCK_STREAM;
+		  if ( (d->Protocol&0x0f) == 2) prot = SOCK_DGRAM;
+		  if ( (d->Protocol&0x0f) == 3) prot = SOCK_RAW;
+		  if ( (d->Protocol&0x0f) == 4) prot = SOCK_RDM;
+		  if ( (d->Protocol&0x0f) == 5) prot = SOCK_SEQPACKET;
+
+		  e = socket(AF_INET, prot,(d->Protocol>>8));
+                }
+#else
+		e = socket(AF_INET, d->Protocol&0xf,(d->Protocol>>8));
+#endif
+#else
 #if (TR5 || i486V4)
 		{ int prot = 0;
 		  if ( (d->Protocol&0x0f) == 1) prot = SOCK_STREAM;
@@ -811,6 +989,7 @@ isroot:
 #else
 		e = socket(AF_INET, d->Protocol&0xf,(d->Protocol>>8));
 #endif
+#endif /* LINUX */
 		setsu(FALSE);
 
 		if( e == -1 )
@@ -827,9 +1006,15 @@ isroot:
 		if( addr ) 
 		{
 			setsu(TRUE);
+#if LINUX
+#if (TR5 || (i486V4 && !LINUX))
+			addr->sin_family = swap_short(addr->sin_family);
+#endif
+#else
 #if (TR5 || i486V4)
 			addr->sin_family = swap_short(addr->sin_family);
 #endif
+#endif /* LINUX */
 
 			/* ServerDebug ("InternetDoBind () - attempting bind () on <%d, %d, <%d>, %s>", 
 				addr->sin_family, addr->sin_port, 
@@ -877,18 +1062,31 @@ isroot:
 	pathcat(IOname, d->ObjNode.direntry.Name);
 sendreply:
 
+#if LINUX
+         Internet_OpenSocket(d);
+#else
      	NewStream(Type_Socket, Flags_Closeable|Flags_Selectable, (WORD) 0,
              Internet_Handlers );
+#endif /* LINUX */
 
 	return TRUE;
 	
 killsocket:
 	/* ServerDebug ("InternetDoBind () - killing socket"); */
 
+#if LINUX
+	if (d != NULL) {
+            if (d->fd >= 0) ios_net_close(d->fd);
+            listRemove((Node *)d);
+            iofree(d);
+            if (Internet_extra.entries) Internet_extra.entries--;
+        }
+#else
 	close(d->fd);
 	listRemove((Node *)d);
 	if(Internet_extra.entries)
 		Internet_extra.entries--;
+#endif /* LINUX */
 	if( ! errsent)
 	Request_Return(SS_InterNet|EC_Error|EG_NoMemory|EO_Socket, 0L, 0L);
 bad:
@@ -1033,6 +1231,31 @@ short a;
 void Internet_SetInfo(myco)
 Conode *myco;
 {
+#if LINUX
+    SocketInfoReq *si = (SocketInfoReq *)mcb->Control;
+    SockEntry *d = Dir_find_socket(myco);
+    word size;
+    mcb->MsgHdr.Dest = NullPort;
+    if (!d) {
+        Request_Return(SS_InterNet|EC_Error|EG_Unknown|EO_Socket,0L,0L);
+        return;
+    }
+    if (si->Optval < 0 || si->Optval > mcb->MsgHdr.DataSize - 4) {
+        errno = EINVAL; goto error;
+    }
+    memcpy(&size,mcb->Data+si->Optval,4);
+    size = swap(size);
+    if (size < 0 || size > mcb->MsgHdr.DataSize - si->Optval - 4) {
+        errno = EINVAL; goto error;
+    }
+    if (ios_net_set(d->fd,si->Level,si->Option,mcb->Data+si->Optval+4,
+                    size,&d->nonblocking) < 0) goto error;
+    Request_Return(ReplyOK,0L,0L);
+    return;
+error:
+    convert_errno();
+    Request_Return(SS_InterNet|EC_Error|EG_Errno|errno,0L,0L);
+#else
 	word e;
 	SocketInfoReq *si = (SocketInfoReq *)mcb->Control;
 	caddr_t val = NULL;
@@ -1085,6 +1308,7 @@ done:
 	}
 	
 	return ;
+#endif /* LINUX */
 }
 
 /************************************************************************/
@@ -1097,6 +1321,40 @@ done:
 void Internet_GetInfo(myco)
 Conode *myco;
 {
+#if LINUX
+    SocketInfoReq *si = (SocketInfoReq *)mcb->Control;
+    SockEntry *d = Dir_find_socket(myco);
+    int level = si->Level, name = si->Option;
+    byte *val = mcb->Data + 4;
+    unsigned size = IOCDataMax - 4;
+    mcb->MsgHdr.Dest = NullPort;
+    if (!d) {
+        Request_Return(SS_InterNet|EC_Error|EG_Unknown|EO_Socket,0L,0L);
+        return;
+    }
+    if (level == 0xfff0 && name == 0x8001) {
+        memcpy(val,&MyAddr,4); size = 4;
+    } else if (level == 0xfff0 && name == 0x8002) {
+        strcpy(val,MyName); size = strlen(MyName)+1;
+    } else {
+        if (ios_net_get(d->fd,level,name,val,&size) < 0) {
+            convert_errno();
+            Request_Return(SS_InterNet|EC_Error|EG_Errno|errno,0L,0L);
+            return;
+        }
+        if (level == 0xffff && name == 0x1007) {
+            memcpy(&errno,val,4);
+            convert_errno();
+            memcpy(val,&errno,4);
+        }
+    }
+    mcb->Control[0] = level;
+    mcb->Control[1] = name;
+    mcb->Control[2] = 0;
+    *(WORD *)mcb->Data = swap(size);
+    mcb->MsgHdr.Flags = 0;
+    Request_Return(ReplyOK,3L,size+4);
+#else
 	word e = 0;
 	SocketInfoReq *si = (SocketInfoReq *)mcb->Control;
 	int level = si->Level;
@@ -1210,6 +1468,7 @@ done:
 	    Request_Return(SS_InterNet|EC_Error|EO_Socket|e, 0L, 0L);
 	
 	return ;
+#endif /* LINUX */
 }
 
 /************************************************************************/
@@ -1230,7 +1489,11 @@ Conode *myco;
 	word idata;
 	Port replyport;
 	Port destport;
+#if LINUX
+	word timeout = ((rw->Timeout == -1) ? -1 : rw->Timeout / time_unit);
+#else
 	word timeout = ((rw->Timeout == -1) ? 0 : rw->Timeout / time_unit);
+#endif /* LINUX */
 	SockEntry *d;
 	char *buf, *buf1, *savebuf1;
 
@@ -1348,8 +1611,19 @@ try_again:
 	   }
 
 dowrite:
+#if LINUX
+	if(buf1 == NULL) {
+            buf1 = (char *)malloc(size);
+            if (buf1 == NULL) {
+                Request_Return(SS_InterNet|EC_Error|EG_NoMemory|EO_Socket,0L,0L);
+                goto finish;
+            }
+            memcpy(buf1, mcb->Data, size);
+        }
+#else
 	if(buf1 == NULL)
 		buf1 = mcb->Data;
+#endif /* LINUX */
 
 	savebuf1 = buf1;	/* save changing variables for later */
 	savesize = size;
@@ -1360,21 +1634,39 @@ dowrite:
 
 	AddTail(Remove(&(myco->node)), PollingCo);	/* may have to retry */
 
+#if LINUX
+	myco->timelimit = ios_net_deadline(d->fd,1,Now,timeout,time_unit);
+#else
 	myco->timelimit = Now + timeout;
+#endif /* LINUX */
 
 	while(size > 0)			/* if blocking, retry until write 
 						succeeds or times-out */
 		{
+#if LINUX
+        do e = ios_net_write(d->fd, buf1, size); while (e < 0 && errno == EINTR);
+#if (TR5 || (i486V4 && !LINUX))
+	if ( (e == -1) && (errno == EAGAIN) ) errno = EWOULDBLOCK;
+#endif
+#else
 		e = write(d->fd, buf1, size);
 #if (TR5 || i486V4)
 	if ( (e == -1) && (errno == EAGAIN) ) errno = EWOULDBLOCK;
 #endif
+#endif /* LINUX */
 
 		if(e == size)		/* write OK - continue */
 			break;
 
 		if( e == -1 && errno != EWOULDBLOCK ) /* some error - report */
 			{
+#if LINUX
+            if (size < savesize) {
+                saveact = savesize - size;
+                goto done;
+            }
+#else
+#endif /* LINUX */
 			convert_errno();
 			Request_Return(SS_InterNet|EC_Error|EG_Errno|errno,
 								0L,0L);
@@ -1425,6 +1717,13 @@ dowrite:
 
 			if(myco->type == CoTimeout || myco->timelimit < Now)
 				{
+#if LINUX
+                if (size < savesize) {
+                    saveact = savesize - size;
+                    goto done;
+                }
+#else
+#endif /* LINUX */
 				Request_Return(SS_InterNet|EC_Recover|EG_Timeout
 						|EO_Socket, 0L, 0L);
 				goto finish;
@@ -1461,7 +1760,11 @@ Conode *myco;
 	SockEntry *d;
 	ReadWrite *rw = (ReadWrite *)mcb->Control;
 	word size = rw->Size;
+#if LINUX
+	word timeout = ((rw->Timeout == -1) ? -1 : rw->Timeout / time_unit);
+#else
 	word timeout = ((rw->Timeout == -1) ? 0 : rw->Timeout / time_unit);
+#endif /* LINUX */
 	byte *buf = NULL;
 	byte *data = mcb->Data;
 	word e;
@@ -1501,12 +1804,23 @@ Conode *myco;
                                  /* I might have to poll later */
         AddTail(Remove(&(myco->node)), PollingCo);
 
+#if LINUX
+        myco->timelimit = ios_net_deadline(d->fd,0,Now,timeout,time_unit);
+#else
         myco->timelimit = Now + timeout;
+#endif /* LINUX */
 retry:
+#if LINUX
+	e = ios_net_read(d->fd, buf, size);
+#if (TR5 || (i486V4 && !LINUX))
+	if ( (e == -1) && (errno == EAGAIN) ) errno = EWOULDBLOCK;
+#endif
+#else
 	e = read(d->fd, buf, size);
 #if (TR5 || i486V4)
 	if ( (e == -1) && (errno == EAGAIN) ) errno = EWOULDBLOCK;
 #endif
+#endif /* LINUX */
 
 	if( e == -1 && (errno == EINTR))		/* exception */
 	{
@@ -1590,9 +1904,27 @@ done:
 /*                                                                      */
 /************************************************************************/
 
+#if LINUX
+/* Inserted into tcp.c by reliability.py. Helios commits the send length
+ * before delivering its payload. Keep the whole message private and finish
+ * partial TCP sends cooperatively, even if another request reuses the MCB. */
+static int InternetValidAddress(MCB *message, word offset)
+#else
 InternetDoSendMessage(myco)
 Conode *myco;
+#endif /* LINUX */
 {
+#if LINUX
+    word size;
+    if (offset == -1) return TRUE;
+    if (offset < 0 || offset > message->MsgHdr.DataSize ||
+        message->MsgHdr.DataSize - offset < sizeof(word)) return FALSE;
+    memcpy(&size,message->Data+offset,sizeof(size));
+    size = swap(size);
+    return size >= sizeof(short) && size <= sizeof(struct sockaddr_storage) &&
+           size <= message->MsgHdr.DataSize-offset-sizeof(word);
+}
+#else
 	struct msghdr msg;
 	struct iovec iov;
 	DataGram *dg = (DataGram *)mcb->Control;
@@ -1600,9 +1932,115 @@ Conode *myco;
 	Port replyport = mcb->MsgHdr.Reply;
 	word e;
 	SockEntry *d;
+#endif /* LINUX */
 
+#if LINUX
+int InternetDoSendMessage(Conode *myco)
+{
+    SockEntry *d = Dir_find_socket(myco);
+    struct msghdr msg = {0};
+    struct iovec iov;
+    DataGram *dg = (DataGram *)mcb->Control;
+    char *buf = NULL;
+    byte *shared;
+    word expected, capacity, flags, timeout, error = 0;
+    Port reply = mcb->MsgHdr.Reply;
+    int e, polling = 0, sent = 0, stream_socket;
+#else
 	/* ServerDebug ("InternetDoSendMessage (%s)", myco->name); */
+#endif /* LINUX */
 
+#if LINUX
+    if (!d) {
+        Request_Return(SS_InterNet|EC_Error|EG_Unknown|EO_Socket,0L,0L);
+        return FALSE;
+    }
+    if (d->Oob) {
+        d->Oob = FALSE;
+        Request_Return(SS_InterNet|EC_Error|EG_Exception|EE_Signal|SIGURG,0L,0L);
+        return FALSE;
+    }
+    if ((UBYTE)mcb->MsgHdr.ContSize < 5 || (UBYTE)mcb->MsgHdr.ContSize >= 255) {
+        Request_Return(SS_InterNet|EC_Error|EG_WrongSize|EO_Message,0L,0L);
+        return FALSE;
+    }
+    expected = dg->DataSize;
+    if (expected < 0 || expected > maxdata - mcb->MsgHdr.DataSize) {
+        Request_Return(SS_InterNet|EC_Error|EG_WrongSize|EO_Message,0L,0L);
+        return FALSE;
+    }
+    capacity = expected + mcb->MsgHdr.DataSize;
+    buf = (char *)malloc(capacity ? capacity : 1);
+    if (!buf) {
+        Request_Return(SS_InterNet|EC_Error|EG_NoMemory|EO_Socket,0L,0L);
+        return FALSE;
+    }
+    timeout = dg->Timeout == -1 ? -1 : dg->Timeout / time_unit;
+    stream_socket = (d->Protocol & 0xf) == SOCK_STREAM;
+    mcb->MsgHdr.Flags = 0;
+    mcb->MsgHdr.Dest = myco->id;
+    mcb->Control[(UBYTE)mcb->MsgHdr.ContSize] = -1;
+    mcb->MsgHdr.ContSize = (UBYTE)mcb->MsgHdr.ContSize + 1;
+    Request_Return(Err_Null,(UBYTE)mcb->MsgHdr.ContSize,mcb->MsgHdr.DataSize);
+    myco->timelimit = Now + 20;
+    Suspend();
+    if (myco->type == CoSuicide) goto suicide;
+    if (myco->type == CoTimeout) {
+        error = SS_InterNet|EC_Recover|EG_Timeout|EO_Stream;
+        goto done;
+    }
+    reply = mcb->MsgHdr.Reply; /* payload often deliberately has no reply */
+    dg = (DataGram *)mcb->Control;
+    if ((UBYTE)mcb->MsgHdr.ContSize < (int)(sizeof(DataGram)/sizeof(word)) ||
+        mcb->MsgHdr.DataSize > capacity || dg->Data < 0 ||
+        dg->Data > mcb->MsgHdr.DataSize || dg->DataSize != expected ||
+        expected > mcb->MsgHdr.DataSize - dg->Data ||
+        !InternetValidAddress(mcb,dg->DestAddr)) {
+        error = SS_InterNet|EC_Error|EG_WrongSize|EO_Message;
+        goto done;
+    }
+    if (dg->AccRights != -1) { errno = EOPNOTSUPP; goto host_error; }
+    flags = dg->Flags;
+    memcpy(buf,mcb->Data,mcb->MsgHdr.DataSize);
+    shared = mcb->Data;
+    mcb->Data = (byte *)buf;
+    msg.msg_iov = &iov;
+    dgtomsg(mcb,&msg);
+    mcb->Data = shared;
+    AddTail(Remove(&myco->node),PollingCo);
+    polling = 1;
+    myco->timelimit = ios_net_deadline(d->fd,1,Now,timeout,time_unit);
+    for (;;) {
+        e = ios_net_sendmsg(d->fd,&msg,flags);
+        if (e >= 0) {
+            sent += e;
+            if ((size_t)e == iov.iov_len) break;
+            /* Datagram sends are atomic; never turn a suffix into a second
+             * datagram. A zero-progress stream send is an error as well. */
+            if (!stream_socket || e == 0) { errno = EIO; goto host_error; }
+            iov.iov_base = (char *)iov.iov_base + e;
+            iov.iov_len -= e;
+        } else if (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK) {
+            goto host_error;
+        } else if (d->nonblocking && sent == 0 && errno != EINTR) {
+            goto host_error;
+        }
+        /* Once a prefix has been accepted, the protocol cannot report a
+         * smaller byte count. Retain and drain its suffix before accepting
+         * the next request on this socket. */
+        myco->type = CoReady;
+        Suspend();
+        if (myco->type == CoSuicide) goto suicide;
+        if (myco->type == CoTimeout || myco->timelimit < Now) {
+            error = SS_InterNet|EC_Recover|EG_Timeout|EO_Socket;
+            goto done;
+        }
+    }
+    goto done;
+host_error:
+    convert_errno();
+    error = SS_InterNet|EC_Error|EG_Errno|errno;
+#else
 	if((d = Dir_find_socket(myco)) == (SockEntry *) NULL)
 	{
 		Request_Return(SS_InterNet|EC_Error|EG_Unknown|EO_Socket,0L,0L);
@@ -1680,9 +2118,29 @@ Conode *myco;
 	elif( mcb->MsgHdr.Reply )
 		Request_Return(ReplyOK, 0L, 0L);
 
+#endif /* LINUX */
 done:
+#if LINUX
+    /* A failed, unacknowledged stream send must not leave a live stream
+     * whose next successful send silently follows the truncated message. */
+    if (error && stream_socket && sent > 0) ios_tls_shutdown(d->fd,2);
+    if (polling) PostInsert(Remove(&myco->node),Heliosnode);
+    myco->type = CoReady;
+    mcb->MsgHdr.Reply = reply;
+    mcb->MsgHdr.Dest = NullPort;
+    mcb->MsgHdr.Flags = 0;
+    if (reply) Request_Return(error,0L,0L);
+    iofree(buf);
+    return FALSE;
+suicide:
+    iofree(buf);
+    Internet_TidyStream(myco);
+    Seppuku();
+    return FALSE;
+#else
 
 	return FALSE;
+#endif /* LINUX */
 }
 
 /************************************************************************/
@@ -1696,12 +2154,25 @@ Conode *myco;
 {
 	DataGram *dg = (DataGram *)mcb->Control;
 	word e;
+#if LINUX
+	word capacity = dg->DataSize;
+#else
+#endif /* LINUX */
 	byte *buf = NULL;
 	byte *data = mcb->Data;
+#if LINUX
+	struct sockaddr_in addr = {0};
+	struct msghdr msg = {0};
+#else
 	static struct sockaddr_in addr;
 	struct msghdr msg;
+#endif /* LINUX */
 	struct iovec iov;
+#if LINUX
+	int timeout = ((dg->Timeout == -1)? -1 : dg->Timeout / time_unit);
+#else
 	int timeout = ((dg->Timeout == -1)? 0 : dg->Timeout / time_unit);
+#endif /* LINUX */
 	int reply = mcb->MsgHdr.Reply;
 	int flags = dg->Flags;
 	SockEntry *d;
@@ -1726,7 +2197,17 @@ Conode *myco;
 	     return FALSE;
 	}
 		
+#if LINUX
+	if (capacity < 0) {
+            Request_Return(SS_InterNet|EC_Error|EG_WrongSize|EO_Message,0L,0L);
+            return FALSE;
+        }
+        if (capacity > maxdata - (word)sizeof(addr) - 7)
+            capacity = maxdata - sizeof(addr) - 7;
+        buf = (char *)malloc(capacity+sizeof(addr)+7);
+#else
 	buf = (char *)malloc((dg->DataSize)+sizeof(addr)+4);
+#endif /* LINUX */
 
 	if( buf == NULL )
 	{
@@ -1736,7 +2217,11 @@ Conode *myco;
 	}
 
 	iov.iov_base = buf;
+#if LINUX
+	iov.iov_len = capacity;
+#else
 	iov.iov_len = dg->DataSize;
+#endif /* LINUX */
 	msg.msg_name = (caddr_t)&addr;
 	msg.msg_iov = &iov;
 	msg.msg_iovlen = 1;
@@ -1744,7 +2229,11 @@ Conode *myco;
 	msg.msg_accrightslen = 0;
                                  /* I might have to poll later */
         AddTail(Remove(&(myco->node)), PollingCo);
+#if LINUX
+        myco->timelimit = ios_net_deadline(d->fd,0,Now,timeout,time_unit);
+#else
         myco->timelimit = timeout + Now;
+#endif /* LINUX */
 	
 retry:
 	msg.msg_namelen = sizeof(addr);	/* set after retry cos kernel */
@@ -1753,15 +2242,29 @@ retry:
 #ifdef USE_recvfrom
 	fromlen = sizeof (addr);
 
+#if LINUX
+	e = ios_net_recvfrom(d->fd, buf, capacity, flags,
+#else
 	e = recvfrom(d->fd, buf, dg->DataSize, flags,
+#endif /* LINUX */
 			(struct sockaddr_in *)&(addr), &fromlen);
 #else
+#if LINUX
+	e = ios_net_recvmsg(d->fd,&msg,flags);
+#else
 	e = recvmsg(d->fd,&msg,flags);
+#endif /* LINUX */
 #endif
 
+#if LINUX
+#if (TR5 || (i486V4 && !LINUX))
+	if ( (e == -1) && (errno == EAGAIN) ) errno = EWOULDBLOCK;
+#endif
+#else
 #if (TR5 || i486V4)
 	if ( (e == -1) && (errno == EAGAIN) ) errno = EWOULDBLOCK;
 #endif
+#endif /* LINUX */
 
 	if( e == -1 && errno == EINTR )
 	{
@@ -1801,6 +2304,10 @@ retry:
 		   	if(myco->type == CoSuicide)
 		   	 {
 		   	 iofree(buf);
+#if LINUX
+                         buf = NULL;
+#else
+#endif /* LINUX */
 			 mcb->MsgHdr.FnRc = FG_Close;
 			 Internet_Close(myco);
 			 goto done;
@@ -1885,9 +2392,21 @@ struct msghdr *msg;
 	if( dg->DestAddr != -1 )
 	{
 	   msg->msg_name = (caddr_t)(data+dg->DestAddr+4);
+#if LINUX
+           {
+               word length;
+               short family;
+               memcpy(&family,msg->msg_name,sizeof(family));
+               family = swap_short(family);
+               memcpy(msg->msg_name,&family,sizeof(family));
+               memcpy(&length,data+dg->DestAddr,sizeof(length));
+               msg->msg_namelen = swap(length);
+           }
+#else
 	   ((struct sockaddr_in *) (msg->msg_name))->sin_family =
               swap_short(((struct sockaddr_in *) (msg->msg_name))->sin_family);
 	   msg->msg_namelen = swap(*(word *)(data+dg->DestAddr));
+#endif /* LINUX */
 	}
 	else msg->msg_name = NULL, msg->msg_namelen = 0;
 	
@@ -1943,11 +2462,25 @@ Conode *myco;
 	d -> selval = 0;
 
 	if( fnmode & O_ReadOnly )
+#if LINUX
+		AddMultiwait(Multi_SocketInput, &myco->type, (hostword)(d->fd), (hostword)((long)(&d->selval)));
+#else
 		AddMultiwait(Multi_SocketInput, &myco->type, d->fd, (long)(&d->selval));
+#endif /* LINUX */
 	if( fnmode & O_WriteOnly )
+#if LINUX
+		AddMultiwait(Multi_SocketOutput, &myco->type, (hostword)(d->fd), (hostword)((long)(&d->selval)));
+    if( fnmode & HU_O_HANGUP )
+        AddMultiwait(Multi_SocketHup, &myco->type, (hostword)(d->fd), (hostword)((long)(&d->selval)));
+#else
 		AddMultiwait(Multi_SocketOutput, &myco->type, d->fd, (long)(&d->selval));
+#endif /* LINUX */
 	if( fnmode & O_Exception )
+#if LINUX
+		AddMultiwait(Multi_SocketExcp, &myco->type, (hostword)(d->fd), (hostword)((long)(&d->selval)));
+#else
 		AddMultiwait(Multi_SocketExcp, &myco->type,  d->fd, (long)(&d->selval));
+#endif /* LINUX */
 
 	myco -> type = 0;
                                   /* suspend myself until selected */
@@ -2005,29 +2538,58 @@ SockEntry *d;
 	{
 #if SOLARIS
 		/* The last 0 argument is a dummy value to keep the C++ compiler happy */
+#if LINUX
+		ClearMultiwait(Multi_SocketInput, (hostword)(d->fd), (hostword)(0));
+#else
 		ClearMultiwait(Multi_SocketInput, d->fd, 0);
+#endif /* LINUX */
+#else
+#if LINUX
+		ClearMultiwait(Multi_SocketInput, (hostword)(d->fd), (hostword)0);
 #else
 		ClearMultiwait(Multi_SocketInput, d->fd);
+#endif /* LINUX */
 #endif
 	}
 	if(d->selfn & O_WriteOnly)
 	{
 #if SOLARIS
 		/* The last 0 argument is a dummy value to keep the C++ compiler happy */
+#if LINUX
+		ClearMultiwait(Multi_SocketOutput, (hostword)(d->fd), (hostword)(0));
+#else
 		ClearMultiwait(Multi_SocketOutput,d->fd, 0);
+#endif /* LINUX */
+#else
+#if LINUX
+		ClearMultiwait(Multi_SocketOutput, (hostword)(d->fd), (hostword)0);
 #else
 		ClearMultiwait(Multi_SocketOutput,d->fd);
+#endif /* LINUX */
 #endif
 	}
 	if(d->selfn & O_Exception)
 	{
 #if SOLARIS
 		/* The last 0 argument is a dummy value to keep the C++ compiler happy */
+#if LINUX
+		ClearMultiwait(Multi_SocketExcp, (hostword)(d->fd), (hostword)(0));
+#else
 		ClearMultiwait(Multi_SocketExcp,  d->fd, 0);
+#endif /* LINUX */
+#else
+#if LINUX
+		ClearMultiwait(Multi_SocketExcp, (hostword)(d->fd), (hostword)0);
 #else
 		ClearMultiwait(Multi_SocketExcp,  d->fd);
+#endif /* LINUX */
 #endif
 	}
+#if LINUX
+    if(d->selfn & HU_O_HANGUP)
+        ClearMultiwait(Multi_SocketHup, (hostword)(d->fd), (hostword)0);
+#else
+#endif /* LINUX */
 	result = d -> selval;
 	d -> selval = 0;
 	d -> selfn  = 0;
@@ -2056,7 +2618,11 @@ Conode *myco;
 		return ;
 	}
 	
+#if LINUX
+	e = ios_net_set(d->fd,0xffff,0x1001,&size,sizeof(size),&d->nonblocking);
+#else
 	e = setsockopt(d->fd,SOL_SOCKET,SO_SNDBUF,(char *)(&size),sizeof(int));
+#endif /* LINUX */
 
 	if( e == -1 )
 	{
@@ -2175,12 +2741,21 @@ void oobdata()
 #endif
 		node->Oob = TRUE;
 	   else
+#if LINUX
+#if (TR5 || (i486V4 && !LINUX))
+                {
+		node->Oob = FALSE;
+		FD_ZERO(&exfds);
+	        }
+#endif
+#else
 #if (TR5 || i486V4)
                 {
 		node->Oob = FALSE;
 		FD_ZERO(&exfds);
 	        }
 #endif
+#endif /* LINUX */
 		node->Oob = FALSE;
 	}
 }
@@ -2258,6 +2833,10 @@ void convert_errno()		/* yuck - I hate it, I hate it !! */
 
 	int i;
 
+#if LINUX
+        if (errno == EWOULDBLOCK) { errno = 37; return; }
+#else
+#endif /* LINUX */
 	for(i = 0 ; helios_errs[i] != -1 ; i++)
 		if(helios_errs[i] == errno)
 			{ errno = i; break; }

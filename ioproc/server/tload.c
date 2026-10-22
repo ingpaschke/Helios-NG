@@ -26,8 +26,13 @@
 #include "helios.h"
 
 #include <stdlib.h>
+#if LINUX
+#include <sys/types.h>
+#include <sys/stat.h>
+#else
 #include <sys\types.h>
 #include <sys\stat.h>
+#endif /* LINUX */
 
 /*{{{  description */
 /**
@@ -45,14 +50,27 @@ PRIVATE int bootstrap_mode;
 PRIVATE word processor_memory;
 PRIVATE char *box_type;
 
+#if LINUX
+#define MAXREAD  0xffff
+#else
 #define MAXREAD  0xffffL
+#endif /* LINUX */
 #if (UNIX)
+#if LINUX
+#define MAXCHUNK 0x20000
+#else
 #define MAXCHUNK 0x20000L
+#endif /* LINUX */
 #define C40MAXCHUNK MAXCHUNK
 #else
 #define C40MAXCHUNK 30720 	/* try to stop mem probs - 30k */
+#if LINUX
+				/*  else revert to 0xD000 = ~50k */
+#define MAXCHUNK 0x1000
+#else
 				/*  else revert to 0xD000L = ~50k */
 #define MAXCHUNK 0x1000L
+#endif /* LINUX */
 #endif
 
 PRIVATE List  system_list;
@@ -240,18 +258,38 @@ PRIVATE int  test_processor()
 	resetlnk();
 	xpreset();
 	unless(xpwrbyte(0L))          continue;
+#if LINUX
+        unless(xpwrint(0x80000100))  continue;
+        unless(xpwrint(0x12345678))  continue;
+#else
         unless(xpwrint(0x80000100L))  continue;
         unless(xpwrint(0x12345678L))  continue;
+#endif /* LINUX */
         unless(xpwrbyte(1L))          continue;
+#if LINUX
+        unless(xpwrint(0x80000100))  continue;
+        if (xprdint() ne 0x12345678) continue;
+#else
         unless(xpwrint(0x80000100L))  continue;
         if (xprdint() ne 0x12345678L) continue; 
+#endif /* LINUX */
 	   /* And again for good measure */
         unless(xpwrbyte(0L))          continue;
+#if LINUX
+        unless(xpwrint(0x80000104))  continue;
+        unless(xpwrint(0x87654321))  continue;
+#else
         unless(xpwrint(0x80000104L))  continue;
         unless(xpwrint(0x87654321L))  continue;
+#endif /* LINUX */
         unless(xpwrbyte(1L))          continue;
+#if LINUX
+        unless(xpwrint(0x80000104))  continue;
+        if (xprdint() ne 0x87654321) continue;
+#else
         unless(xpwrint(0x80000104L))  continue;
         if (xprdint() ne 0x87654321L) continue;
+#endif /* LINUX */
 
            /* Two successful exchanges is good enough  */
         return(1);
@@ -330,11 +368,19 @@ int mode;
 #if multi_tasking
 #if SOLARIS
     /* last 0 in call is a dummy value to keep the C++ compiler happy */
+#if LINUX
+    AddMultiwait(Multi_LinkMessage, &link_table[current_link].ready, (hostword)(current_link), (hostword)(0));
+#else
     AddMultiwait(Multi_LinkMessage, &link_table[current_link].ready,
                  current_link, 0);
+#endif /* LINUX */
+#else
+#if LINUX
+    AddMultiwait(Multi_LinkMessage, &link_table[current_link].ready, (hostword)(current_link), (hostword)0);
 #else
     AddMultiwait(Multi_LinkMessage, &link_table[current_link].ready,
                  current_link);
+#endif /* LINUX */
 #endif
     link_table[current_link].ready = 0L;
 #endif
@@ -525,14 +571,30 @@ PRIVATE void load_boot()
 
    {
 	/* Check bootstrap's image magic */
+#if LINUX
+	word magic = 0x12345678; /* default to transputer */
+#else
 	word magic = 0x12345678L; /* default to transputer */
+#endif /* LINUX */
 
 	if (target_processor eq Processor_C40)
+#if LINUX
+		magic = 0xc4045601;
+#else
 		magic = 0xc4045601L;
+#endif /* LINUX */
 	else if (target_processor eq Processor_Arm)
+#if LINUX
+		magic = 0x0a245601;
+#else
 		magic = 0x0a245601L;
+#endif /* LINUX */
 	else if (target_processor eq Processor_i860)
+#if LINUX
+		magic = 0x86045601;
+#else
 		magic = 0x86045601L;
+#endif /* LINUX */
 	
 	if( swap(ihdr[0]) ne magic) {
 		ServerDebug("Error: bootstrap is not an executable Helios file.");
@@ -653,7 +715,11 @@ PRIVATE void send_boot()
         temp = get_config("BOX");          /* This entry is known to exist */
         if (!mystrcmp(temp, "MK026"))      /* or anything else with parity memory */
          { word size = processor_memory;
+#if LINUX
+           if (size eq Invalid_config) size = 0x300000;
+#else
            if (size eq Invalid_config) size = 0x300000L;
+#endif /* LINUX */
            xpwrbyte(5L);
            xpwrint(size);
            while (!xprdrdy());           /* wait for the clear to finish */
@@ -1104,7 +1170,11 @@ static void send_nucleus()
 	    armnucbase = get_int_config("arm_nucleus_base");
 
 	    if (armnucbase == Invalid_config)
+#if LINUX
+	      armnucbase = 0xa000;
+#else
 	      armnucbase = 0xa000L;
+#endif /* LINUX */
 
 	    /* Calculate ARM nucleus execution address: */
 
@@ -1211,18 +1281,30 @@ static void send_nucleus()
 		Debug(Boot_Flag, ("Initialising execution environment."));
 		
 		/* Setup register contents required for kernel startup */
+#if LINUX
+		regs[0] = swap(0x02000020);		/* r0 = comms port address */
+#else
 		regs[0] = swap(0x02000020L);		/* r0 = comms port address */
+#endif /* LINUX */
 		regs[1] = swap(armnucbase);		/* r1 = nucleus base */
 		regs[2] = swap (hwconfig);		/* r2 = hardware configuration */
 		regs[3] = swap (0x00000000);		/* r3 = reserved (for configuration) */
 		regs[4] = swap(kernelstartaddress);	/* pc = kernel start address */
+#if LINUX
+		regs[5] = swap(0xD3);			/* cpsr = SVC32 mode FIQ/IRQ disabled */
+#else
 		regs[5] = swap(0xD3L);			/* cpsr = SVC32 mode FIQ/IRQ disabled */
+#endif /* LINUX */
 
 	      
 		/* 0x5 = Write CPU state RDP request, 0xff = current mode */
 		/* 0x050003 = mask to write regs r0, r1, r2, r3, pc and cpsr */
 		/* and the contents of the four registers. */
+#if LINUX
+		if ((!xpwrbyte(0x5)) || (!xpwrbyte(0xff)) || (!xpwrint(0x05000F)) ||
+#else
 		if ((!xpwrbyte(0x5)) || (!xpwrbyte(0xff)) || (!xpwrint(0x05000FL)) ||
+#endif /* LINUX */
 		    (!xpwrdata((byte *)regs, NUM_ARM_REGS * sizeof(word))) )
 		  {
 		    timeout("Initialising execution environment");
@@ -1247,7 +1329,11 @@ static void send_nucleus()
 		
 		/* 0x4 = Read CPU state RDP request, 0xff = current mode */
 		/* 0x05000F = mask to read regs r0, r1, r2, r3, pc, cpsr. */
+#if LINUX
+		if ((!xpwrbyte(0x4)) || (!xpwrbyte(0xff)) || (!xpwrint(0x05000F)))
+#else
 		if ((!xpwrbyte(0x4)) || (!xpwrbyte(0xff)) || (!xpwrint(0x05000FL)))
+#endif /* LINUX */
 		  {
 		    timeout("Checking execution environment");
 		  }
@@ -1327,7 +1413,11 @@ static void send_nucleus()
 		ServerDebug("Sending ARM monitor download request (t %lX %lX).", armnucbase, isize);
 
 		/* t = transfer(startaddr,size) : binary download */
+#if LINUX
+		sprintf(buf,"t %X %X\n", (unsigned)armnucbase, (unsigned)isize) ;
+#else
 		sprintf(buf,"t %lX %lX\n", armnucbase, isize) ;
+#endif /* LINUX */
 
 		for (i=0; i < strlen(buf); i++)
 		  {
@@ -1452,7 +1542,11 @@ static void send_nucleus()
 	   char *b;
 
 	   ServerDebug("Starting Helios-ARM system (g %lX).", kernelstartaddress);
+#if LINUX
+    	   sprintf(buf,"g %X\n", (unsigned)kernelstartaddress);
+#else
     	   sprintf(buf,"g %lX\n", kernelstartaddress);
+#endif /* LINUX */
     	   for (b = buf ; *b != '\0'; ) {
 		if (!xpwrbyte(*b++))
 			timeout("sending 'go' command to monitor") ;
@@ -1467,7 +1561,11 @@ static void send_nucleus()
       }
      else
       { Debug(Boot_Flag, ("Sending System Image (%ld bytes) ...",isize) );
+#if LINUX
+        if (Wander(Image_List, (WordNodeFnPtr)send_bit, (hostword)0, (hostword)0))
+#else
         if (Wander(Image_List, (WordNodeFnPtr)send_bit))
+#endif /* LINUX */
          timeout("system image");
       }
 }
@@ -1514,7 +1612,11 @@ PRIVATE word build_config()
 
   config.PortTabSize = swap(1024L);
   config.Incarnation = swap(1L);
+#if LINUX
+  config.loadbase    = swap(0x80001000);	/* will be ignored by kernel */
+#else
   config.loadbase    = swap(0x80001000L);	/* will be ignored by kernel */
+#endif /* LINUX */
   if (bootstrap_mode & B_Send_Image)
    config.ImageSize   = swap(isize);		/* will be ignored by kernel */
   else
@@ -1544,13 +1646,29 @@ PRIVATE word build_config()
 	/* is intelligent and running and has the right flags set, 	*/
 	/* parent +  debug + ioserver					*/
   for (i = 0L; i < numlinks; i++)
+#if LINUX
+   config.LinkConf[(int) i] = swap(0x00060000 | (i << 24));
+#else
    config.LinkConf[(int) i] = swap(0x00060000L | (i << 24));
+#endif /* LINUX */
 
+#if LINUX
+  config.LinkConf[(int) bootlink] &= swap(0xFF00FF00);
+#else
   config.LinkConf[(int) bootlink] &= swap(0xFF00FF00L); 
+#endif /* LINUX */
   if (!mystrcmp(box_type, "DSP1"))
+#if LINUX
+   config.LinkConf[(int) bootlink] |= swap(0x00100370);
+#else
    config.LinkConf[(int) bootlink] |= swap(0x00100370L);
+#endif /* LINUX */
   elif (!mystrcmp(box_type, "HYDRA"))
+#if LINUX
+   config.LinkConf[(int) bootlink] |= swap(0x00110370);
+#else
    config.LinkConf[(int) bootlink] |= swap(0x00110370L);
+#endif /* LINUX */
   elif( !mystrcmp(box_type, "VC40") || !mystrcmp(box_type, "SPIRIT40") )
   {
   	/* setup configuration for shared memory links */
@@ -1560,7 +1678,11 @@ PRIVATE word build_config()
 	 * 00000300 => Special link,
 	 * 00000070 => parent + ioserver + debug
 	 */
+#if LINUX
+  	word cfg = 0x00e00370;
+#else
   	word cfg = 0x00e00370L;
+#endif /* LINUX */
 	word tmp;
 
 
@@ -1575,12 +1697,20 @@ PRIVATE word build_config()
 		if (VC40_Type == 1)
 		{
 			/* Ariel's HYDRA I board */
+#if LINUX
+		 	cfg |= 0x00000000;
+#else
 		 	cfg |= 0x00000000L;
+#endif /* LINUX */
 		}
 		else if (VC40_Type == 2)
 		{
 			/* Ariel's HYDRA II board */
+#if LINUX
+			cfg |= 0x00100000;
+#else
 			cfg |= 0x00100000L;
+#endif /* LINUX */
 		}
 		else
 		{
@@ -1588,12 +1718,20 @@ PRIVATE word build_config()
 		}
 	}
 #endif
+#if LINUX
+	if( !mystrcmp(box_type, "SPIRIT40") ) 	cfg |= 0x00080000;
+#else
 	if( !mystrcmp(box_type, "SPIRIT40") ) 	cfg |= 0x00080000L;
+#endif /* LINUX */
 
 	/*
 	 * Set SML strobe
 	 */
+#if LINUX
+	if( get_config("c40_sml_g1") ) 		cfg |= 0x00040000;
+#else
 	if( get_config("c40_sml_g1") ) 		cfg |= 0x00040000L;
+#endif /* LINUX */
 
 	/*
 	 * Set SML size
@@ -1627,7 +1765,11 @@ PRIVATE word build_config()
   }
   else
   {
+#if LINUX
+	config.LinkConf[(int) bootlink] |= swap(0x00030270);
+#else
 	config.LinkConf[(int) bootlink] |= swap(0x00030270L);
+#endif /* LINUX */
   }
 
   /* if half duplex protocol is not disabled, set it on the boot link */
@@ -1652,9 +1794,14 @@ PRIVATE word build_config()
     memcpy(names + lp + 1, myname, lm);
     names[lp + 1 + lm] = '\0';
 
+#if LINUX
+    config.MyName      = swap( (word)(names - (char *)&config.MyName));
+    config.ParentName  = swap( (word)((names + lp + 1) - (char *)&config.ParentName) );
+#else
     config.MyName      = swap( ((word) names) - ((word) &config.MyName));
     config.ParentName  = swap( ((word) (names + lp + 1)) -
                                ((word) &config.ParentName) );
+#endif /* LINUX */
 
     return((word) (sizeof(Config) + ((numlinks - 1) * sizeof(word)) +
 		  lp + 1 + lm + 1 - CONFIGSPACE));
@@ -1827,10 +1974,19 @@ PRIVATE void handle_info_request()
   a = swap(x[1]);
   iocport = swap(x[2]);
 
+#if LINUX
+  if ( (a & 0x00FF0000) ne 0L)
+#else
   if ( (a & 0x00FF0000L) ne 0L)
+#endif /* LINUX */
    { Debug(Boot_Flag, ("Sending back info"));
+#if LINUX
+     x[0] = swap(0xf0f0f0f0);
+     x[1] = swap(0x00000100);
+#else
      x[0] = swap(0xf0f0f0f0L);
      x[1] = swap(0x00000100L);
+#endif /* LINUX */
      x[2] = swap(1L);
      xpwrdata(&(misc_buffer1[0]), 12L);
    }
@@ -1840,8 +1996,13 @@ PRIVATE int send_info_request()
 {
   word *x = (word *) &(misc_buffer1[0]);
 
+#if LINUX
+  x[0] = swap(0xf0f0f0f0);	/* Proto_Sync */
+  x[1] = swap(0x00000100);	/* 1st incarnation + no reply required */
+#else
   x[0] = swap(0xf0f0f0f0L);	/* Proto_Sync */
   x[1] = swap(0x00000100L);	/* 1st incarnation + no reply required */
+#endif /* LINUX */
   x[2] = swap(1L);		/* IO Servers port */
 
   return (int)(xpwrdata(&(misc_buffer1[0]), 12L));
@@ -1856,9 +2017,15 @@ PRIVATE int send_resync()
   /* Sending resyncs of at least sizeof(MshHdr) + MaxContolSize + MaxDataSize */
   /* (16 + 256 + 64k) would probably be acceptable over 10Mb links */
 
+#if LINUX
+  x[0] = swap(0x7f7f7f7f);
+  x[1] = swap(0x7f7f7f7f);
+  x[2] = swap(0x7f7f7f7f);
+#else
   x[0] = swap(0x7f7f7f7fL);
   x[1] = swap(0x7f7f7f7fL);
   x[2] = swap(0x7f7f7f7fL);
+#endif /* LINUX */
 
   return (int)(xpwrdata(&(misc_buffer1[0]), 12L));
 }
@@ -1870,6 +2037,43 @@ PRIVATE int send_resync()
 -- with the processor.                                                 --
 ------------------------------------------------------------------------*/
 
+#if LINUX
+/**
+*** It is desirable that all message interaction between processor and host
+*** go via a small set of routines, and for historical reasons these are the
+*** ones. Messages are always received by the root coroutine inside the main
+*** loop, by calls to Request_Stat() and Request_Get(). The messages are
+*** buffered in mcbstruct, which is set up by init_main_message() and the
+*** space obtained is freed again by free_main_message(). It is important
+*** that coroutines do not do their own GetMsg's, because the local GetMsg
+*** does not know anything about ports etc. and I do not want to complicate it.
+***
+*** Request_Stat() is the routine that gets hold of any messages the processor
+*** is trying to send. Some of these messages may be very low-level debugging
+*** ones, identified by a FnRc of 0x22222222, and these are treated separately.
+*** I have to worry a little bit to make sure that all debugging messages
+*** appear on separate lines, assuming they are not too interleaved. If another
+*** message is received the routine returns true, and main_loop calls
+*** Request_Get() to get hold of it. In fact the value returned is always the
+*** same, the address of the main message, but this call allows me to clear
+*** the flags field which is desirable according to NHG.
+***
+*** When a reply is to be sent to the processor this goes via Request_Return(),
+*** which plays about a bit with the message to make sure that each coroutine
+*** does not have to worry about swapping ports around etc. There is also a
+*** user debugging facility, and a test for the special case of sending a
+*** message to the invalid port zero which is strongly indicative of a bug
+*** in the server. If for some reason Request_Return() is unable to send its
+*** message this is indicative of the processor having crashed, so I output
+*** a suitable message.
+***
+*** GetMsg() can return three values. It can return true if the machine has
+*** received a complete Helios message, false if it has not received anything
+*** or 0xF0 if it has received the first byte of a raw message. GetMsg() itself
+*** is responsible for handling all peek and poke requests coming from the
+*** processor.
+**/
+#else
 /**
 *** It is desirable that all message interaction between processor and host
 *** go via a small set of routines, and for historical reasons these are the
@@ -1905,6 +2109,7 @@ PRIVATE int send_resync()
 *** is responsible for handling all peek and poke requests coming from the
 *** processor.
 **/
+#endif /* LINUX */
 
 PRIVATE MCB  mcbstruct;
 PRIVATE word control[256];
@@ -1925,7 +2130,11 @@ void init_main_message()
 	longjmp_exit;
     }
   real_buff          = temp;
+#if LINUX
+  mcbstruct.Data     = (byte *) (((uintptr_t)temp + 511) & ~(uintptr_t)511);
+#else
   mcbstruct.Data     = (byte *) (( ((word)temp) + 511L) & 0xFFFFFE00L);
+#endif /* LINUX */
   mcbstruct.Control  = &(control[0]);
   mcb = &mcbstruct;
 }
@@ -1943,7 +2152,11 @@ int newdebug = true;
 word Request_Stat()
 { word j = 0L;
 
+#if LINUX
+  mcbstruct.Timeout = 0x0FF;
+#else
   mcbstruct.Timeout = 0x0FFL;
+#endif /* LINUX */
 #if AMIGA
   j = GetHeliosMsg(&mcbstructs);
 #else  
@@ -1953,7 +2166,11 @@ word Request_Stat()
   if (j eq Proto_Info)
    { handle_info_request(); return(0); }
   elif (j) 
+#if LINUX
+     { if (mcbstruct.MsgHdr.FnRc eq 0x22222222)
+#else
      { if (mcbstruct.MsgHdr.FnRc eq 0x22222222L)
+#endif /* LINUX */
          { int x;
            for (x = 0; x < (int)(mcbstruct.MsgHdr.DataSize); x++)
             { if (newdebug)
@@ -1995,7 +2212,11 @@ word code, contlen, datalen;
   temp                  = mcb->MsgHdr.Dest;
   mcb->MsgHdr.Dest      = mcb->MsgHdr.Reply;
   mcb->MsgHdr.Reply     = temp;
+#if LINUX
+  mcb->Timeout          = 0x07FFF;
+#else
   mcb->Timeout          = 0x07FFFL;
+#endif /* LINUX */
   
   if (debugflags)
   {
@@ -2004,7 +2225,11 @@ word code, contlen, datalen;
              mcb->MsgHdr.Reply, code, mcb->MsgHdr.Dest, contlen, datalen);
   
     if (debugflags & Error_Flag)
+#if LINUX
+       if ((code & 0x80000000) ne 0)
+#else
        if ((code & 0x80000000L) ne 0)
+#endif /* LINUX */
           ServerDebug("Error : fn 0x%lx", code);
   }
 

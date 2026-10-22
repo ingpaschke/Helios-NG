@@ -708,7 +708,11 @@ Conode *myco;
 
      if (object_exists(local_name))
       { if ((openmode & O_Create) && (openmode & O_Exclusive))
+#if LINUX
+         { Request_Return(EC_Error + SS_IOProc + EG_Create + EO_Name, 0L, 0L);
+#else
          { Request_Return(EC_Error + SS_IOProc + EG_InUse + EO_Name, 0L, 0L);
+#endif /* LINUX */
            return;
          }
         if (object_isadirectory(local_name))
@@ -756,12 +760,21 @@ use(myco)
 **/
 
 #if floppies_available
+#if LINUX
+#define format_mask     0xFFFFFF00
+#define format_magic    0x659A2B00
+#define format_single   0x00000080
+#define format_double   0x00000000
+#define format_40       0x00000040
+#define format_80       0x00000000
+#else
 #define format_mask     0xFFFFFF00L
 #define format_magic    0x659A2B00L
 #define format_single   0x00000080L
 #define format_double   0x00000000L
 #define format_40       0x00000040L
 #define format_80       0x00000000L
+#endif /* LINUX */
 PRIVATE void fn( Drive_Format, (word));
 #endif
 
@@ -863,7 +876,11 @@ PRIVATE void Drive_Format(type)
 word type;
 { word tracks = (type & format_40) ? 40L : 80L;
   word sides  = (type & format_single) ? 1L : 2L;
+#if LINUX
+  word count  = type & 0x0F, temp;
+#else
   word count  = type & 0x0FL, temp;
+#endif /* LINUX */
   word size   = mcb->Control[CreateSize_off];
   char *label = (char *) &(misc_buffer1[0]);
 
@@ -1297,6 +1314,24 @@ Conode *myco;
      return;
    }
 
+#if LINUX
+#if (!SUN && !LINUX)
+        /* No symbolic links here: say so rather than pretend success */
+  Debug(FileIO_Flag, ("link from %s to %s not supported", local_name, linkname));
+  Request_Return(EC_Error + SS_IOProc + EG_WrongFn + EO_Directory, 0L, 0L);
+
+#else
+
+  Server_errno = EC_Error + SS_IOProc + EG_WrongFn + EO_Directory;
+
+  if (symlink(local_name,linkname)==0)
+    Request_Return(ReplyOK, 0L, 0L);
+  else
+   {
+     Request_Return(Server_errno, 0L, 0L);
+   }
+#endif
+#else
 #if (!SUN)
         /* No symbolic links here: say so rather than pretend success */
   Debug(FileIO_Flag, ("link from %s to %s not supported", local_name, linkname));
@@ -1313,6 +1348,7 @@ Conode *myco;
      Request_Return(Server_errno, 0L, 0L);
    }
 #endif
+#endif /* LINUX */
 
   use(myco)
 }
@@ -1385,12 +1421,20 @@ word File_InitStream(myco)
 Conode *myco;
 { File_extra *extra;
   stream     handle;
+#if LINUX
+  word       openmode = (hostword) myco->extra;
+#else
   word       openmode = (word) myco->extra;
+#endif /* LINUX */
   int        firsttry = 1;
 
 #ifdef DEMONSTRATION
                     /* Demonstration mode, no writing */
+#if LINUX
+  openmode = (openmode & 0xFFFFFFF0) + O_ReadOnly;
+#else
   openmode = (openmode & 0xFFFFFFF0L) + O_ReadOnly;
+#endif /* LINUX */
 #endif
 
   myco->flags = parentco->flags | CoFlag_FileStream;
@@ -1401,8 +1445,13 @@ Conode *myco;
 *** that is already open.
 **/
   { PRIVATE void fn( check_file_name, (Conode *, Conode *));
+#if LINUX
+    WalkList(&WaitingCo, func(check_file_name), (hostword)(myco), (hostword)0);
+    WalkList(&PollingCo, func(check_file_name), (hostword)(myco), (hostword)0);
+#else
     WalkList(&WaitingCo, func(check_file_name), myco);
     WalkList(&PollingCo, func(check_file_name), myco);
+#endif /* LINUX */
   }
 #endif
 
@@ -1721,6 +1770,10 @@ try_again:
 #if floppies_available
           if (floppy_errno) floppy_handler();
 #endif
+#if LINUX
+          extra->curr_pos = -1; /* a failed write may have written a prefix */
+#else
+#endif /* LINUX */
           Request_Return(Server_errno , 0L, 0L);
           return;
         }
@@ -1777,7 +1830,11 @@ try_again:
                 actual, asked, mcb->MsgHdr.FnRc) );
          if (((mcb->MsgHdr.FnRc & FC_Mask) eq FC_GSP) &&
              (FG_Read <= getfnrc(mcb)) && (getfnrc(mcb) <= FG_Select))
+#if LINUX
+          { int handler_off = ((int) (mcb->MsgHdr.FnRc & 0x000000F0)) >> 4;
+#else
           { int handler_off = ((int) (mcb->MsgHdr.FnRc & 0x000000F0L)) >> 4;
+#endif /* LINUX */
             (*(myco->handlers)[Read_off - 1 + handler_off])(myco);
           }
          elif (mcb->MsgHdr.Reply ne NullPort)
@@ -1794,16 +1851,29 @@ try_again:
 #endif
             /* On failure, send an error message and get rid of the stream */
          unless(temp)
+#if LINUX
+          write_error = Server_errno;
+#else
           write_error = 1;
+#endif /* LINUX */
        }
 
       actual += (word) mcb->MsgHdr.DataSize;
+#if LINUX
+      if (write_error) extra->curr_pos = -1;
+      else extra->curr_pos += mcb->MsgHdr.DataSize;
+#else
       extra->curr_pos += mcb->MsgHdr.DataSize;
+#endif /* LINUX */
     }
 
   mcb->MsgHdr.Reply        = reply_port;
   if (write_error)
+#if LINUX
+   Request_Return(write_error, 0L, 0L);
+#else
    Request_Return(Server_errno, 0L, 0L);
+#endif /* LINUX */
   else
    { mcb->Control[Reply1_off] = actual;
      Request_Return(WriteRc_Done, 1L, 0L);
@@ -1982,7 +2052,11 @@ Conode *myco;
 { DirHeader *extra = (DirHeader *) myco->extra;
 
 #if PC
+#if LINUX
+  WalkList(&(extra->list), func(FreeObjNode), (hostword)0, (hostword)0);
+#else
   WalkList(&(extra->list), func(FreeObjNode));
+#endif /* LINUX */
 #else
   FreeList(&(extra->list));
 #endif
@@ -1997,7 +2071,11 @@ Conode *myco;
 { DirHeader *extra;
 
                                  /* Cannot open directory in WriteOnly mode */
+#if LINUX
+  if ( ((hostword) myco->extra & 0x0F) eq O_WriteOnly)
+#else
   if ( ((word) myco->extra & 0x0F) eq O_WriteOnly)
+#endif /* LINUX */
    { Debug(Directory_Flag, ("Wrong mode for opening directory") );
      return(EC_Error + SS_IOProc + EG_Protected + EO_Directory);
    }
@@ -2196,7 +2274,11 @@ void tidy_logger()
 void Logger_Open(myco)
 Conode *myco;
 { NewStream(Type_File, Flags_Closeable + Flags_Interactive,
+#if LINUX
+            0, Logger_Handlers);
+#else
             NULL, Logger_Handlers);
+#endif /* LINUX */
   use(myco);
 }
 
@@ -2426,17 +2508,29 @@ Conode *myco;
 #define LL_Fill   (3 << 24)
 #define C_shift   16
 #else
+#if LINUX
+#define LL_Bounce 0x01000000
+#define LL_Empty  0x02000000
+#define LL_Fill   0x03000000
+#define LL_Mask   0x0F000000
+#else
 #define LL_Bounce 0x01000000L
 #define LL_Empty  0x02000000L
 #define LL_Fill   0x03000000L
 #define LL_Mask   0x0F000000L
+#endif /* LINUX */
 #endif
 
 void Logger_PrivateStream(myco)
 Conode *myco;
 { word fnrc = mcb->MsgHdr.FnRc & LL_Mask;
+#if LINUX
+  word dsize = mcb->MsgHdr.FnRc & 0x0000FFFF;
+  word csize = mcb->MsgHdr.FnRc & 0x00FF0000;
+#else
   word dsize = mcb->MsgHdr.FnRc & 0x0000FFFFL;
   word csize = mcb->MsgHdr.FnRc & 0x00FF0000L;
+#endif /* LINUX */
 
   if (fnrc eq LL_Bounce)
    Request_Return(ReplyOK, (word) mcb->MsgHdr.ContSize,
@@ -2444,7 +2538,11 @@ Conode *myco;
   elif(fnrc eq LL_Empty)
    Request_Return(ReplyOK, 0L, 0L);
   else
+#if LINUX
+   { csize      = divlong(csize, 0x00010000);
+#else
    { csize      = divlong(csize, 0x00010000L);
+#endif /* LINUX */
      Request_Return(ReplyOK, csize, dsize);
    }
   use(myco)
@@ -2595,7 +2693,11 @@ Conode *myco;
 { ObjNode *node;
 
   if (!strcmp(IOname, myco->name))    /* is it for the server ? */
+#if LINUX
+   { NewStream(Type_Directory, Flags_Closeable, (hostword) myco->extra,
+#else
    { NewStream(Type_Directory, Flags_Closeable, (word) myco->extra,
+#endif /* LINUX */
              PortDir_Handlers);
      return;
    }
@@ -2603,7 +2705,11 @@ Conode *myco;
    Request_Return(EC_Error + SS_IOProc + EG_Unknown + EO_File, 0L, 0L);
   else
    { Debug(HardDisk_Flag, ("Rawdisk : open") );
+#if LINUX
+     NewStream(Type_File, Flags_Closeable, (hostword) node, Rawdisk_Handlers );
+#else
      NewStream(Type_File, Flags_Closeable, (word) node, Rawdisk_Handlers );
+#endif /* LINUX */
    }
 }
 
@@ -2684,7 +2790,11 @@ Conode *myco;
      Request_Return(EC_Error + SS_IOProc + EG_WrongSize + EO_File, 0L, 0L);
      return;
    }
+#if LINUX
+  if (asked > 0x08000) asked = 0x08000;  /* limit read to 32K */
+#else
   if (asked > 0x08000L) asked = 0x08000L;  /* limit read to 32K */
+#endif /* LINUX */
 
   no_secs   = divlong(asked, Sector_size);
   first_sec = divlong(req_pos, Sector_size);
@@ -2737,7 +2847,11 @@ Conode *myco;
      Request_Return(EC_Error + SS_IOProc + EG_WrongSize + EO_File, 0L, 0L);
      return;
    }
+#if LINUX
+  if (asked > 0x08000) asked = 0x08000;  /* limit read to 32K */
+#else
   if (asked > 0x08000L) asked = 0x08000L;  /* limit read to 32K */
+#endif /* LINUX */
 
   no_secs   = divlong(asked, Sector_size);
   first_sec = divlong(req_pos, Sector_size);
@@ -2858,7 +2972,11 @@ Conode *myco;
 { ObjNode *node;
 
   if (!strcmp(IOname, myco->name))    /* is it for the server ? */
+#if LINUX
+   { NewStream(Type_Directory, Flags_Closeable, (hostword) myco->extra,
+#else
    { NewStream(Type_Directory, Flags_Closeable, (word) myco->extra,
+#endif /* LINUX */
              PortDir_Handlers);
      return;
    }
@@ -2866,7 +2984,11 @@ Conode *myco;
    Request_Return(EC_Error + SS_IOProc + EG_Unknown + EO_File, 0L, 0L);
   else
    { Debug(HardDisk_Flag, ("romdisk : open") );
+#if LINUX
+     NewStream(Type_File, Flags_Closeable, (hostword) node, Romdisk_Handlers );
+#else
      NewStream(Type_File, Flags_Closeable, (word) node, Romdisk_Handlers );
+#endif /* LINUX */
    }
 }
 

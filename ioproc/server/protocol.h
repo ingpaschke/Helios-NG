@@ -25,6 +25,28 @@
 
 /* standard type definitions */
 
+#if LINUX
+#if TR5 || LINUX
+	/* 64 bit longs I assume */
+typedef  int            WORD    ;       /* a machine word, 32 bits      */
+typedef  unsigned int   UWORD   ;       /* a machine word, 32 bits      */
+typedef  WORD           INT     ;       /* a synonym                    */
+typedef  WORD           word    ;       /* another synonym              */
+typedef  WORD           Offset  ;       /* and another                  */
+
+#else
+
+#if (!MSWINDOWS)
+	/* MSWINDOWS already defines WORD and BYTE... */
+typedef  long           WORD    ;
+#endif
+
+typedef  unsigned long  UWORD   ;       /* a machine word, 32 bits      */
+typedef  long           INT     ;       /* a synonym                    */
+typedef  long           word    ;       /* another synonym              */
+typedef  long           Offset  ;       /* and another                  */
+#endif
+#else
 #if TR5
 	/* 64 bit longs I assume */
 typedef  int            WORD    ;       /* a machine word, 32 bits      */
@@ -45,6 +67,7 @@ typedef  long           INT     ;       /* a synonym                    */
 typedef  long           word    ;       /* another synonym              */
 typedef  long           Offset  ;       /* and another                  */
 #endif
+#endif /* LINUX */
 
 typedef  short int      SHORT   ;       /* a 16 bit word                */
 typedef  unsigned short USHORT  ;       /* an unsigned 16 bit value     */
@@ -82,10 +105,19 @@ typedef  word           (*WordFnPtr)(); /* pointer to word function     */
 #endif
 #define false           0l
 #define Variable        1
+#if LINUX
+#define MinInt          0x80000000
+#else
 #define MinInt          0x80000000L
+#endif /* LINUX */
 
+#if LINUX
+#define MemStart  MinInt+0x70
+#define LoadBase  (MinInt+0x1000)
+#else
 #define MemStart  MinInt+0x70L
 #define LoadBase  (MinInt+0x1000L)
+#endif /* LINUX */
 
 #define Null(_type) ((_type *)NULL)
 
@@ -118,13 +150,43 @@ typedef struct Attributes {
 
 typedef word Attribute;
 
+#if LINUX
+#define ConsoleEcho           0x00000007
+#define ConsoleIgnoreBreak    0x00000100
+#define ConsoleBreakInterrupt 0x00000200
+#define ConsolePause          0x00000400
+#define ConsoleRawInput       0x0000000b
+#define ConsoleRawOutput      0x00000101
+#else
 #define ConsoleEcho           0x00000007L
 #define ConsoleIgnoreBreak    0x00000100L
 #define ConsoleBreakInterrupt 0x00000200L
 #define ConsolePause          0x00000400L
 #define ConsoleRawInput       0x0000000bL
 #define ConsoleRawOutput      0x00000101L
+#endif /* LINUX */
 
+#if LINUX
+#define RS232_IgnPar          0x00000800
+#define RS232_ParMrk          0x00001000
+#define RS232_InPck           0x00002000
+#define RS232_IXON            0x00004000
+#define RS232_IXOFF           0x00008000
+#define RS232_Istrip          0x00010000
+#define RS232_IgnoreBreak     0x00000100
+#define RS232_BreakInterrupt  0x00000200
+#define RS232_Cstopb          0x00000102
+#define RS232_Cread           0x00000202
+#define RS232_ParEnb          0x00000402
+#define RS232_ParOdd          0x00000802
+#define RS232_HupCl           0x00001002
+#define RS232_CLocal          0x00002002
+#define RS232_Csize           0x0003C000   /* Mask for the sizes */
+#define RS232_Csize_5         0x00004002
+#define RS232_Csize_6         0x00008002
+#define RS232_Csize_7         0x00010002
+#define RS232_Csize_8         0x00020002
+#else
 #define RS232_IgnPar          0x00000800L
 #define RS232_ParMrk          0x00001000L
 #define RS232_InPck           0x00002000L
@@ -144,6 +206,7 @@ typedef word Attribute;
 #define RS232_Csize_6         0x00008002L
 #define RS232_Csize_7         0x00010002L
 #define RS232_Csize_8         0x00020002L
+#endif /* LINUX */
 
 #define RS232_B0              0
 #define RS232_B50             1
@@ -175,8 +238,27 @@ typedef word Attribute;
 -- Subsystems
 ----------------------------------------------------------------*/
 
+#if LINUX
+#define SS_Mask         0x1f000000
+#else
 #define SS_Mask         0x1f000000L
+#endif /* LINUX */
 
+#if LINUX
+#define SS_Unknown      0x00000000
+#define SS_Kernel       0x01000000
+#define SS_SysLib       0x02000000
+#define SS_ProcMan      0x03000000
+#define SS_Loader       0x04000000
+#define SS_TFM          0x05000000
+#define SS_RamDisk      0x06000000
+#define SS_HardDisk     0x07000000
+#define SS_Fifo         0x08000000
+#define SS_NameTable    0x09000000
+#define SS_IOProc       0x0A000000
+#define SS_Window       0x0B000000
+#define SS_IOC          0x0C000000
+#else
 #define SS_Unknown      0x00000000L
 #define SS_Kernel       0x01000000L
 #define SS_SysLib       0x02000000L
@@ -190,6 +272,7 @@ typedef word Attribute;
 #define SS_IOProc       0x0A000000L
 #define SS_Window       0x0B000000L
 #define SS_IOC          0x0C000000L
+#endif /* LINUX */
 #define SS_NullDevice   0x0d000000
 #define SS_Pipe         0x0e000000
 #define SS_Batch        0x0f000000
@@ -206,9 +289,15 @@ typedef word Attribute;
 -- Function Classes
 ----------------------------------------------------------------*/
 
+#if LINUX
+#define FC_Mask         0x60000000
+#define FC_GSP          0x00000000
+#define FC_Private      0x60000000
+#else
 #define FC_Mask         0x60000000L
 #define FC_GSP          0x00000000L
 #define FC_Private      0x60000000L
+#endif /* LINUX */
 
 /*----------------------------------------------------------------
 -- Retry Counter
@@ -221,9 +310,28 @@ typedef word Attribute;
 -- General Functions
 ----------------------------------------------------------------*/
 
+#if LINUX
+#define FG_Mask         0x000FFFF0     /* without FR_Mask, as codes.h */
+#else
 #define FG_Mask         0x000FFFF0L     /* without FR_Mask, as codes.h */
+#endif /* LINUX */
 
 /* IOC requests */
+#if LINUX
+#define FG_Unknown      0x00000000
+#define FG_Open         0x00000010
+#define FG_Create       0x00000020
+#define FG_Locate       0x00000030
+#define FG_ObjectInfo   0x00000040
+#define FG_ServerInfo   0x00000050
+#define FG_Delete       0x00000060
+#define FG_Rename       0x00000070
+#define FG_Link         0x00000080
+#define FG_Protect      0x00000090
+#define FG_SetDate      0x000000a0
+#define FG_Refine       0x000000b0
+#define FG_CloseObj     0x000000c0
+#else
 #define FG_Unknown      0x00000000L
 #define FG_Open         0x00000010L
 #define FG_Create       0x00000020L
@@ -237,8 +345,23 @@ typedef word Attribute;
 #define FG_SetDate      0x000000a0L
 #define FG_Refine       0x000000b0L
 #define FG_CloseObj     0x000000c0L
+#endif /* LINUX */
 
 /* direct server requests */
+#if LINUX
+#define FG_Read                 0x00001010
+#define FG_Write                0x00001020
+#define FG_GetSize              0x00001030
+#define FG_SetSize              0x00001040
+#define FG_Close                0x00001050
+#define FG_Seek                 0x00001060
+#define FG_GetAttr              0x00001070
+#define FG_SetAttr              0x00001080
+#define FG_EnableEvents         0x00001090
+#define FG_Acknowledge          0x000010A0
+#define FG_NegAcknowledge       0x000010B0
+#define FG_Select               0x000010C0
+#else
 #define FG_Read                 0x00001010L
 #define FG_Write                0x00001020L
 #define FG_GetSize              0x00001030L
@@ -251,10 +374,16 @@ typedef word Attribute;
 #define FG_Acknowledge          0x000010A0L
 #define FG_NegAcknowledge       0x000010B0L
 #define FG_Select               0x000010C0L
+#endif /* LINUX */
 
 /* Distributed search codes */
+#if LINUX
+#define FG_Search               0x00002010
+#define FG_FollowTrail          0x00002020
+#else
 #define FG_Search               0x00002010L
 #define FG_FollowTrail          0x00002020L
+#endif /* LINUX */
 
 /*Socket Related Requests*/
 #define FG_Socket               0x00008010  /* create socket */
@@ -277,26 +406,71 @@ typedef word Attribute;
 -- Error Codes
 ----------------------------------------------------------------*/
 
+#if LINUX
+#define ErrBit          0x80000000     /* set for all error codes */
+#else
 #define ErrBit          0x80000000L     /* set for all error codes */
+#endif /* LINUX */
 #define Err_Null        0L              /* no error at all         */
 
 /*----------------------------------------------------------------
 -- Error Classes
 ----------------------------------------------------------------*/
 
+#if LINUX
+#define EC_Mask         0xe0000000
+#else
 #define EC_Mask         0xe0000000L
+#endif /* LINUX */
 
+#if LINUX
+#define EC_Recover      0x80000000      /* a retry might succeed */
+#define EC_Warn         0xA0000000      /* recover & try again   */
+#define EC_Error        0xC0000000      /* client fatal          */
+#define EC_Fatal        0xE0000000      /* system fatal          */
+#else
 #define EC_Recover      0x80000000L      /* a retry might succeed */
 #define EC_Warn         0xA0000000L      /* recover & try again   */
 #define EC_Error        0xC0000000L      /* client fatal          */
 #define EC_Fatal        0xE0000000L      /* system fatal          */
+#endif /* LINUX */
 
 /*----------------------------------------------------------------
 -- General Error codes
 ----------------------------------------------------------------*/
 
+#if LINUX
+#define EG_Mask         0x00FF0000      /* mask to isolate             */
+#else
 #define EG_Mask         0x00FF0000L      /* mask to isolate             */
+#endif /* LINUX */
 
+#if LINUX
+#define EG_UnknownError 0x00000000
+#define EG_NoMemory     0x00010000     /* memory allocation failure    */
+#define EG_Create       0x00020000     /* failed to create             */
+#define EG_Delete       0x00030000     /* failed to delete             */
+#define EG_Protected    0x00040000     /* object is protected          */
+#define EG_Timeout      0x00050000     /* timeout                      */
+#define EG_Unknown      0x00060000     /* object not found             */
+#define EG_FnCode       0x00070000     /* unknown function code        */
+#define EG_Name         0x00080000     /* mal-formed name              */
+#define EG_Invalid      0x00090000     /* invalid/corrupt object       */
+#define EG_InUse        0x000a0000     /* object in use/locked         */
+#define EG_Congested    0x000b0000     /* server/route overloaded      */
+#define EG_WrongFn      0x000c0000     /* fn inappropriate to object   */
+#define EG_Broken       0x000d0000     /* object broken in some way    */
+#define EG_Exception    0x000e0000     /* exception message            */
+#define EG_WrongSize    0x000f0000     /* object wrong size            */
+#define EG_ReBooted     0x00100000     /* server/processor rebooted    */
+#define EG_Open         0x00110000
+#define EG_Execute      0x00120000
+#define EG_Boot         0x00130000
+#define EG_State        0x00140000
+#define EG_NoResource   0x00150000
+#define EG_Errno        0x00160000
+#define EG_Parameter    0x00ff0000     /* bad parameter value          */
+#else
 #define EG_UnknownError 0x00000000L
 #define EG_NoMemory     0x00010000L     /* memory allocation failure    */
 #define EG_Create       0x00020000L     /* failed to create             */
@@ -321,11 +495,48 @@ typedef word Attribute;
 #define EG_NoResource   0x00150000L
 #define EG_Errno        0x00160000L
 #define EG_Parameter    0x00ff0000L     /* bad parameter value          */
+#endif /* LINUX */
 
 /*----------------------------------------------------------------
 -- Object codes for general errors
 ----------------------------------------------------------------*/
 
+#if LINUX
+#define EO_Unknown       0x00000000
+#define EO_Message       0x00008001     /* error refers to a message    */
+#define EO_Task          0x00008002     /* error refers to a task       */
+#define EO_Port          0x00008003     /* error refers to a port       */
+#define EO_Route         0x00008004     /* error refers to a route      */
+#define EO_Directory     0x00008005     /* error refers to a directory  */
+#define EO_Object        0x00008006     /* error refers to Object struct*/
+#define EO_Stream        0x00008007     /* error refers to Stream       */
+#define EO_Program       0x00008008
+#define EO_Module        0x00008009
+#define EO_Matrix        0x0000800a     /* access matrix                */
+#define EO_Fifo          0x0000800b
+#define EO_File          0x0000800c
+#define EO_Capability    0x0000800d
+#define EO_Name          0x0000800e     /* name in name table           */
+#define EO_Window        0x0000800f
+#define EO_Server        0x00008010
+#define EO_TaskForce     0x00008011
+#define EO_Link          0x00008012
+#define EO_Memory        0x00008013
+#define EO_Pipe          0x00008014
+#define EO_NetServ       0x00008015     /* error refers to NS           */
+#define EO_Subnetwork    0x00008016     /* error refers to Subnetwork   */
+#define EO_User          0x00008017
+#define EO_Session       0x00008018
+#define EO_Loader        0x00008019
+#define EO_ProcMan       0x0000801A
+#define EO_TFM           0x0000801B
+#define EO_Attribute     0x0000801C
+#define EO_NoProcessors  0x0000801D
+#define EO_ProcessorType 0x0000801E
+#define EO_Processor     0x0000801F
+#define EO_Socket        0x00008020
+#define EO_Medium        0x00008021
+#else
 #define EO_Unknown       0x00000000L
 #define EO_Message       0x00008001L     /* error refers to a message    */
 #define EO_Task          0x00008002L     /* error refers to a task       */
@@ -360,6 +571,7 @@ typedef word Attribute;
 #define EO_Processor     0x0000801FL
 #define EO_Socket        0x00008020L
 #define EO_Medium        0x00008021L
+#endif /* LINUX */
 
 /*----------------------------------------------------------------------*/
 /*-- Exception codes                                                  --*/
@@ -386,7 +598,11 @@ typedef word Attribute;
 --                                                                      --
 ------------------------------------------------------------------------*/
 
+#if LINUX
+typedef UWORD           Matrix;    /* access matrix */
+#else
 typedef unsigned long   Matrix;    /* access matrix */
+#endif /* LINUX */
 typedef UBYTE           AccMask;   /* access mask   */
 typedef word            Key;       /* encryption key */
 
@@ -430,10 +646,17 @@ typedef struct Capability {
 /* Access Matrix category masks                                         */
 /*----------------------------------------------------------------------*/
 
+#if LINUX
+#define AccMatrix_V     0x000000ff
+#define AccMatrix_X     0x0000ff00
+#define AccMatrix_Y     0x00ff0000
+#define AccMatrix_Z     0xff000000
+#else
 #define AccMatrix_V     0x000000ffL
 #define AccMatrix_X     0x0000ff00L
 #define AccMatrix_Y     0x00ff0000L
 #define AccMatrix_Z     0xff000000L
+#endif /* LINUX */
 
 /*----------------------------------------------------------------------*/
 /* Printed matrix letters                                               */
@@ -449,6 +672,17 @@ typedef struct Capability {
 /* Default Matrices                                                     */
 /*----------------------------------------------------------------------*/
 
+#if LINUX
+#define DefDirMatrix    0x21134BC7     /* DARWV/DRWX/RWY/RZ */
+#define DefFileMatrix   0x010343C3     /* DARW/DRW/RW/R     */
+#define DefLinkMatrix   0x201088C4     /* dav:dx:y:z        */
+#define DefTFMatrix     0x21134BC7     /* darwv:drwx:rwy:rz */
+#define DefTaskMatrix   0x010343C3     /* darw:drw:rw:r     */
+#define DefModuleMatrix 0x010545C5     /* dare:dre:re:r     */
+#define DefProgMatrix   0x010545C5     /* dare:dre:re:r     */
+#define DefNameMatrix   0x21110907     /* rwv:rx:ry:rz      */
+#define DefRootMatrix   0x21130B87     /* arwv:rwx:rwy:rz   */
+#else
 #define DefDirMatrix    0x21134BC7L     /* DARWV/DRWX/RWY/RZ */
 #define DefFileMatrix   0x010343C3L     /* DARW/DRW/RW/R     */
 #define DefLinkMatrix   0x201088C4L     /* dav:dx:y:z        */
@@ -458,6 +692,7 @@ typedef struct Capability {
 #define DefProgMatrix   0x010545C5L     /* dare:dre:re:r     */
 #define DefNameMatrix   0x21110907L     /* rwv:rx:ry:rz      */
 #define DefRootMatrix   0x21130B87L     /* arwv:rwx:rwy:rz   */
+#endif /* LINUX */
 
 
 /* End of ioprot.h */
@@ -571,7 +806,11 @@ typedef struct MCB {
  * of the following values.
  */
 
+#if LINUX
+#define ReadRc_Mask     0xf    /* mask for lower 4 bits                */
+#else
 #define ReadRc_Mask     0xfL    /* mask for lower 4 bits                */
+#endif /* LINUX */
 #define ReadRc_More     0L      /* more data to come                    */
 #define ReadRc_EOD      1L      /* end of data                          */
 #define ReadRc_EOF      2L      /* end of data and of file              */
@@ -597,7 +836,11 @@ typedef struct MCB {
 #define DefaultStreamTimeout ((word) 30L * 60L * OneSec)
 #define IOCDataMax    512             /* maximum size of full filenames   */
 #define ControlMax    16              /* maximum size of a control vector */
+#if LINUX
+#define MAXTIME       0x7FFFFFFF     /* for timeouts of -1 (infinity)  */
+#else
 #define MAXTIME       0x7FFFFFFFL     /* for timeouts of -1 (infinity)  */
+#endif /* LINUX */
 
 
 /*----------------------------------------------------------------------*/
@@ -611,6 +854,23 @@ typedef struct MCB {
 #define Type_Private    4L      /* own private protocol                 */
                                 /* remaining bit reserved               */
 
+#if LINUX
+#define Type_File       0x12   /*(0x10+Type_Stream)*/
+#define Type_Fifo       0x22   /*(0x20+Type_Stream)*/
+#define Type_Module     0x32   /*(0x30+Type_Stream)*/
+#define Type_Program    0x42   /*(0x40+Type_Stream)*/
+#define Type_Task       0x52   /*(0x50+Type_Stream)*/
+#define Type_Link       (0x60)
+#define Type_Name       (0x70)
+#define Type_TaskForce  0x81   /*(0x80|Type_Directory)*/
+#define Type_LTaskForce 0x91   /*(0x90|Type_Directory)*/
+#define Type_CacheName  (0xa0)
+#define Type_Pipe       0xb2   /*(0xb0|Type_Stream)*/
+#define Type_Pseudo     0xc2   /*(0xc0|Type_Stream)*/
+#define Type_Device     0xd4   /*(0xd0|Type_Private)*/
+#define Type_Session    0xe0
+#define Type_Socket     0xf0
+#else
 #define Type_File       0x12L   /*(0x10L+Type_Stream)*/
 #define Type_Fifo       0x22L   /*(0x20L+Type_Stream)*/
 #define Type_Module     0x32L   /*(0x30L+Type_Stream)*/
@@ -626,6 +886,7 @@ typedef struct MCB {
 #define Type_Device     0xd4L   /*(0xd0|Type_Private)*/
 #define Type_Session    0xe0L
 #define Type_Socket     0xf0L
+#endif /* LINUX */
 /**
 *** The reply to Open, Locate and Create requests
 **/
@@ -666,9 +927,15 @@ typedef struct ObjInfo {
         DirEntry        DirEntry;       /* re-iteration of common info  */
         word            Account;        /* accounting identifier        */
         word            Size;           /* object size in bytes         */
+#if LINUX
+        word            Creation;       /* three date stamps            */
+        word            Access;
+        word            Modified;
+#else
         time_t          Creation;       /* three date stamps            */
         time_t          Access;
         time_t          Modified;
+#endif /* LINUX */
 } ObjInfo;
 
 /*----------------------------------------------------------------------*/
@@ -679,12 +946,21 @@ typedef struct ObjInfo {
 #define O_WriteOnly     2L
 #define O_ReadWrite     3L
 #define O_Execute       4L
+#if LINUX
+#define O_Create        0x0100          /* create if does not exist   */
+#define O_Exclusive     0x0200          /* get exclusive access       */
+#define O_Truncate      0x0400          /* truncate if already exists */
+#define O_NonBlock      0x0800          /* do not block on read/write */
+#define O_Append        0x1000          /* append data (not to be used */
+#define O_Sync          0x2000          /* synchronous transfers */
+#else
 #define O_Create        0x0100L          /* create if does not exist   */
 #define O_Exclusive     0x0200L          /* get exclusive access       */
 #define O_Truncate      0x0400L          /* truncate if already exists */
 #define O_NonBlock      0x0800L          /* do not block on read/write */
 #define O_Append        0x1000L          /* append data (not to be used */
 #define O_Sync          0x2000L          /* synchronous transfers */
+#endif /* LINUX */
 
 /* The flags array of the Select call contains the standard bits in the */
 /* bottom 2 bits, plus the following bits...                            */
@@ -708,6 +984,21 @@ typedef struct ObjInfo {
 /* First column of comments indicates whose responsibility the state    */
 /* of the bit is: S = Server, L = Syslib.                               */
 
+#if LINUX
+#define Flags_Mode         0x0000000f  /* L copy of open mode      */
+#define Flags_More         0x00000010  /* S More info available    */
+#define Flags_Seekable     0x00000020  /* S stream is seekable     */
+#define Flags_Remote       0x00000040  /* L server is non-local    */
+#define Flags_StripName    0x00000080  /* S names are stripped before pass on */
+#define Flags_CacheName    0x00000100  /* S name is cached         */
+#define Flags_LinkName     0x00000200  /* S name is for h/w link   */
+#define Flags_PStream      0x00000400  /* L set for PseudoStreams  */
+#define Flags_ResetContext 0x00000800  /* S set for remote servers */
+#define Flags_Pipe         0x00001000  /* S set for pipes          */
+#define Flags_CloseOnSend  0x00002000  /* S close in SendEnv       */
+#define Flags_OpenOnGet    0x00004000  /* S open in GetEnv         */
+#define Flags_Selectable   0x00008000  /* S can be used in Select  */
+#else
 #define Flags_Mode         0x0000000fL  /* L copy of open mode      */
 #define Flags_More         0x00000010L  /* S More info available    */
 #define Flags_Seekable     0x00000020L  /* S stream is seekable     */
@@ -721,14 +1012,27 @@ typedef struct ObjInfo {
 #define Flags_CloseOnSend  0x00002000L  /* S close in SendEnv       */
 #define Flags_OpenOnGet    0x00004000L  /* S open in GetEnv         */
 #define Flags_Selectable   0x00008000L  /* S can be used in Select  */
+#endif /* LINUX */
 
+#if LINUX
+#define Flags_Interactive 0x00010000   /* S if stream is interactive   */
+#define Flags_MSdos       0x00020000   /* S MSdos format files         */
+#else
 #define Flags_Interactive 0x00010000L   /* S if stream is interactive   */
 #define Flags_MSdos       0x00020000L   /* S MSdos format files         */
+#endif /* LINUX */
 
+#if LINUX
+#define Flags_CloseMask 0xe0000000     /*   mask for following flags   */
+#define Flags_Closeable 0x20000000     /* S set if needs closing       */
+#define Flags_Server    0x40000000     /* L set if served stream       */
+#define Flags_Stream    0x80000000     /* L set if stream structure    */
+#else
 #define Flags_CloseMask 0xe0000000L     /*   mask for following flags   */
 #define Flags_Closeable 0x20000000L     /* S set if needs closing       */
 #define Flags_Server    0x40000000L     /* L set if served stream       */
 #define Flags_Stream    0x80000000L     /* L set if stream structure    */
+#endif /* LINUX */
 
 #define closebits_(x)    ((((UWORD)(x))>>Flags_CloseShift)&0x7)
 
@@ -742,7 +1046,11 @@ typedef struct ObjInfo {
 
 #define getfnrc(request)   (((request)->MsgHdr).FnRc & FG_Mask)
 
+#if LINUX
+#define ReqDie             0x00FFFFF0         /* still necessary */
+#else
 #define ReqDie             0x00FFFFF0L         /* still necessary */
+#endif /* LINUX */
 
 #define ReplyOK            (Err_Null)
 
@@ -780,17 +1088,34 @@ typedef struct { word type;        /* always Type_Directory */
 ------------------------------------------------------------------------*/
 
 /* These are valid types for the Type field of an Event */
+#if LINUX
+#define Event_Mouse            0x1
+#define Event_Keyboard         0x2
+#define Event_Break            0x4
+#define Event_SerialBreak      0x8
+#define Event_ModemRing        0x10
+#else
 #define Event_Mouse            0x1L
 #define Event_Keyboard         0x2L
 #define Event_Break            0x4L
 #define Event_SerialBreak      0x8L
 #define Event_ModemRing        0x10L
+#endif /* LINUX */
 
+#if LINUX
+#define Flag_Buffer            0x80000000
+#else
 #define Flag_Buffer            0x80000000L
+#endif /* LINUX */
 
 /* additional reply codes */
+#if LINUX
+#define EventRc_Acknowledge     0x1   /* the other side should acknowledge   */
+#define EventRc_IgnoreLost      0x2   /* unimportant messages have been lost */
+#else
 #define EventRc_Acknowledge     0x1L   /* the other side should acknowledge   */
 #define EventRc_IgnoreLost      0x2L   /* unimportant messages have been lost */
+#endif /* LINUX */
 
 #if (mouse_supported || gem_supported || MSWINDOWS)
 /**
@@ -808,6 +1133,17 @@ typedef struct {
                  word   Buttons;
 } Mouse_Event;
 
+#if LINUX
+#define Buttons_Unchanged       0x00000000
+#define Buttons_Button0_Down    0x00000001
+#define Buttons_Button0_Up      0x00008001
+#define Buttons_Button1_Down    0x00000002
+#define Buttons_Button1_Up      0x00008002
+#define Buttons_Button2_Down    0x00000004
+#define Buttons_Button2_Up      0x00008004
+#define Buttons_Button3_Down    0x00000008
+#define Buttons_Button3_Up      0x00008008
+#else
 #define Buttons_Unchanged       0x00000000L
 #define Buttons_Button0_Down    0x00000001L
 #define Buttons_Button0_Up      0x00008001L
@@ -817,6 +1153,7 @@ typedef struct {
 #define Buttons_Button2_Up      0x00008004L
 #define Buttons_Button3_Down    0x00000008L
 #define Buttons_Button3_Up      0x00008008L
+#endif /* LINUX */
 #endif  /* mouse_supported */
 
 #if keyboard_supported
@@ -952,16 +1289,31 @@ typedef struct Config {
 /**
 *** Network control function codes
 **/
+#if LINUX
+#define NC_Reset                 0x2010
+#define NC_Analyse               0x2020
+#define NC_Connect               0x2030
+#define NC_Disconnect            0x2040
+#define NC_Enquire               0x2050
+#else
 #define NC_Reset                 0x2010L
 #define NC_Analyse               0x2020L
 #define NC_Connect               0x2030L
 #define NC_Disconnect            0x2040L
 #define NC_Enquire               0x2050L
+#endif /* LINUX */
 
+#if LINUX
+#define ND_INVALID               0x0000
+#define ND_HARDWIRED             0x0001
+#define ND_SOFTWIRED             0x0002
+#define ND_NOCONNECT             0x0003
+#else
 #define ND_INVALID               0x0000L
 #define ND_HARDWIRED             0x0001L
 #define ND_SOFTWIRED             0x0002L
 #define ND_NOCONNECT             0x0003L
+#endif /* LINUX */
 
 /**
 *** Bootstrap stuff, used by tload.c and hydra
@@ -1020,6 +1372,20 @@ typedef struct Config {
 /*
  * Additional options, not kept in so_options.
  */
+#if LINUX
+#if LINUX
+#undef SO_SNDBUF
+#undef SO_RCVBUF
+#undef SO_SNDLOWAT
+#undef SO_RCVLOWAT
+#undef SO_SNDTIMEO
+#undef SO_RCVTIMEO
+#undef SO_ERROR
+#undef SO_TYPE
+#undef SO_PEERNAME
+#endif
+#else
+#endif /* LINUX */
 #define SO_SNDBUF	0x1001		/* send buffer size */
 #define SO_RCVBUF	0x1002		/* receive buffer size */
 #define SO_SNDLOWAT	0x1003		/* send low-water mark */

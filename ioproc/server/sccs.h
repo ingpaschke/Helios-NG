@@ -95,7 +95,15 @@ static char SccsId2[] = "TR5000";
 #endif
 
 #if i486V4
+#if LINUX
+#if defined(__aarch64__)
+static char SccsId2[] = "Linux AArch64";
+#else
+static char SccsId2[] = "Linux native";
+#endif
+#else
 static char SccsId2[] = "i486 System V.4";
+#endif /* LINUX */
 #endif
 
 #if SCOUNIX

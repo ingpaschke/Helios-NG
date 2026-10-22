@@ -36,6 +36,34 @@ typedef struct debug_options {
          char   *name;
 } debug_options;
 
+#if LINUX
+#define Message_Flag                 0x1
+#define Search_Flag                  0x2
+#define Open_Flag                    0x4
+#define Name_Flag                    0x8
+#define Read_Flag                   0x10
+#define Boot_Flag                   0x20
+#define Memory_Flag                 0x40
+#define Keyboard_Flag               0x80
+#define Init_Flag                  0x100
+#define Com_Flag                   0x200
+#define Write_Flag                 0x400
+#define Quit_Flag                  0x800
+#define Close_Flag                0x1000
+#define HardDisk_Flag             0x2000
+#define Log_Flag                  0x4000
+#define Graphics_Flag             0x8000
+#define Reconfigure_Flag         0x10000
+#define Timeout_Flag             0x20000
+#define OpenReply_Flag           0x40000
+#define FileIO_Flag              0x80000
+#define Delete_Flag             0x100000
+#define Directory_Flag          0x200000
+#define Nopop_Flag              0x400000
+#define ListAll_Flag            0x800000
+#define Error_Flag             0x1000000
+#define DDE_Flag               0x2000000
+#else
 #define Message_Flag                 0x1L
 #define Search_Flag                  0x2L
 #define Open_Flag                    0x4L
@@ -62,12 +90,17 @@ typedef struct debug_options {
 #define ListAll_Flag            0x800000L
 #define Error_Flag             0x1000000L
 #define DDE_Flag               0x2000000L
+#endif /* LINUX */
 /**
 *** All_Debug_Flags is a mask for all the debugging options except the
 *** one-off ones : memory, log, reconfigure, nopop, listall.
 *** It is used for -a etc.
 **/
+#if LINUX
+#define All_Debug_Flags       0x033EBFBF
+#else
 #define All_Debug_Flags       0x033EBFBFL
+#endif /* LINUX */
               
 #define Log_to_screen           1
 #define Log_to_file             2

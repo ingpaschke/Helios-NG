@@ -60,7 +60,11 @@
 /**
 *** This is returned by get_int_config() in module server.c to indicate failure
 **/ /* @@@ Bart, this is going to give us real grief on day! */
+#if LINUX
+#define Invalid_config     0x64928AF2
+#else
 #define Invalid_config     0x64928AF2L
+#endif /* LINUX */
 
 /**
 *** The main data structure in the Server is the linked list.
@@ -74,7 +78,11 @@ typedef void	(*VoidNodeFnPtr)(Node *, ...);
 typedef word	(*WordNodeFnPtr)(Node *, ...);
 #else
 typedef VoidFnPtr	VoidNodeFnPtr;
+#if LINUX
+typedef hostword (*WordNodeFnPtr)();
+#else
 typedef WordFnPtr	WordNodeFnPtr;
+#endif /* LINUX */
 #endif
 
 typedef struct List { Node *head;       /* first node in list  */
@@ -122,11 +130,19 @@ typedef struct Conode_str { Node node;           /* conodes held in linked list 
 #define CoAbortSelect (655321L)
 #define CoReady       (777777L)
 
+#if LINUX
+#define CoFlag_Floppy       0x0001
+#define CoFlag_CtrlCed      0x0002
+#define CoFlag_FileStream   0x0004
+#define CoFlag_Waiting      0x0008
+#define CoFlag_EOFed        0x0010
+#else
 #define CoFlag_Floppy       0x0001L
 #define CoFlag_CtrlCed      0x0002L
 #define CoFlag_FileStream   0x0004L
 #define CoFlag_Waiting      0x0008L
 #define CoFlag_EOFed        0x0010L
+#endif /* LINUX */
 
 /**
 *** This structure is used to declare my devices. The type is File, Directory
@@ -265,7 +281,11 @@ typedef struct Window { ObjNode       node;
                         Screen        screen;
 #endif
                         UBYTE         Table[Console_limit + 1]; /* & Console_limit */
+#if LINUX
+			hostword      handle;
+#else
 			word	      handle;
+#endif /* LINUX */
                         int           head, tail;
                         int           XOFF;
 #if multi_tasking
@@ -273,7 +293,11 @@ typedef struct Window { ObjNode       node;
 #endif
 } Window;
 
+#if LINUX
+#define WindowFlags_Deleted  0x00000001
+#else
 #define WindowFlags_Deleted  0x00000001L
+#endif /* LINUX */
 
 /**
 *** Multi-tasking support. To prevent the server from hogging all the
@@ -351,8 +375,13 @@ typedef struct Trans_link {
 *** This structure is used between hydra and the server
 **/
 typedef struct socket_msg {
+#if LINUX
+        word fnrc;
+        word extra;
+#else
         long fnrc;
         long extra;
+#endif /* LINUX */
         char userid[16];   /* cannot use l_cuserid, server and hydra may be */
         char hostname[64]; /* compiled with different headers. */
         char linkname[32]; /* name of the link */
@@ -364,8 +393,13 @@ typedef struct socket_msg {
 #define Hydra_Busy         0x12345604
 
 typedef struct debug_msg {
+#if LINUX
+	word fnrc;
+        word link;
+#else
 	long fnrc;
         long link;
+#endif /* LINUX */
 } debug_msg;
 #define Debug_Info       0x12345605
 #define Debug_Disconnect 0x12345606

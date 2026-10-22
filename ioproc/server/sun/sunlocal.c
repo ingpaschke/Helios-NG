@@ -227,7 +227,11 @@ typedef word	(*WordWordFnPtr)(word *, ...);
 #else
 typedef VoidFnPtr	VoidWordargFnPtr;
 typedef VoidFnPtr	VoidCharFnPtr;
+#if LINUX
+typedef hostword (*WordCharFnPtr)();
+#else
 typedef WordFnPtr	WordCharFnPtr;
+#endif /* LINUX */
 typedef WordFnPtr	WordWordFnPtr;
 #endif
 
@@ -426,24 +430,40 @@ Window *handle;
   (*send_window_fn)(data, handle);
 }
 
+#if LINUX
+hostword create_a_window(name)
+#else
 WORD create_a_window(name)
+#endif /* LINUX */
 char *name;
 { return( (*open_window_fn)(name));
 }
 
 void close_window(handle)
+#if LINUX
+hostword handle;
+#else
 WORD handle;
+#endif /* LINUX */
 { (*close_window_fn)((word *)handle); 
 } 
 
 void window_size(handle, x, y)
+#if LINUX
+hostword handle;
+#else
 WORD handle;
+#endif /* LINUX */
 WORD *x, *y;
 { (*window_size_fn)((word *)handle, x, y); 
 }
 
 int read_char_from_keyboard(andle)
+#if LINUX
+hostword andle;
+#else
 WORD andle;
+#endif /* LINUX */
 { unix_window *handle = (unix_window *) andle;
 
   if (handle->out[0] ne '\0')
@@ -574,7 +594,11 @@ PRIVATE void initialise_keyboard_strings()
      if (temp ne NULL)
       { key_definition *key = &(key_table[keyindex_max++]);
           /* Undocumented magic */
+#if LINUX
+        if (!LINUX && (temp[0] eq 0x1B) && (temp[1] eq 'O'))
+#else
         if ((temp[0] eq 0x1B) && (temp[1] eq 'O'))
+#endif /* LINUX */
            temp[1] = 0x5B;
         strcpy(key->local_sequence, temp);
         key->helios_sequence  = def->helios_sequence;
@@ -609,7 +633,11 @@ PRIVATE void initialise_keyboard_strings()
                      /* but other unix machines may not. Those have */
                      /* to make do with the sgtty junk              */
   { struct termios t;
+#if LINUX
+    if (tcgetattr(0, &t) eq 0)
+#else
     if (ioctl(0, TCGETS, &t) eq 0)
+#endif /* LINUX */
      { key_definition *key;
        key = &(key_table[keyindex_max++]);
        key->local_sequence[0] = t.c_cc[VERASE];
@@ -1104,15 +1132,24 @@ PRIVATE void initialise_dumb_terminal()
 
 #if (SUN3 || SUN4 || SUN386 || TR5 || i486V4 || HP9000 || SCOUNIX)
 
+#if LINUX
+  tcgetattr(0, &old_term);
+  tcgetattr(0, &cur_term);
+#else
   ioctl(0, TCGETS, &old_term);
   ioctl(0, TCGETS, &cur_term);
+#endif /* LINUX */
   cur_term.c_iflag &= ~(IXON + IXOFF);
   cur_term.c_iflag |= (IGNBRK | IGNPAR | INLCR); 
   cur_term.c_lflag &= ~(ISIG + ICANON + ECHO + ECHOE + ECHOK + 
                         ECHONL);
   cur_term.c_cc[VMIN]  = 0;
   cur_term.c_cc[VTIME] = 0;
+#if LINUX
+  tcsetattr(0, TCSANOW, &cur_term);
+#else
   ioctl(0, TCSETS, &cur_term);
+#endif /* LINUX */
 
 #else
                             /* set mode RAW ,ctrl \ gets out */
@@ -1141,7 +1178,11 @@ PRIVATE void restore_dumb_terminal()
 {
   if (terminal_changed)
 #if (SUN3 || SUN4 || SUN386 || TR5 || i486V4 || HP9000 || SCOUNIX)
+#if LINUX
+   tcsetattr(0, TCSADRAIN, &old_term);
+#else
    ioctl(0, TCSETSW, &old_term); 
+#endif /* LINUX */
 #else
    ioctl(0, TIOCSETP, &old_term);
 /*@@@*/
@@ -1150,7 +1191,11 @@ PRIVATE void restore_dumb_terminal()
 #endif
 
 #if (SUN3 || SUN4 || SUN386 || TR5 || i486V4 || HP9000 || SCOUNIX)
+#if LINUX
+  tcdrain(1);  /* drain the output */
+#else
   ioctl(1, TCSBRK, 100);  /* drain the output */
+#endif /* LINUX */
 #endif
 }
 
@@ -1163,7 +1208,11 @@ unix_window *handle;
   for (window = (Window *) Window_List.list.head;
        window->node.node.next ne (Node *) NULL;
        window = (Window *) window->node.node.next)
+#if LINUX
+   if (window->handle eq (hostword) handle)
+#else
    if (window->handle eq (WORD) handle)
+#endif /* LINUX */
     return(window);
 
   return((Window *) NULL);
@@ -1849,8 +1898,22 @@ PRIVATE void initialise_signals()
 *** others to microseconds.
 **/
 void goto_sleep(delay)
+#if LINUX
+word delay;
+#else
 long delay;
+#endif /* LINUX */
 {
+#if LINUX
+#if ((UNIX386 || SM90 || TR5 || i486V4 || HP9000 || SCOUNIX || SOLARIS) && !LINUX)
+  if (delay < OneSec)
+   sleep(1);
+  else
+   sleep(delay / OneSec);
+#else
+  usleep(delay);
+#endif
+#else
 #if (UNIX386 || SM90 || TR5 || i486V4 || HP9000 || SCOUNIX || SOLARIS)
   if (delay < OneSec)
    sleep(1);
@@ -1859,12 +1922,32 @@ long delay;
 #else
   usleep(delay);
 #endif
+#endif /* LINUX */
 }
 
 /**
 *** The multiwait function to handle multi-tasking.
 **/
 
+#if LINUX
+/* Included in sunlocal.c after the ABI edits. One poll slot per descriptor,
+ * with independent coroutine and select-result pointers for each direction. */
+#include <poll.h>
+#include "../linux/net_compat.h"
+
+typedef struct {
+    WORD *ready[4];
+    WORD *result[4];
+} LinuxWaiter;
+static struct pollfd *wait_fds;
+static LinuxWaiter *waiters;
+static size_t wait_count, wait_capacity;
+/* Linux's peer write-half close need not include POLLHUP. Let an exception
+ * subscription wake for it too, so hu_poll can observe EOF without polling. */
+#ifndef POLLRDHUP
+#define POLLRDHUP 0x2000
+#endif
+#else
 PRIVATE int link_not_selectable = 0;  /* cope with Inmos standard */
 PRIVATE struct timeval timelim;
 PRIVATE int maxmask;
@@ -1875,7 +1958,19 @@ PRIVATE WORD **rd_wakeup, **wr_wakeup, **ex_wakeup;
 #if internet_supported
 PRIVATE WORD **fd_selval;
 #endif
+#endif /* LINUX */
+#if LINUX
+static const short wait_events[4] = { POLLIN, POLLOUT, POLLPRI | POLLRDHUP, POLLRDHUP };
+static const WORD wait_results[4] = { O_ReadOnly, O_WriteOnly, O_Exception, HU_O_HANGUP };
+#else
+#endif /* LINUX */
 
+#if LINUX
+void InitMultiwait(void)
+{
+    wait_fds = NULL; waiters = NULL;
+    wait_count = wait_capacity = 0;
+#else
 #if i486V4
 #define getdtablesize() (OPEN_MAX)
 #endif
@@ -1908,15 +2003,31 @@ void InitMultiwait()
 /*     longjmp(exit_jmpbuf, 1); */
      longjmp_exit;
    }
+#endif /* LINUX */
 }
 
+#if LINUX
+void TidyMultiwait(void)
+{
+    free(wait_fds); free(waiters);
+    InitMultiwait();
+#else
 void TidyMultiwait()
 { free((char *)rd_wakeup); free((char *)wr_wakeup); free((char *)ex_wakeup);
 #if internet_supported
   free((char *)fd_selval);
 #endif
+#endif /* LINUX */
 }
 
+#if LINUX
+void RestartMultiwait(void)
+{
+    int i;
+    wait_count = 0;
+    for (i = 0; i < number_of_links; ++i)
+        link_table[i].flags &= ~Link_flags_waiting;
+#else
 void RestartMultiwait()
 { int i;
   link_not_selectable = 0;
@@ -1930,8 +2041,34 @@ void RestartMultiwait()
   FD_ZERO(&rd_mask);
   FD_ZERO(&wr_mask);
   FD_ZERO(&ex_mask);
+#endif /* LINUX */
 }
 
+#if LINUX
+static void linux_wait_set(int fd, int direction, WORD *ready, WORD *result)
+{
+    size_t i;
+    int d;
+    if (fd < 0) return;
+    for (i = 0; i < wait_count; ++i) if (wait_fds[i].fd == fd) break;
+    if (i == wait_count) {
+        if (!ready) return;
+        if (wait_count == wait_capacity) {
+            size_t capacity = wait_capacity ? wait_capacity * 2 : 32;
+            struct pollfd *fds = malloc(capacity * sizeof(*fds));
+            LinuxWaiter *new_waiters = malloc(capacity * sizeof(*new_waiters));
+            if (!fds || !new_waiters) {
+                free(fds); free(new_waiters);
+                ServerDebug("Failed to grow multiwait table");
+                longjmp_exit;
+            }
+            if (wait_count) {
+                memcpy(fds,wait_fds,wait_count * sizeof(*fds));
+                memcpy(new_waiters,waiters,wait_count * sizeof(*new_waiters));
+            }
+            free(wait_fds); free(waiters);
+            wait_fds = fds; waiters = new_waiters; wait_capacity = capacity;
+#else
 void fn( WindowAddMultiwait,   (WORD *, unix_window *));
 void fn( WindowClearMultiwait, (unix_window *));
 
@@ -1967,7 +2104,24 @@ long extra1, extra2;
            { FD_SET(link_fd, &rd_mask);
              rd_wakeup[link_fd] = addr;
            }
+#endif /* LINUX */
         }
+#if LINUX
+        wait_fds[i].fd = fd; wait_fds[i].events = wait_fds[i].revents = 0;
+        memset(&waiters[i],0,sizeof(waiters[i]));
+        ++wait_count;
+    }
+    waiters[i].ready[direction] = ready;
+    waiters[i].result[direction] = ready ? result : NULL;
+    wait_fds[i].events = 0;
+    for (d = 0; d < 4; ++d)
+        if (waiters[i].ready[d]) wait_fds[i].events |= wait_events[d];
+    if (!wait_fds[i].events) {
+        --wait_count;
+        wait_fds[i] = wait_fds[wait_count];
+        waiters[i] = waiters[wait_count];
+    }
+#else
         break;
 
      case Multi_MouseInput    :
@@ -2012,8 +2166,40 @@ long extra1, extra2;
 #if ! internet_supported
  use(extra2)
 #endif
+#endif /* LINUX */
 }
 
+#if LINUX
+static void linux_wait_change(WORD code, WORD *addr, intptr_t extra, WORD *result)
+{
+    int fd, direction = 0;
+    switch (code) {
+    case Multi_LinkMessage:
+        if (link_table[extra].flags & Link_flags_not_selectable) {
+            if (addr) link_table[extra].flags |= Link_flags_waiting;
+            else link_table[extra].flags &= ~Link_flags_waiting;
+            return;
+        }
+        fd = link_table[extra].fildes;
+        break;
+    case Multi_WindowInput: {
+        unix_window *w = (unix_window *)extra;
+        if (window_type == WindowType_Dumb) {
+            if (w != Server_handle) return;
+            fd = fileno(stdin);
+        } else fd = w->child;
+        break;
+    }
+    case Multi_MouseInput:
+    case Multi_KeyboardInput:
+    case Multi_SocketInput: fd = extra; break;
+    case Multi_SocketOutput: fd = extra; direction = 1; break;
+    case Multi_SocketExcp: fd = extra; direction = 2; break;
+    case Multi_SocketHup: fd = extra; direction = 3; break;
+    default: ServerDebug("Unknown multiwait %d",code); return;
+    }
+    linux_wait_set(fd,direction,addr,result);
+#else
 #if (RS6000 || HP9000 || SCOUNIX)
 void ClearMultiwait(WORD code, ...)
 { WORD extra1, extra2;
@@ -2088,8 +2274,23 @@ long extra1, extra2;
    break;
 
  use(extra2)
+#endif /* LINUX */
 }
 
+#if LINUX
+void AddMultiwait(WORD code, WORD *addr, ...)
+{
+    va_list args;
+    intptr_t extra;
+    WORD *result = NULL;
+    va_start(args,addr);
+    extra = va_arg(args,intptr_t);
+    if (code == Multi_SocketInput || code == Multi_SocketOutput || code == Multi_SocketExcp ||
+        code == Multi_SocketHup)
+        result = (WORD *)va_arg(args,intptr_t);
+    va_end(args);
+    linux_wait_change(code,addr,extra,result);
+#else
 void WindowAddMultiwait(addr, handle)
 WORD *addr;
 unix_window *handle;
@@ -2107,8 +2308,19 @@ unix_window *handle;
 
      default                 : ServerDebug("bad addmulti for window");
    }
+#endif /* LINUX */
 }
 
+#if LINUX
+void ClearMultiwait(WORD code, ...)
+{
+    va_list args;
+    intptr_t extra;
+    va_start(args,code);
+    extra = va_arg(args,intptr_t);
+    va_end(args);
+    linux_wait_change(code,NULL,extra,NULL);
+#else
 void WindowClearMultiwait(handle)
 unix_window *handle;
 { switch(window_type)
@@ -2125,8 +2337,26 @@ unix_window *handle;
 
      default                 : ServerDebug("bad addmulti for window");
    }
+#endif /* LINUX */
 }
 
+#if LINUX
+WORD Multiwait(void)
+{
+    int i, direction, selected, timeout = Multi_nowait > 0 ? 1 : 50;
+    size_t slot;
+    /* MMIO links cannot be polled as descriptors. Keep their short polling
+     * interval and priority over host descriptors. */
+    for (i = 0; i < number_of_links; ++i) {
+        if (link_table[i].flags & Link_flags_waiting) {
+            int old = current_link, ready;
+            current_link = i;
+            ready = xprdrdy();
+            current_link = old;
+            if (ready) { link_table[i].ready = CoReady; return TRUE; }
+            timeout = 1;
+        }
+#else
 WORD Multiwait()
 { fd_set t_rd_mask, t_wr_mask, t_ex_mask;
   int    no_fds, i;
@@ -2175,7 +2405,15 @@ WORD Multiwait()
   if (short_timeout)
     {
       timelim.tv_usec = 1000;
+#endif /* LINUX */
     }
+#if LINUX
+    selected = ios_tls_poll(wait_fds,wait_count,timeout);
+    if (selected <= 0) {
+        if (selected < 0 && errno != EINTR)
+            ServerDebug("Warning: poll failed: errno %d",errno);
+        return FALSE;
+#else
   else
     {
 #if (TR5 || i486V4)
@@ -2183,14 +2421,41 @@ WORD Multiwait()
 #else
       timelim.tv_usec = 500 * 1000;	/* 1/2 second default timeout */
 #endif  
+#endif /* LINUX */
     }
+#if LINUX
+    for (slot = 0; slot < wait_count; ++slot) {
+        short events = wait_fds[slot].revents;
+        for (direction = 0; direction < 4; ++direction) {
+            if (waiters[slot].ready[direction] &&
+                (events & (wait_events[direction] | POLLHUP | POLLERR | POLLNVAL))) {
+                *waiters[slot].ready[direction] = CoReady;
+                if (waiters[slot].result[direction])
+                    *waiters[slot].result[direction] |= wait_results[direction];
+            }
+        }
+        /* Invalid descriptors cannot become ready again. Remove their
+         * subscription after the final wakeup instead of polling it forever. */
+        if (events & POLLNVAL) {
+            --wait_count;
+            if (slot < wait_count) {
+                wait_fds[slot] = wait_fds[wait_count];
+                waiters[slot] = waiters[wait_count];
+            }
+            --slot;
+        }
+#else
 
   no_fds = select(maxfd + 1, &t_rd_mask, &t_wr_mask, &t_ex_mask, &timelim);
 
   if (no_fds eq 0)
     {
       return(FALSE);           /* no IO therefore useless to look */
+#endif /* LINUX */
     }
+#if LINUX
+    return TRUE;
+#else
 
   if (no_fds eq -1)
     { if (errno ne EINTR)  /* no warning if signal */
@@ -2254,6 +2519,7 @@ WORD Multiwait()
     ServerDebug("Strange : not all selected streams accounted for");
 
   return(TRUE);
+#endif /* LINUX */
 }
 
 /**
@@ -2418,6 +2684,20 @@ WORD set_file_date(name,time)
      char *name;
      long time;
 {
+#if LINUX
+#if SOLARIS || LINUX
+  struct utimbuf timestamps;
+  timestamps.actime = time;
+  timestamps.modtime = time;
+
+  return (utime (name,&timestamps) eq 0) ? TRUE : FALSE;
+#else
+  time_t timestamps[2];
+  timestamps[0] = time;
+  timestamps[1] =time;
+  return (utime(name,timestamps) eq 0) ? TRUE : FALSE;
+#endif
+#else
 #if SOLARIS
   struct utimbuf timestamps;
   timestamps.actime = time;
@@ -2430,6 +2710,7 @@ WORD set_file_date(name,time)
   timestamps[1] =time;
   return (utime(name,timestamps) eq 0) ? TRUE : FALSE;
 #endif
+#endif /* LINUX */
 }
 
 /**
@@ -2514,10 +2795,19 @@ WORD Heliosmode;
 
   if ((O_Create & Heliosmode) ne 0)
     mymode |= O_CREAT;
+#if LINUX
+  if ((O_Exclusive & Heliosmode) ne 0)
+    mymode |= O_EXCL;
+#else
+#endif /* LINUX */
   if ((O_Truncate & Heliosmode) ne 0)
     mymode |= O_TRUNC;
   
+#if LINUX
+  handle = open(name,mymode | (fifo ? O_NONBLOCK : 0),0666);
+#else
   handle = open(name,mymode,0666);
+#endif /* LINUX */
   
   if (handle < 0)
    { convert_error();  return(0); }
@@ -2564,10 +2854,25 @@ WORD write_to_file(handle, amount, buff)
 stream handle;
 WORD   amount;
 BYTE   *buff;
+#if LINUX
+{ int written = 0;
+  while (written < amount) {
+    int n = write(handle & Blocking_mask, buff + written, amount - written);
+    if (n < 0 && errno == EINTR) continue;
+    if (n <= 0) {
+      if (n == 0) errno = EIO;
+      convert_error();
+      return FALSE;
+    }
+    written += n;
+  }
+  return TRUE;
+#else
 { if (write(handle & Blocking_mask, buff, amount) < 0)
    { convert_error(); return(FALSE); }
   else
    return(TRUE);
+#endif /* LINUX */
 }
 
 #ifndef L_XTND

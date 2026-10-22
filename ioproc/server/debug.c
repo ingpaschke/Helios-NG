@@ -125,7 +125,11 @@ PRIVATE word ispos = 0;
 #define DEL    0x7f
 #define ESC    0x1b
 
+#if LINUX
+#define probe_value 0x61616161
+#else
 #define probe_value 0x61616161L
+#endif /* LINUX */
 #define MAXCHUNK 8192
 
 PRIVATE unsigned long deftrace = MinInt;
@@ -194,7 +198,11 @@ pptr node;
 
 PRIVATE void delete_module(node)
 mptr node;
+#if LINUX
+{ WalkList(&(node->procsyms), (VoidNodeFnPtr)func(delete_proc), (hostword)0, (hostword)0);
+#else
 { WalkList(&(node->procsyms),   (VoidNodeFnPtr)func(delete_proc));
+#endif /* LINUX */
   FreeList(&(node->staticsyms));
   iofree(Remove(&(node->node)));
 }
@@ -202,7 +210,11 @@ mptr node;
 void tidy_debug()
 { if (!debug_initialised) return;
  
+#if LINUX
+  WalkList(&modlist, (VoidNodeFnPtr)func(delete_module), (hostword)0, (hostword)0);
+#else
   WalkList(&modlist, (VoidNodeFnPtr)func(delete_module));
+#endif /* LINUX */
 }
 
 /*------------------------------------------------------------------------------
@@ -637,9 +649,15 @@ PRIVATE void dogo()
                     dump();
                     return;
 
+#if LINUX
+          case 'i': xpwrint (0xf0f0f0f0);
+                    xpwrword(0x00010100);
+                    xpwrint (0x8000AAAA);
+#else
           case 'i': xpwrint (0xf0f0f0f0L);
                     xpwrword(0x00010100L);
                     xpwrint (0x8000AAAAL);
+#endif /* LINUX */
                     output("Info sent.\r\n");
                     break;
 
@@ -653,13 +671,25 @@ PRIVATE void dogo()
 
           case 'm':          /* send a test message */
                     xpwrbyte(2L);
+#if LINUX
+                    xpwrint (0x00010008);
+#else
                     xpwrint (0x00010008L);
+#endif /* LINUX */
                     xpwrint (iocport);
+#if LINUX
+                    xpwrint (0x00000000);
+                    xpwrint (0xAAAAAAAA);
+                    xpwrword(0xCCCCCCCC);
+                    xpwrword(0xDDDDDDDD);
+                    xpwrword(0xDDDDDDDD);
+#else
                     xpwrint (0x00000000L);
                     xpwrint (0xAAAAAAAAL);
                     xpwrword(0xCCCCCCCCL);
                     xpwrword(0xDDDDDDDDL);
                     xpwrword(0xDDDDDDDDL);
+#endif /* LINUX */
                     break;
 
            default: if (scport ne 0L)
@@ -701,18 +731,30 @@ PRIVATE void dogo()
                     r = xprdint();
                     f = xprdint();
                       /* special single character message */
+#if LINUX
+                    if( h eq 1L && f eq 0x22222222 )
+#else
                     if( h eq 1L && f eq 0x22222222L )
+#endif /* LINUX */
                      { int c = (int) xprdbyte();
                        outputch(c, &Server_window);
                        break;
                      }
 
+#if LINUX
+                    if ( f eq 0x44444444)
+#else
                     if ( f eq 0x44444444L)
+#endif /* LINUX */
                      { scport = r;
                        break;
                      }
 
+#if LINUX
+                    if (f eq 0x60002010)
+#else
                     if (f eq 0x60002010L)
+#endif /* LINUX */
                      { ServerDebug("Search: %8x %8x %8x %8x.", h, d, r, f);
                        xprdint(); xprdint();
                        if ((dsize = (h & 0x0000ffff)) ne 0)
@@ -723,20 +765,37 @@ PRIVATE void dogo()
                           output("\r\n");
                         }
                        xpwrbyte(2L);
+#if LINUX
+                       xpwrint(0x00000000);
+#else
                        xpwrint(0x00000000L);
+#endif /* LINUX */
                        xpwrint(r);
+#if LINUX
+                       xpwrint(0x8000BBBB);
+                       xpwrint(0x00000000);
+#else
                        xpwrint(0x8000BBBBL);
                        xpwrint(0x00000000L);
+#endif /* LINUX */
                        break;
                      }
                     ServerDebug("Message      : %8lx %8lx %8lx %8lx", h,d,r,f);
+#if LINUX
+                    if ( (csize=((h & 0x00ff0000)>>16)) ne 0 )
+#else
                     if ( (csize=((h & 0x00ff0000L)>>16)) ne 0 )
+#endif /* LINUX */
                       { output("Control vector: ");
                         for( i = 0 ; i < csize ; i++ )
                           ServerDebug("%08lx %q",xprdint());
                         output("\r\n");
                       }
+#if LINUX
+                    if ( (dsize=(h & 0x0000ffff)) ne 0 )
+#else
                     if ( (dsize=(h & 0x0000ffffL)) ne 0 )
+#endif /* LINUX */
                       { output("Data vector   : ");
                         for( i = 0 ; i < dsize ; i++ )
                           ServerDebug("%02x %q",(UBYTE)xprdbyte());
@@ -752,10 +811,17 @@ PRIVATE void dogo()
                      a=xprdint();
                      iocport=xprdint();
                      ServerDebug("INFO : %8lx %8lx.",a,iocport);
+#if LINUX
+                     if( ( a & 0x00ff0000 ) ne 0L )
+                      { xpwrint (0xf0f0f0f0);
+                        xpwrint (0x00000100);
+                        xpwrint (0x8000AAAA);
+#else
                      if( ( a & 0x00ff0000L ) ne 0L )
                       { xpwrint (0xf0f0f0f0L);
                         xpwrint (0x00000100L);
                         xpwrint (0x8000AAAAL);
+#endif /* LINUX */
                         output("Info sent.\r\n");
                       }
                      break;
@@ -839,7 +905,11 @@ PRIVATE void dump()
   output("\r\nSaving low memory...\r\n");
 
   for(i = 0 ; i < 100 ; i++ )
+#if LINUX
+    savearea[i] = dbrdword(0x80000000+(i<<2));
+#else
     savearea[i] = dbrdword(0x80000000L+(i<<2));
+#endif /* LINUX */
 
   output("Sending bootstrap...\r\n");
   xpwrbyte(bootsize);           /* bootstrap size */
@@ -854,7 +924,11 @@ PRIVATE void dump()
   output("Restoring low memory...\r\n");
 
   for(i = 0 ; i < 100 ; i++ )
+#if LINUX
+    dbwrword(0x80000000+(i<<2),savearea[i]);
+#else
     dbwrword(0x80000000L+(i<<2),savearea[i]);
+#endif /* LINUX */
 }
 
 /**
@@ -1022,7 +1096,11 @@ PRIVATE word readnumber()
      if (ch eq BS)
       { outputch(' ', &Server_window);
         outputch(BS,  &Server_window);
+#if LINUX
+        n = (n>>4) & 0x0fffffff;
+#else
         n = (n>>4) & 0x0fffffffL;
+#endif /* LINUX */
       }
      elif('0' <= ch && ch <= '9' )
         n = (n<<4) + ch - '0';
@@ -1173,8 +1251,13 @@ PRIVATE void trace()
   if ( deftrace ne MinInt )
     dbvec = deftrace;
   else
+#if LINUX
+   { dbvec = dbrdint(0x80001000);
+     dbvec = dbrdint(dbvec+0x80001000+0x54);
+#else
    { dbvec = dbrdint(0x80001000L);
      dbvec = dbrdint(dbvec+0x80001000L+0x54);
+#endif /* LINUX */
    }
 
   upb = dbrdint(dbvec);
@@ -1663,7 +1746,11 @@ word loc, op,opd;
                        break;
       }
    }
+#if LINUX
+  elif((0L <= opd) && (opd <= 0x00ac) && (oper[opd] ne 0L))
+#else
   elif((0L <= opd) && (opd <= 0x00acL) && (oper[opd] ne 0L))
+#endif /* LINUX */
    ServerDebug("%s%q",oper[opd]);
   else
    ServerDebug("UNKNOWN %2lx %8lx%q",op,opd);

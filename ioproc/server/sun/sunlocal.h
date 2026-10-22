@@ -51,8 +51,19 @@ typedef long clock_t;
 #define SEEK_SET	0
 #endif
 
+#if LINUX
+#if !LINUX
 extern char *sys_errlist[];
 extern int  sys_nerr;
+#else
+extern const char **linux_errlist(void);
+#define sys_errlist (linux_errlist())
+#define sys_nerr 256
+#endif
+#else
+extern char *sys_errlist[];
+extern int  sys_nerr;
+#endif /* LINUX */
 
 /**
 *** These define the interface between the I/O Server and the

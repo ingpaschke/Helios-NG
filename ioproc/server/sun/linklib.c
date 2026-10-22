@@ -265,6 +265,23 @@ PRIVATE void fn( inmos_free_link,  (int));
 
 #endif 
 
+
+#if LINUX
+#include "../linux/linkdrv.h"
+void ios_linux_register_link(const struct ios_link_driver *driver)
+{
+    open_link_fn = inin_fn_(driver->open);
+    free_link_fn = vdin_fn_(driver->free);
+    reset_fn = vdvd_fn_(driver->reset);
+    analyse_fn = vdvd_fn_(driver->analyse);
+    rdrdy_fn = wdvd_fn_(driver->rdrdy);
+    wrrdy_fn = wdvd_fn_(driver->wrrdy);
+    byte_from_link_fn = wdub_fn_(driver->read_byte);
+    byte_to_link_fn = wdin_fn_(driver->write_byte);
+    send_block_fn = wdinp_fn_(driver->send);
+    fetch_block_fn = wdinp_fn_(driver->fetch);
+}
+#endif
 PRIVATE WORD fn( gen_byte_from_link, (UBYTE *));
 PRIVATE WORD fn( gen_byte_to_link, (int));
 PRIVATE WORD fn( gen_send_block, (int, BYTE *, int));
@@ -459,6 +476,52 @@ extern int  fn ( bbk_rdrdy, (void));
 extern int  fn ( bbk_wrrdy, (void));
 #endif
 
+#if LINUX
+#if LINUX
+extern void fn( t4_init_link,      (void));
+extern int  fn( t4_open_link,      (int));
+extern void fn( t4_free_link,      (int));
+extern void fn( t4_reset,          (void));
+extern void fn( t4_analyse,        (void));
+extern WORD fn( t4_rdrdy,          (void));
+extern WORD fn( t4_wrrdy,          (void));
+extern WORD fn( t4_byte_from_link, (UBYTE *));
+extern WORD fn( t4_byte_to_link,   (int));
+extern WORD fn( t4_send_block,     (int, BYTE *, int));
+extern WORD fn( t4_fetch_block,    (int, BYTE *, int));
+extern int ios_linux_extra_link(const char *);
+#endif
+
+#if (IUNIX386 || (i486V4 && !LINUX))
+extern void fn ( kpar2_init_link, (void));
+extern int  fn ( kpar2_open_link, (int));
+extern void fn ( kpar2_free_link, (int));
+extern void fn ( kpar2_analyse_transputer, (void));
+extern void fn ( kpar2_reset_transputer, (void));
+extern int  fn ( kpar2_rdrdy, (void));
+extern int  fn ( kpar2_wrrdy, (void));
+
+extern void fn ( tim40_init_link, (void));
+extern int  fn ( tim40_open_link, (int));
+extern void fn ( tim40_free_link, (int));
+extern void fn ( tim40_reset, (void));
+extern int  fn ( tim40_rdrdy, (void));
+extern int  fn ( tim40_wrrdy, (void));
+
+#if 0
+extern void fn ( hepc2_init_link, (void));
+extern int  fn ( hepc2_open_link, (int));
+extern void fn ( hepc2_free_link, (int));
+extern void fn ( hepc2_reset, (void));
+extern int  fn ( hepc2_rdrdy, (void));
+extern int  fn ( hepc2_wrrdy, (void));
+extern int  fn ( hepc2_byte_from_link, (int *));
+extern int  fn ( hepc2_byte_to_link, (int));
+extern int  fn ( hepc2_send_block, (int, BYTE *, int));
+extern int  fn ( hepc2_fetch_block, (int, BYTE *, int));
+#endif
+#endif
+#else
 #if (IUNIX386 || i486V4)
 extern void fn ( kpar2_init_link, (void));
 extern int  fn ( kpar2_open_link, (int));
@@ -488,6 +551,7 @@ extern int  fn ( hepc2_send_block, (int, BYTE *, int));
 extern int  fn ( hepc2_fetch_block, (int, BYTE *, int));
 #endif
 #endif
+#endif /* LINUX */
 
 #if (SUN3 || SUN4)
 
@@ -777,7 +841,7 @@ void resetlnk()
   }
 #endif
 
-#endif (SUN3 || SUN4)
+#endif /* (SUN3 || SUN4) */
 
 #if (SUN386)
   elif (!mystrcmp(conf, "IMB"))
@@ -866,6 +930,64 @@ void resetlnk()
    }        
 #endif
 
+#if LINUX
+#if LINUX
+  elif (!mystrcmp(conf, "t4"))     /* t4 emulator over a socket */
+   { t4_init_link();
+     open_link_fn      = inin_fn_(t4_open_link);
+     free_link_fn      = vdin_fn_(t4_free_link);
+     reset_fn          = vdvd_fn_(t4_reset);
+     analyse_fn        = vdvd_fn_(t4_analyse);
+     rdrdy_fn          = wdvd_fn_(t4_rdrdy);
+     wrrdy_fn          = wdvd_fn_(t4_wrrdy);
+     byte_from_link_fn = wdub_fn_(t4_byte_from_link);
+     byte_to_link_fn   = wdin_fn_(t4_byte_to_link);
+     send_block_fn     = wdinp_fn_(t4_send_block);
+     fetch_block_fn    = wdinp_fn_(t4_fetch_block);
+   }
+  elif (ios_linux_extra_link(conf)) { /* external link backend selected */ }
+#endif
+#if (IUNIX386 || (i486V4 && !LINUX))
+  elif (!mystrcmp(conf, "interactive"))
+   { kpar2_init_link();
+     open_link_fn      = inin_fn_(kpar2_open_link);
+     free_link_fn      = vdvd_fn_(kpar2_free_link);
+     reset_fn          = vdvd_fn_(kpar2_reset_transputer);
+     analyse_fn        = vdvd_fn_(kpar2_analyse_transputer);
+     rdrdy_fn	       = wdvd_fn_(kpar2_rdrdy);
+     wrrdy_fn	       = wdvd_fn_(kpar2_wrrdy);
+   }
+  /* TMS320C40 'box' implementations */
+
+  elif (!mystrcmp(conf, "TIM40")) {
+    /* HEPC2 defaults */
+     tim40_init_link();
+     open_link_fn      = inin_fn_(tim40_open_link);
+     free_link_fn      = vdin_fn_(tim40_free_link);
+     reset_fn          = vdvd_fn_(tim40_reset);
+     analyse_fn        = vdvd_fn_(tim40_reset);
+     rdrdy_fn	       = wdvd_fn_(tim40_rdrdy);
+     wrrdy_fn	       = wdvd_fn_(tim40_wrrdy);
+   }
+#if 0
+  elif (!mystrcmp(conf, "HEPC2")) {
+    /* HEPC2 defaults */
+    hepc2_init_link();
+    open_link_fn      = inin_fn_(hepc2_open_link);
+    free_link_fn      = vdin_fn_(hepc2_free_link);
+    rdrdy_fn          = wdvd_fn_(hepc2_rdrdy);
+    wrrdy_fn          = wdvd_fn_(hepc2_wrrdy);
+    byte_to_link_fn   = wdin_fn_(hepc2_byte_to_link);	/* not actually used */
+    byte_from_link_fn = wdub_fn_(hepc2_byte_from_link);	/* not actually used */
+    send_block_fn     = wdinp_fn_(hepc2_send_block);
+    fetch_block_fn    = wdinp_fn_(hepc2_fetch_block);
+    reset_fn          = vdvd_fn_(hepc2_reset);
+    analyse_fn        = vdvd_fn_(hepc2_reset);
+   }
+#endif
+
+#endif /* IUNIX386 */
+#else
 #if (IUNIX386 || i486V4)
   elif (!mystrcmp(conf, "interactive"))
    { kpar2_init_link();
@@ -906,6 +1028,7 @@ void resetlnk()
 #endif
 
 #endif /* IUNIX386 */
+#endif /* LINUX */
 
 #if (SUN3 || SUN4)
 
@@ -1714,7 +1837,13 @@ PRIVATE void fn( hydra_inet_init_link, (int));
 extern "C"
 {
 #endif
+#if LINUX
+#if !LINUX
 int fn (gethostname, (char *, int));
+#endif
+#else
+int fn (gethostname, (char *, int));
+#endif /* LINUX */
 #ifdef __cplusplus
 }
 #endif

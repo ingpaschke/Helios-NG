@@ -54,7 +54,11 @@ PUBLIC  word fn( InitCo,   (word));
 PUBLIC  word fn( InitCo,   (void));
 #endif
 PUBLIC  word fn( CallCo,   (ptr, word));
+#if LINUX
+PUBLIC  word fn( WaitCo,   (word));
+#else
 PUBLIC  ptr  fn( WaitCo,   (word));
+#endif /* LINUX */
 PUBLIC  word fn( DeleteCo, (ptr));
 PUBLIC  ptr  fn( CreateCo, (VoidFnPtr, word));
 PUBLIC  word CurrentCo;
@@ -193,7 +197,11 @@ Conode *conode;
 { Conode *save_conode = current_conode;
   current_conode = conode;
 
+#if LINUX
+  if (CallCo( conode->cobase, 0L) eq CoDeleted)
+#else
   if (CallCo( conode->cobase, (word) conode) eq CoDeleted)
+#endif /* LINUX */
    { 
      Remove(&(conode->node));
      DeleteCo( conode->cobase);
@@ -353,12 +361,21 @@ List *header;
 void WalkList(List *list, VoidNodeFnPtr fun, ...)
 {
  Node *node, *node2;
+#if LINUX
+  hostword arg1, arg2;
+#else
   word arg1, arg2;
+#endif /* LINUX */
   va_list args;
 
   va_start(args, fun);
+#if LINUX
+  arg1 = va_arg(args, hostword);
+  arg2 = va_arg(args, hostword);
+#else
   arg1 = va_arg(args, word);
   arg2 = va_arg(args, word);
+#endif /* LINUX */
   va_end(args);
 
   for (node=list->head; node->next ne NULL; node=node2)
@@ -367,14 +384,27 @@ void WalkList(List *list, VoidNodeFnPtr fun, ...)
     }
 }
 
+#if LINUX
+hostword Wander(List *list, WordNodeFnPtr fun, ...)
+#else
 word Wander(List *list, WordNodeFnPtr fun, ...)
+#endif /* LINUX */
 { Node *node, *node2;
+#if LINUX
+  hostword result, arg1, arg2;
+#else
   word result, arg1, arg2;
+#endif /* LINUX */
   va_list args;
 
   va_start(args, fun);
+#if LINUX
+  arg1 = va_arg(args, hostword);
+  arg2 = va_arg(args, hostword);
+#else
   arg1 = va_arg(args, word);
   arg2 = va_arg(args, word);
+#endif /* LINUX */
   va_end(args);
 
   result = false;
@@ -402,7 +432,11 @@ word arg1, arg2;
     }
 }
 
+#if LINUX
+hostword Wander(list, fun, arg1, arg2)
+#else
 word Wander(list, fun, arg1, arg2)
+#endif /* LINUX */
 List *list;
 WordFnPtr fun;
 word arg1, arg2;

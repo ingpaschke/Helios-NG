@@ -637,7 +637,11 @@ char *config_name;
   InitList(&config_hdr);
   unless(base_config_initialised) InitList(&base_config);
 
+#if LINUX
+  WalkList(&base_config, (VoidNodeFnPtr)func(copy_config), (hostword)0, (hostword)0);
+#else
   WalkList(&base_config, (VoidNodeFnPtr)func(copy_config));
+#endif /* LINUX */
 
   config_initialised++;                /* There may be memory to be freed */
 
@@ -714,7 +718,11 @@ char *config_name;
       return(0); 
     }
 
+#if LINUX
+  WalkList(&config_hdr, (VoidNodeFnPtr)func(test_relative), (hostword)0, (hostword)0);
+#else
   WalkList(&config_hdr, (VoidNodeFnPtr)func(test_relative));
+#endif /* LINUX */
 
   temp = get_config("SYSTEM_IMAGE");
   if (temp ne NULL) strcpy(system_image, temp);
@@ -792,9 +800,17 @@ char * get_config (char * str)
 char *get_config(str)
 char *str;
 #endif
+#if LINUX
+{ hostword result;
+#else
 { word result;
+#endif /* LINUX */
 
+#if LINUX
+  result = Wander(&config_hdr, (WordNodeFnPtr) func(test_name), (hostword)(str), (hostword)0);
+#else
   result = Wander(&config_hdr, (WordNodeFnPtr) func(test_name), str);
+#endif /* LINUX */
   if (result eq false)
     return(NULL);
   else
@@ -1048,7 +1064,11 @@ PRIVATE word Init()
        tempco->timelimit  = MAXINT;       /* servers never time out */
        strcpy(tempco->name, devices[i].name);
        tempco->handlers   = devices[i].handlers;
+#if LINUX
+       tempco->extra      = (ptr)(hostword) devices[i].type;
+#else
        tempco->extra      = (ptr) devices[i].type;
+#endif /* LINUX */
        tempco->flags      = 0L;
     }
 
@@ -1064,7 +1084,11 @@ PRIVATE word Init()
                 /* node having the name ?                                */
     drivemap = get_drives(&floppies);
 
+#if LINUX
+    mask     = 0x00000001;
+#else
     mask     = 0x00000001L;
+#endif /* LINUX */
     for (i=0; i < 32; i++)
      { if (drivemap & mask)
          { 
@@ -1170,9 +1194,15 @@ PRIVATE void TidyUp()
   Debug(Quit_Flag, ("Shutting down streams and servers."));
 
   for (TerminateState = 1; TerminateState <= 4; TerminateState++)
+#if LINUX
+   { WalkList(WaitingCo, (VoidNodeFnPtr)func(TerminateCo), (hostword)0, (hostword)0);
+     WalkList(PollingCo, (VoidNodeFnPtr)func(TerminateCo), (hostword)0, (hostword)0);
+     WalkList(SelectCo, (VoidNodeFnPtr)func(TerminateCo), (hostword)0, (hostword)0);
+#else
    { WalkList(WaitingCo, (VoidNodeFnPtr)func(TerminateCo));
      WalkList(PollingCo, (VoidNodeFnPtr)func(TerminateCo));
      WalkList(SelectCo,  (VoidNodeFnPtr)func(TerminateCo));
+#endif /* LINUX */
    }
 
   iofree(WaitingCo);   /* and free all memory that has been allocated */
@@ -1182,9 +1212,17 @@ PRIVATE void TidyUp()
 #if multi_tasking
 #if SOLARIS
   /* Last 0 argument is a dummy value to kepp the C++ compiler happy */
+#if LINUX
+  ClearMultiwait(Multi_LinkMessage, (hostword)(current_link), (hostword)(0));
+#else
   ClearMultiwait(Multi_LinkMessage, current_link, 0);
+#endif /* LINUX */
+#else
+#if LINUX
+  ClearMultiwait(Multi_LinkMessage, (hostword)(current_link), (hostword)0);
 #else
   ClearMultiwait(Multi_LinkMessage, current_link);
+#endif /* LINUX */
 #endif
 
 #endif
@@ -1421,16 +1459,33 @@ PRIVATE int MainLoop()
 #endif
 
                                     /* wake up any coroutines that may */
+#if LINUX
+     WalkList(PollingCo, (VoidNodeFnPtr)func(polling_check), (hostword)0, (hostword)0); /* be waiting */
+     WalkList(SelectCo, (VoidNodeFnPtr)func(polling_check), (hostword)0, (hostword)0);
+#else
      WalkList(PollingCo, (VoidNodeFnPtr)func(polling_check)); /* be waiting */
      WalkList(SelectCo,  (VoidNodeFnPtr)func(polling_check));
+#endif /* LINUX */
 
                                     /* allow stream coroutines to die if */
                                     /* no message has arrived in time    */
+#if LINUX
+     WalkList(WaitingCo, (VoidNodeFnPtr)func(timeout_check), (hostword)0, (hostword)0);
+#else
      WalkList(WaitingCo, (VoidNodeFnPtr)func(timeout_check));
+#endif /* LINUX */
 
+#if LINUX
+     WalkList(PollingCo, (VoidNodeFnPtr)func(timeout_check), (hostword)0, (hostword)0);
+#else
      WalkList(PollingCo, (VoidNodeFnPtr)func(timeout_check));
+#endif /* LINUX */
 
+#if LINUX
+     WalkList(SelectCo, (VoidNodeFnPtr)func(timeout_check), (hostword)0, (hostword)0);
+#else
      WalkList(SelectCo,  (VoidNodeFnPtr)func(timeout_check));
+#endif /* LINUX */
 
 #if multi_tasking
 
@@ -1475,7 +1530,11 @@ PRIVATE int MainLoop()
       }
 
                       /* I want to ignore error messages for the time being */
+#if LINUX
+     if (((mcb->MsgHdr).FnRc & 0x80000000) ne 0L)
+#else
      if (((mcb->MsgHdr).FnRc & 0x80000000L) ne 0L)
+#endif /* LINUX */
        continue;
 
                       /* BLV - patch to cope with very slow I/O Servers,    */
@@ -1489,7 +1548,11 @@ PRIVATE int MainLoop()
                                                 /* who is the request for ? */
 
         /* A coroutine in WaitingCo can usually receive a message immediately */
+#if LINUX
+     result = (Conode *)Wander(WaitingCo, (WordNodeFnPtr) func(CheckPkt), (hostword)(tempport), (hostword)0);
+#else
      result = (Conode *)Wander(WaitingCo, (WordNodeFnPtr) func(CheckPkt), tempport);
+#endif /* LINUX */
      if (result)
       {
         StartCo(result);
@@ -1499,7 +1562,11 @@ PRIVATE int MainLoop()
         /* A coroutine in PollingCo cannot receive another request, but if */
         /* that request happens to be a Close the last transaction must    */
         /* be aborted and replaced by the Close. */
+#if LINUX
+      result = (Conode *)Wander(PollingCo, (WordNodeFnPtr) func(CheckPkt), (hostword)(tempport), (hostword)0);
+#else
       result = (Conode *)Wander(PollingCo,(WordNodeFnPtr) func(CheckPkt), tempport);
+#endif /* LINUX */
       if (result)
        { if ((mcb->MsgHdr.FnRc & FG_Mask) eq FG_Close)
          result->type = CoSuicide; 
@@ -1508,7 +1575,11 @@ PRIVATE int MainLoop()
          continue;
        }
 
+#if LINUX
+      result = (Conode *)Wander(SelectCo, (WordNodeFnPtr) func(CheckPkt), (hostword)(tempport), (hostword)0);
+#else
       result = (Conode *)Wander(SelectCo, (WordNodeFnPtr) func(CheckPkt), tempport);
+#endif /* LINUX */
       if (result)
       { 
          result->type = CoAbortSelect;
@@ -1666,7 +1737,11 @@ Conode *myco;
 *** for Open and 0xC0 for CloseObj, so I mask off the useless bits, and use the
 *** remainder as an array index.
 **/
+#if LINUX
+    handler_off = ((int) (mcb->MsgHdr.FnRc & 0x000000F0)) >> 4;
+#else
     handler_off = ((int) (mcb->MsgHdr.FnRc & 0x000000F0L)) >> 4;
+#endif /* LINUX */
     (*(myco->handlers)[Open_off - 1 + handler_off])(myco);
    }
 }
@@ -1763,7 +1838,11 @@ Conode *myco;
 *** for Read and 0x10B0 for NegAck, so I mask off the useless bits, and use the
 *** remainder as an array index.
 **/
+#if LINUX
+    handler_off = ((int) (mcb->MsgHdr.FnRc & 0x000000F0)) >> 4;
+#else
     handler_off = ((int) (mcb->MsgHdr.FnRc & 0x000000F0L)) >> 4;
+#endif /* LINUX */
     (*(myco->handlers)[Read_off - 1 + handler_off])(myco);
    }
 }
@@ -1852,7 +1931,11 @@ use(myco)
 *** even to forward messages to other bits of the network.
 **/
 
+#if LINUX
+PRIVATE hostword fn( do_search, (Conode *, char *));
+#else
 PRIVATE word fn( do_search, (Conode *, char *));
+#endif /* LINUX */
 PRIVATE void Forward()
 { register char *server_name, *server_end;
   Conode *tempco;
@@ -1870,7 +1953,11 @@ PRIVATE void Forward()
 
   *server_end = '\0';
 
+#if LINUX
+  if ((tempco = (Conode *) Wander(WaitingCo, (WordNodeFnPtr)func(do_search), (hostword)(server_name), (hostword)0) )
+#else
   if ((tempco = (Conode *) Wander(WaitingCo, (WordNodeFnPtr)func(do_search), server_name) )
+#endif /* LINUX */
       ne (Conode *) false)
    if (tempco->id ne 1L)                   /* Cannot forward to IOPROC device */
     { 
@@ -1936,7 +2023,11 @@ Conode *myco;
   for ( ; curnode->node.next ne (Node *) NULL;
           curnode = (Conode *) curnode->node.next)
    { ObjNode *newnode = (ObjNode *) malloc(sizeof(ObjNode));
+#if LINUX
+     word type = (hostword) curnode->extra;
+#else
      word type = (word) curnode->extra;
+#endif /* LINUX */
 
      if (newnode eq (ObjNode *) NULL)
        { ServerDebug("Insufficient memory to initialise IOProc device.");
@@ -2014,15 +2105,27 @@ use(myco)
 }
 
 #if ANSI_prototypes
+#if LINUX
+PRIVATE hostword do_search (Conode * conode, char * str)
+#else
 PRIVATE word do_search (Conode * conode, char * str)
+#endif /* LINUX */
+#else
+#if LINUX
+PRIVATE hostword do_search(conode, str)      /* function passed to list walking */
 #else
 PRIVATE word do_search(conode, str)      /* function passed to list walking */
+#endif /* LINUX */
 Conode *conode;
 char   *str;
 #endif
 { 
   if (!strcmp(conode->name, str))
+#if LINUX
+    return((hostword) conode);
+#else
     return((word) conode);
+#endif /* LINUX */
   else
     return(false);
 }
@@ -2047,7 +2150,11 @@ PRIVATE void handle_search()
    if (*ptr1 eq '/')
     ptr2 = ptr1 + 1;
 
+#if LINUX
+  tempco = (Conode *) Wander(WaitingCo, (WordNodeFnPtr)func(do_search), (hostword)(ptr2), (hostword)0);
+#else
   tempco = (Conode *) Wander(WaitingCo, (WordNodeFnPtr)func(do_search), ptr2);
+#endif /* LINUX */
   if (!tempco)
     { Debug(Search_Flag, ("Distributed search for %s : unknown server", mcb->Data));
       Request_Return(EC_Error + SS_IOProc + EG_Unknown + EO_Server, 0L, 0L);
@@ -2068,7 +2175,11 @@ PRIVATE void handle_search()
      char   junk = tempco->name[0];  /* I must pick up the 2nd one   */
 
      tempco->name[0] = '\0';
+#if LINUX
+     junkco = (Conode *) Wander(WaitingCo, (WordNodeFnPtr)func(do_search), (hostword)(ptr2), (hostword)0);
+#else
      junkco = (Conode *) Wander(WaitingCo, (WordNodeFnPtr)func(do_search), ptr2);
+#endif /* LINUX */
      tempco->name[0] = junk;
      if (junkco)                    /* there is a lower-level server */
       {                             /* with the right name */
@@ -2173,7 +2284,11 @@ Conode *myco;
         return;
       }
 
+#if LINUX
+     NewStream(Type_Directory, Flags_Closeable, (hostword) &IO_extra,
+#else
      NewStream(Type_Directory, Flags_Closeable, (word) &IO_extra,
+#endif /* LINUX */
                IOPROC_Handlers);
    } 
 }
@@ -2541,19 +2656,35 @@ typedef struct nodes_buffer {
         ObjNode      nodes[MaxNodesPerBuffer];
 } nodes_buffer;
 
+#if LINUX
+PRIVATE hostword find_free(buf)
+#else
 PRIVATE word find_free(buf)
+#endif /* LINUX */
 nodes_buffer *buf;
 { int i;
   if (buf->free eq 0)
+#if LINUX
+   return(0);
+#else
    return(NULL);
+#endif /* LINUX */
   buf->free--;
   for (i = 0; i < MaxNodesPerBuffer; i++)
    if (buf->nodes[i].size eq node_magic_size)
     { buf->nodes[i].size = 0;
+#if LINUX
+      return((hostword) &(buf->nodes[i]));
+#else
       return((word) &(buf->nodes[i]));
+#endif /* LINUX */
     }
   buf->free++;
+#if LINUX
+  return(0);
+#else
   return(NULL);
+#endif /* LINUX */
 }
 
 ObjNode *NewObjNode()
@@ -2561,7 +2692,11 @@ ObjNode *NewObjNode()
   if (!nodes_list_initialised)
    { InitList(&nodes_list); nodes_list_initialised++; }
 
+#if LINUX
+  result = (ObjNode *) Wander(&nodes_list, (WordNodeFnPtr)func(find_free), (hostword)0, (hostword)0);
+#else
   result = (ObjNode *) Wander(&nodes_list, (WordNodeFnPtr)func(find_free));
+#endif /* LINUX */
   if (result ne (ObjNode *) NULL)
    return(result);
 
@@ -2596,7 +2731,11 @@ ObjNode      *node;
 
 void FreeObjNode(node)
 ObjNode *node;
+#if LINUX
+{ if (Wander(&nodes_list, (WordNodeFnPtr)func(find_node_to_free), (hostword)(node), (hostword)0) eq 0)
+#else
 { if (Wander(&nodes_list, (WordNodeFnPtr)func(find_node_to_free), node) eq 0)
+#endif /* LINUX */
    ServerDebug("Internal error : supposed to free unknown ObjNode.");
 }
 
@@ -2939,7 +3078,11 @@ word a;
 **/
 
 void NewStream(type, flags, extra, handlers)
+#if LINUX
+hostword extra;
+#else
 word extra;
+#endif /* LINUX */
 word type, flags;
 VoidConFnPtr *handlers;
 { word   temp;
@@ -2986,24 +3129,39 @@ VoidConFnPtr *handlers;
 word IsAnAttribute(attr, item)
 Attributes *attr;
 Attribute item;
+#if LINUX
+{ word *a_ptr = (word *) attr + (item & 0x00000003);
+  item     &= 0xFFFFFFFC;
+#else
 { word *a_ptr = (word *) attr + (item & 0x00000003L);
   item     &= 0xFFFFFFFCL;
+#endif /* LINUX */
   return( *a_ptr & item);
 }
 
 void AddAttribute(attr, item)
 Attributes *attr;
 Attribute item;
+#if LINUX
+{ word *a_ptr = (word *) attr + (item & 0x00000003);
+  item     &= 0xFFFFFFFC;
+#else
 { word *a_ptr = (word *) attr + (item & 0x00000003L);
   item     &= 0xFFFFFFFCL;
+#endif /* LINUX */
   *a_ptr     |= item;
 }
 
 void RemoveAttribute(attr, item)
 Attributes *attr;
 Attribute item;
+#if LINUX
+{ word *a_ptr = (word *) attr + (item & 0x00000003);
+  item     &= 0xFFFFFFFC;
+#else
 { word *a_ptr = (word *) attr + (item & 0x00000003L);
   item     &= 0xFFFFFFFCL;
+#endif /* LINUX */
   *a_ptr     &= ~item;
 }
 
@@ -3013,20 +3171,33 @@ Attribute item;
                      /* thus allowing upto 256 different speeds.            */
 word GetInputSpeed(attr)
 Attributes *attr;
+#if LINUX
+{ return((attr->Input) & 0x000000FF);
+#else
 { return((attr->Input) & 0x000000FFL);
+#endif /* LINUX */
 }
 
 word GetOutputSpeed(attr)
 Attributes *attr;
+#if LINUX
+{ return((attr->Output) & 0x000000FF);
+#else
 { return((attr->Output) & 0x000000FFL);
+#endif /* LINUX */
 }
 
 void SetInputSpeed(attr, speed)
 Attributes *attr;
 word speed;
 { 
+#if LINUX
+  attr->Input  &= 0xFFFFFF00;  /* clear bottom byte */
+  speed        &= 0x000000FF;  /* prevent nasty crash if speed invalid */
+#else
   attr->Input  &= 0xFFFFFF00L;  /* clear bottom byte */
   speed        &= 0x000000FFL;  /* prevent nasty crash if speed invalid */
+#endif /* LINUX */
   attr->Input  |= speed;
 }
 
@@ -3038,8 +3209,13 @@ Attributes *attr;
 word speed;
 #endif
 { 
+#if LINUX
+  attr->Output &= 0xFFFFFF00;  /* clear bottom byte */
+  speed        &= 0x000000FF;  /* prevent nasty crash if speed invalid */
+#else
   attr->Output &= 0xFFFFFF00L;  /* clear bottom byte */
   speed        &= 0x000000FFL;  /* prevent nasty crash if speed invalid */
+#endif /* LINUX */
   attr->Output |= speed;
 }
 

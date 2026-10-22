@@ -33,7 +33,11 @@ PUBLIC Node *fn( AddHead,     (Node *, List *));
 PUBLIC Node *fn( AddTail,     (Node *, List *));
 PUBLIC Node *fn( listRemove,  (Node *));
 PUBLIC Node *fn( NextNode,    (Node *));
+#if LINUX
+PUBLIC hostword fn(  Wander,      (List *, WordNodeFnPtr, ...));
+#else
 PUBLIC word fn(  Wander,      (List *, WordNodeFnPtr, ...));
+#endif /* LINUX */
 PUBLIC word fn(  TstList,     (List *));
 PUBLIC word fn(  ListLength,  (List *));
 PUBLIC void fn(  PreInsert,   (Node *, Node *));
@@ -131,7 +135,11 @@ PUBLIC word fn(  data_offset_ok,  (int));
 PUBLIC word fn(  request_name,    (char *, int));
 PUBLIC word fn(  mystrcmp,        (char *, char *));
 PUBLIC word fn(  get_unix_time,   (void));
+#if LINUX
+PUBLIC void fn(  NewStream,       (word, word, hostword, VoidConFnPtr *));
+#else
 PUBLIC void fn(  NewStream,       (word, word, word, VoidConFnPtr *));
+#endif /* LINUX */
 PUBLIC void fn(  AddAttribute,    (Attributes *, Attribute));
 PUBLIC void fn(  RemoveAttribute, (Attributes *, Attribute));
 PUBLIC void fn(  SetInputSpeed,   (Attributes *, word));
@@ -183,9 +191,15 @@ PUBLIC void fn( output, (char *));
 extern "C"
 {
 #endif
+#if LINUX
+PUBLIC hostword fn( create_a_window, (char *));
+PUBLIC void fn( window_size,     (hostword, word *, word *));
+PUBLIC void fn( close_window,    (hostword));
+#else
 PUBLIC word fn( create_a_window, (char *));
 PUBLIC void fn( window_size,     (word, word *, word *));
 PUBLIC void fn( close_window,    (word));
+#endif /* LINUX */
 PUBLIC void fn( send_to_window,  (char *, Window *));
 #ifdef __cplusplus
 }
@@ -1077,7 +1091,11 @@ PUBLIC  void fn( Internet_ObjectInfo, (Conode *));
 #define InternetDir_Select            Select_handler
 
 PUBLIC  word fn( Internet_InitStream,   (Conode *));
+#if LINUX
+PUBLIC word fn( Internet_TidyStream, (Conode *));
+#else
 #define Internet_TidyStream             Ignore
+#endif /* LINUX */
 PUBLIC  void fn( Internet_PrivateStream,(Conode *));
 PUBLIC  void fn( Internet_Read,         (Conode *));
 PUBLIC  void fn( Internet_Write,        (Conode *));
@@ -1115,6 +1133,23 @@ PUBLIC void  fn(  memory_map,        (void));       /* a debugging facility */
 
 #else
 
+#if LINUX
+#if !(SOLARIS || SUN3 || SUN4 || LINUX)
+
+/* free/malloc declared in <stdlib.h> */
+
+#if !(PC || MAC || HELIOS || RS6000)     /* The PC's header files declare malloc */
+#if !(AMIGA)
+PUBLIC char *fn( malloc,      (uint));
+/* PUBLIC void fn( free,         (char *)); */	/* now included via <stdlib.h> */
+#else
+PUBLIC char *fn( malloc,      (uint));
+PUBLIC void fn( free,         (void *));
+#endif
+#endif
+
+#endif /* !SOLARIS */
+#else
 #if !(SOLARIS || SUN3 || SUN4)
 
 /* free/malloc declared in <stdlib.h> */
@@ -1130,6 +1165,7 @@ PUBLIC void fn( free,         (void *));
 #endif
 
 #endif /* !SOLARIS */
+#endif /* LINUX */
 
 #endif /* use_own_memory_management */
 
@@ -1170,6 +1206,19 @@ extern "C"
 {
 #endif
 
+#if LINUX
+#if (RS6000 || HP9000 || SCOUNIX || LINUX)
+
+PUBLIC void fn (AddMultiwait, (WORD, WORD *, ...));
+PUBLIC void fn( ClearMultiwait, (WORD, ...));
+
+#else
+
+PUBLIC void fn (AddMultiwait, (long, long *, long, long));
+PUBLIC void fn (ClearMultiwait, (long, long, long));
+
+#endif
+#else
 #if (RS6000 || HP9000 || SCOUNIX)
 
 PUBLIC void fn (AddMultiwait, (WORD, WORD *, ...));
@@ -1181,6 +1230,7 @@ PUBLIC void fn (AddMultiwait, (long, long *, long, long));
 PUBLIC void fn (ClearMultiwait, (long, long, long));
 
 #endif
+#endif /* LINUX */
 
 #ifdef __cplusplus
 }
@@ -1196,7 +1246,11 @@ PUBLIC  void fn( initialise_files,        (void));
 PUBLIC  void fn( restart_devices,         (void));
 PUBLIC  void fn( restore_devices,         (void));
 PUBLIC  void fn( poll_the_devices,        (void));
+#if LINUX
+PUBLIC  int  fn( read_char_from_keyboard, (hostword));
+#else
 PUBLIC  int  fn( read_char_from_keyboard, (word));
+#endif /* LINUX */
 PUBLIC  int  fn( init_boot,               (void));
 PUBLIC  void fn( boot_processor,          (int));
 PUBLIC  void fn( tidy_boot,               (void));
