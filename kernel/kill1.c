@@ -147,6 +147,10 @@ Code _KillTask(Task *task)
 	 * EvictLinks/TimerQ precede them because those operations can sleep.
 	 */
 	EvictPortWaiters(pool);
+#ifdef __TRAN
+	/* Return grants which have woken a thread but not yet left _Wait. */
+	EvictSemaphoreWaiters(pool);
+#endif
 	EvictRunQs(pool);
 
 	/* Clean up and free any ports owned by task */

@@ -288,6 +288,9 @@ void FreeBuf(Buffer *buf);
 bool _TimedWait(Semaphore *sem, word timeout);
 word _Wait(Semaphore *sem);
 void _Signal(Semaphore *sem);
+#ifdef __TRAN
+void EvictSemaphoreWaiters(Pool *pool);
+#endif
 void AbortSem(Semaphore *sem);
 
 void PortInit(Config *config);

@@ -23,6 +23,18 @@
 
 #define Waiter Id
 #include "kernel.h"
+#ifdef __TRAN
+/* Records live on blocked threads' stacks. Keep them until _Wait resumes,
+ * including the interval where Signal has transferred its grant but the
+ * thread is still queued. Task teardown must return that grant. */
+struct SemaphoreWait {
+    Id id;
+    Semaphore *semaphore;
+    struct SemaphoreWait *next;
+    struct SemaphoreWait **previous;
+};
+#endif
+
 
 /*--------------------------------------------------------
 -- InitSemaphore					--
@@ -52,21 +64,72 @@ void InitSemaphore(Semaphore *sem, word count)
 
 Code _Wait(Semaphore *sem)
 {
-	Id w;
-
-	w.rc = 1;
-	if( sem->Count <= 0 )
-	{
-		w.next = NULL;
-		sem->Tail->next = &w;
-		sem->Tail = &w;
-		Suspend(&w.state, THREAD_SEMAPHORE);
-		/* Resumed by Signal() */
-	}
-	else	sem->Count--;
-
-	return w.rc;
+#ifdef __TRAN
+    struct SemaphoreWait wait;
+    Id *w = &wait.id;
+#else
+    Id local;
+    Id *w = &local;
+#endif
+    w->rc = 1;
+    if( sem->Count <= 0 )
+    {
+        w->next = NULL;
+#ifdef __TRAN
+        w->rc = 0;
+        wait.semaphore = sem;
+        wait.next = GetRoot()->SemaphoreWaiters;
+        wait.previous = &GetRoot()->SemaphoreWaiters;
+        if( wait.next != NULL ) wait.next->previous = &wait.next;
+        GetRoot()->SemaphoreWaiters = &wait;
+#endif
+        sem->Tail->next = w;
+        sem->Tail = w;
+        Suspend(&w->state, THREAD_SEMAPHORE);
+#ifdef __TRAN
+        *wait.previous = wait.next;
+        if( wait.next != NULL ) wait.next->previous = wait.previous;
+#endif
+    }
+    else sem->Count--;
+    return w->rc;
 }
+
+#ifdef __TRAN
+/* Called at executive priority, before deleting runnable continuations.
+ * No scheduling or allocation: a re-granted waiter remains queued until
+ * the caller finishes removing all dying threads. */
+void EvictSemaphoreWaiters(Pool *pool)
+{
+    struct SemaphoreWait *w;
+    struct SemaphoreWait **p;
+    /* Detach all blocked victims first. Otherwise returning one grant can
+     * wake another dying thread and leave a continuation on the run queue. */
+    for( w = GetRoot()->SemaphoreWaiters; w != NULL; w = w->next )
+    {
+        if( inpool(w,pool) && w->id.rc == 0 )
+        {
+            Semaphore *s = w->semaphore;
+            Id *id = s->Head, *prev = (Id *)s;
+            while( id != NULL && id != &w->id ) { prev = id; id = id->next; }
+            if( id != NULL )
+            {
+                prev->next = id->next;
+                if( s->Tail == id ) s->Tail = prev;
+            }
+        }
+    }
+    p = &GetRoot()->SemaphoreWaiters;
+    while( *p != NULL )
+    {
+        w = *p;
+        if( !inpool(w,pool) ) { p = &w->next; continue; }
+        *p = w->next;
+        if( w->next != NULL ) w->next->previous = p;
+        if( w->id.rc == 1 ) _Signal(w->semaphore);
+    }
+}
+#endif
 
 /*--------------------------------------------------------
 -- _TestWait						--

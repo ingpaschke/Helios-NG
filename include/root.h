@@ -131,7 +131,11 @@ typedef struct RootStruct {
 	word		spare5;
 	word		spare6;
 	word		spare7;
+#ifdef __TRAN
+	struct SemaphoreWait *SemaphoreWaiters; /* uses one reserved word */
+#else
 	word		spare8;
+#endif
 } RootStruct;
 
 /* flags set in Flags word (init from config.Flags)			*/

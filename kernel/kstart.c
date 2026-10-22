@@ -434,6 +434,8 @@ void Kstart(Channel *bootlink, word *loadbase)
 	word confsize;
 	Task *task;
 
+	root->SemaphoreWaiters = NULL;
+
 
 /******************************** Get configuration information */
 
