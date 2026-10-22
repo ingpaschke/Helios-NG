@@ -222,9 +222,14 @@ PASCAL NEAR heliosparm(int n)
 PASCAL NEAR heliosopen(void)
 {
         Attributes conAttr;
-        GetAttributes(Heliosno(stdin),&conAttr);
-        term.t_nrow = conAttr.Min-1;
-        term.t_ncol = conAttr.Time-1;
+        if (GetAttributes(Heliosno(stdin), &conAttr) < 0) {
+            conAttr.Min = 24;
+            conAttr.Time = 80;
+        }
+        if (conAttr.Min < 3 || conAttr.Min > 32767) conAttr.Min = 24;
+        if (conAttr.Time < 10 || conAttr.Time > 32767) conAttr.Time = 80;
+        term.t_mrow = term.t_nrow = conAttr.Min - 1;
+        term.t_mcol = term.t_ncol = conAttr.Time;
         
         strcpy(sres, "NORMAL");
         revexist = TRUE;
@@ -279,35 +284,12 @@ static int inlen=0;
 
 /*---------------------------------------------------------------------------*/
 void HandleScreenSize(void)
-/*
-**	when using the winsrvr (Helios IO-server for Windows 3.0) the screen
-**	size may change anytime. Here we just check, if the size has changed
-**	and try to adapt to it. Works fine for change of width. After a
-**	change of hight the command '^x0' may have to be used in order to
-**	clean up the screen and emacs-windows within the screen.
-*/
 {
-    int updateScreen = FALSE;
-    
-    Attributes conAttr;
-    GetAttributes(Heliosno(stdin),&conAttr);
-    if (term.t_nrow != conAttr.Min-1)
-    {							/* hight has changed */
-        if (term.t_mrow > conAttr.Min-1) term.t_nrow = conAttr.Min-1;
-        else term.t_nrow = term.t_mrow;
-        newsize(TRUE, conAttr.Min);
-        updateScreen = TRUE;
-    }
-    
-    if (term.t_ncol != conAttr.Time-1)
-    {							/* width has changed */
-        if (term.t_mcol > conAttr.Time-1) term.t_ncol = conAttr.Time-1;
-        else term.t_ncol = term.t_mcol;
-        newwidth(TRUE, term.t_ncol);
-        updateScreen = TRUE;
-    }
-    if (updateScreen) upscreen(TRUE, 0);
-        
+    Attributes attr;
+    if (GetAttributes(Heliosno(stdin), &attr) < 0) return;
+    if (term.t_nrow == attr.Min - 1 && term.t_ncol == attr.Time) return;
+    /* newsize must see the OLD dimensions to adjust split windows. */
+    if (vtresize(attr.Min, attr.Time)) upscreen(TRUE, 0);
 } /* HandleScreenSize */
 
 
@@ -413,7 +395,8 @@ int PASCAL NEAR ttgetc(void)
     if (unGotChar == 0)
     {
 #endif    
-        Read(Heliosno(stdin),&cc,1,-1);
+        while (Read(Heliosno(stdin), &cc, 1, OneSec/4) != 1)
+            HandleScreenSize();
 #if TYPEAH        
     }
     else
@@ -433,7 +416,7 @@ int PASCAL NEAR ttgetc_shortwait(void)
     if (unGotChar == 0)
     {
 #endif    
-    if (!Read(Heliosno(stdin),&cc,1,1)) cc = TIMEOUT;
+    if (Read(Heliosno(stdin),&cc,1,1) != 1) cc = TIMEOUT;
 #if TYPEAH        
     }
     else
@@ -450,7 +433,7 @@ int PASCAL NEAR ttgetc_shortwait(void)
 int PASCAL NEAR typahead(void)
 {
     char cc;
-    if (!Read(Heliosno(stdin),&cc,1,1)) cc = 0;
+    if (Read(Heliosno(stdin),&cc,1,1) != 1) cc = 0;
     unGotChar = cc;
     return cc;
 } /* typahead */

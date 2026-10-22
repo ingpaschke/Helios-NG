@@ -1027,3 +1027,5 @@ extern int PASCAL NEAR backtagword();	/* return from tagged word */
 
 #endif
 
+
+extern int PASCAL NEAR vtresize(int rows, int cols);
