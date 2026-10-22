@@ -282,6 +282,11 @@ static void do_open(ServInfo *servinfo)
 
 		/* Idle descriptors still own their reader/writer references. */
 		if( e == EK_Timeout ) continue;
+		/* Abort interrupts a client's outstanding I/O when a POSIX signal
+		 * arrives. It does not close the descriptor. In particular, idle
+		 * FIFO streams must survive SIGWINCH and subsequent select calls. */
+		if( e < Err_Null && (e & EG_Mask) == EG_Exception &&
+		    (e & EE_Mask) == EE_Abort ) continue;
 
 		if( e < Err_Null ) { Wait(&f->ObjNode.Lock); break; }
 
