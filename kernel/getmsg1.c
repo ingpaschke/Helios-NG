@@ -218,6 +218,7 @@ Code _MultiWait(MCB *mcb, word nports, Port *ports)
 	word timeout = mcb->Timeout;
 	word selected = -1;
 	word e = 0;
+	word cleanup_error = 0;
 	word queued = 0;
 	
 	if( ids == NULL ) return Err_NoMemory;
@@ -310,13 +311,13 @@ cleanup:
 			 */
 			if( NotSameCycle_(ports[i],pte) || pte->Type != T_Local )
 			{
-				e = mcb->MsgHdr.FnRc = Err_BadPort;
+				cleanup_error = Err_BadPort;
 				continue;
 			}
 			for( iid = pte->RxId,prev=NULL; iid != NULL && iid != id;
 					prev=iid,iid=iid->next);
 			if( iid == id ) dq(&pte->RxId,prev,id);
-			else e = mcb->MsgHdr.FnRc = Err_BadPort;
+			else cleanup_error = Err_BadPort;
 			continue;
 		}
 		
@@ -330,6 +331,8 @@ cleanup:
 
 	_Free((Memory *)ids, root->FreePool);
 
+	if( selected < 0 && cleanup_error != 0 )
+		e = mcb->MsgHdr.FnRc = cleanup_error;
 	if( e == 0 ) e = selected;
 
 	return e;
