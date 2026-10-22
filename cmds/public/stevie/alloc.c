@@ -28,19 +28,19 @@ char	*string;
 
 screenalloc()
 {
-	/*
-	 * If we're changing the size of the screen, free the old arrays
-	 */
-	if (Realscreen != NULL)
-		free(Realscreen);
-	if (Nextscreen != NULL)
-		free(Nextscreen);
-
-	Realscreen = malloc((unsigned)(Rows*Columns));
-	Nextscreen = malloc((unsigned)(Rows*Columns));
-	if (!Realscreen || !Nextscreen)
-		return (-1);
-	else	return (0);
+	char *real, *next;
+	/* Keep the previous screen intact if either allocation fails. */
+	real = malloc((unsigned)(Rows * Columns));
+	next = malloc((unsigned)(Rows * Columns));
+	if (!real || !next) {
+		if (real) free(real);
+		if (next) free(next);
+		return -1;
+	}
+	if (Realscreen) free(Realscreen);
+	if (Nextscreen) free(Nextscreen);
+	Realscreen = real; Nextscreen = next;
+	return 0;
 }
 
 /*

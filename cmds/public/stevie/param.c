@@ -96,13 +96,17 @@ char	*arg;		/* parameter string */
 	updatescreen();
 
 	if (did_lines) {
+		int oldrows = Rows;
 		Rows = P(P_LI);
 		P(P_LI) = Rows = setrows( Rows );
 					/* setrows() is system-dependent.
 					 * This assures no impossible values
 					 * will be set.
 					 */
-		if (screenalloc() == -1) return;	/* allocate new screen buffers */
+		if (screenalloc() == -1) {
+			P(P_LI) = Rows = oldrows;
+			return;
+		}
 		screenclear();
 		updatescreen();
 	}

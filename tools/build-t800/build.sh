@@ -96,7 +96,7 @@ SERVERS="servers servers/ttyserv servers/ttyserv/devs
 # servers/common is left out: its modend.o and trace.o are for the ARM
 # servers (serial, codec)
 CMDS="cmds/support cmds/shell cmds/com cmds/textutil cmds/private cmds/ampp cmds/asm
- cmds/cc/compiler sa cmds/cdl cmds/make cmds/help cmds/emacs cmds/emacs.311
+ cmds/cc/compiler sa cmds/cdl cmds/make cmds/help cmds/emacs cmds/emacs.311 cmds/public/stevie
  cmds/gnu/gmake cmds/gnu/tar cmds/gnu/gtar cmds/debugger cmds/debugger/lib"
 TCPIP="tcpip tcpip/helios tcpip/net tcpip/netinet tcpip/sys tcpip/rpc/rpc tcpip/nfs
  tcpip/cmds/ftp tcpip/cmds/ftpd tcpip/cmds/inetd tcpip/cmds/ping tcpip/cmds/rexecd

@@ -108,14 +108,14 @@ SOURCES.c	=  main.c edit.c linefunc.c normal.c cmdline.c hexchars.c \
 SOURCES.a	= 
 
 # C header files
-HEADERS.c	= ascii.h env.h keymap.h ops.h param.h 
+HEADERS.c	= ascii.h env.h keymap.h ops.h param.h \
 		  regexp.h regmagic.h stevie.h term.h
 
 # AMPP macro files
 HEADERS.m	=
 
 # Any other source files
-SOURCES.odd	= makefile makefile.old stevie.doc ctags.doc porting.doc
+SOURCES.odd	= makefile makefile.old stevie.doc ctags.doc porting.doc \
 		  source.doc stevie.mm readme readme.dmt
 
 

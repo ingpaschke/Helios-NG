@@ -36,6 +36,32 @@ static	char	RCSid[] =
 #include <stdio.h>
 #include <posix.h>
 #include <nonansi.h>
+#include <attrib.h>
+#include <syslib.h>
+
+/* Resize only between input characters, never from a signal handler. */
+static void resize_terminal(void)
+{
+    extern bool_t interactive;
+    Attributes attr;
+    int oldrows = Rows, oldcols = Columns;
+    if (!interactive || State == CMDLINE) return;
+    if (GetAttributes(Heliosno(stdin), &attr) < 0) return;
+    if (attr.Min < 3 || attr.Time < 10 || attr.Min > 32767 || attr.Time > 32767)
+        return;
+    if (attr.Min == Rows && attr.Time == Columns) return;
+    Rows = attr.Min; Columns = attr.Time;
+    if (screenalloc() < 0) {
+        Rows = oldrows; Columns = oldcols;
+        return;
+    }
+    P(P_LI) = Rows;
+    screenclear();
+    cursupdate();
+    updatescreen();
+    windgoto(Cursrow, Curscol);
+    flushbuf();
+}
 
 /*
  * inchar() - get a character from the keyboard
@@ -50,8 +76,9 @@ inchar( void )
 
 	do
 	{
-		while (read(0, &c, 1) != 1)
-			;
+		resize_terminal();
+		while (Read(Heliosno(stdin), &c, 1, OneSec/4) != 1)
+			resize_terminal();
 	} while (c == NUL);
 
 	if (c == 0x9b)
