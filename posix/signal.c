@@ -61,7 +61,7 @@
 #define DFL_IGNORE	(S(SIGCHLD)|S(SIGWINCH))
 
 /* The following signals will be passed on to the children	  */
-#define DFL_PROPAGATE	(S(SIGINT)|S(SIGKILL)|S(SIGTERM)|S(SIGHUP)|S(SIGABRT))
+#define DFL_PROPAGATE	(S(SIGINT)|S(SIGKILL)|S(SIGTERM)|S(SIGHUP)|S(SIGABRT)|S(SIGWINCH))
 
 /* The following signals may not be blocked, cought or ignored		  */
 #define DFL_ILLEGAL (S(SIGKILL)|S(SIGSTOP))
@@ -299,7 +299,10 @@ extern void _posix_exception_handler(void)
               e == (ErrBit | EG_Exception | EE_Signal | SIGWINCH))
         {
             SetPriority(StandardPri);
-            inner_raise(SIGWINCH,TRUE,FALSE);
+            /* The terminal event port can belong to the waiting shell.
+             * Deliver resize notifications to its children in the same
+             * process group, as for terminal break events. */
+            inner_raise(SIGWINCH,TRUE,TRUE);
             SetPriority(HighServerPri);
             continue;
         }
