@@ -174,6 +174,34 @@ Fifo *NewFifo(DirNode *dir,string name, word flags, Matrix matrix)
 --							--
 --------------------------------------------------------*/
 
+/* One select reply can subscribe to several conditions. Consume every
+ * alias together, so another condition cannot reuse an already freed port. */
+static void FifoForgetSelect(Fifo *f, Port port)
+{
+    if( f->SelectPort == port ) f->SelectPort = NullPort;
+    if( f->WriteSelectPort == port ) f->WriteSelectPort = NullPort;
+    if( f->ReadException == port ) f->ReadException = NullPort;
+    if( f->WriteException == port ) f->WriteException = NullPort;
+}
+
+static void FifoCancelSelect(Fifo *f, Port port)
+{
+    if( port == NullPort ) return;
+    FifoForgetSelect(f,port);
+    FreePort(port);
+}
+
+static void FifoNotifySelect(Fifo *f, Port port, word mode)
+{
+    if( port == NullPort ) return;
+    if( f->ReadException == port && f->Written && f->Writers == 0 )
+        mode |= f->ReadExceptionMode;
+    if( f->WriteException == port && f->Read && f->Readers == 0 )
+        mode |= f->WriteExceptionMode;
+    FifoForgetSelect(f,port);
+    SendException(port,mode);
+}
+
 static void do_open(ServInfo *servinfo)
 {
 	MCB *m = servinfo->m;
@@ -255,7 +283,7 @@ static void do_open(ServInfo *servinfo)
 		/* Idle descriptors still own their reader/writer references. */
 		if( e == EK_Timeout ) continue;
 
-		if( e < Err_Null ) continue;
+		if( e < Err_Null ) { Wait(&f->ObjNode.Lock); break; }
 
 		Wait(&f->ObjNode.Lock);
 
@@ -268,14 +296,14 @@ static void do_open(ServInfo *servinfo)
 			FifoRead(m,f);
 			if( f->SelectPort != NullPort )
 			{
-				FreePort(f->SelectPort);
+				FifoCancelSelect(f,f->SelectPort);
 				f->SelectPort = NullPort;
 			}
 			AbortPort(f->WDelayPort,EC_Error|EG_Exception|EE_Abort);
 			if( f->WriteSelectPort != NullPort &&
 			    data_available(f) < FifoCapacity )
 			{
-				SendException(f->WriteSelectPort,O_WriteOnly);
+				FifoNotifySelect(f,f->WriteSelectPort,O_WriteOnly);
 				f->WriteSelectPort=NullPort;
 			}
 			break;
@@ -285,7 +313,7 @@ static void do_open(ServInfo *servinfo)
 			FifoWrite(m,f);
 			if( f->SelectPort != NullPort && data_available(f) > 0 )
 			{
-				SendException(f->SelectPort,O_ReadOnly);
+				FifoNotifySelect(f,f->SelectPort,O_ReadOnly);
 				f->SelectPort = NullPort;
 			}
 			break;
@@ -331,16 +359,16 @@ static void do_open(ServInfo *servinfo)
 			else 
 			{
 				if(e & O_ReadOnly) {
-					FreePort(f->SelectPort);
+					FifoCancelSelect(f,f->SelectPort);
 					f->SelectPort = m->MsgHdr.Reply;
 				}
 				if(e & O_WriteOnly) {
-					FreePort(f->WriteSelectPort);
+					FifoCancelSelect(f,f->WriteSelectPort);
 					f->WriteSelectPort = m->MsgHdr.Reply;
 				}
 				if(e & (O_Exception|HU_O_HANGUP)) {
 					Port *p=(mode&O_ReadOnly)?&f->ReadException:&f->WriteException;
-					FreePort(*p);*p=m->MsgHdr.Reply;
+					FifoCancelSelect(f,*p);*p=m->MsgHdr.Reply;
 					if(mode&O_ReadOnly) f->ReadExceptionMode=e & (O_Exception|HU_O_HANGUP);
 					else f->WriteExceptionMode=e & (O_Exception|HU_O_HANGUP);
 				}
@@ -467,6 +495,10 @@ static void do_delete(ServInfo *servinfo)
 		Unlink(&f->ObjNode, FALSE);
 		FreePort(f->RDelayPort);
 		FreePort(f->WDelayPort);		
+		FifoCancelSelect(f,f->SelectPort);
+		FifoCancelSelect(f,f->WriteSelectPort);
+		FifoCancelSelect(f,f->ReadException);
+		FifoCancelSelect(f,f->WriteException);
 		Free(f);
 		ErrorMsg(m,Err_Null);
 	}
@@ -649,13 +681,20 @@ void FifoClose(Fifo *f, word mode)
 
 	f->Users--;
 
-	if( f->Users == 0 )
+	/* Preserve a writer's data until its first reader opens. Once a reader
+	 * has closed, stream positions cannot be reused by a fresh open; discard
+	 * the abandoned pipe just as for an empty pipe. */
+	if( f->Users == 0 && (f->Read || data_available(f) == 0) )
 	{
 		f->ReadPos = f->WritePos = f->Upb + FifoMax;
 		AdjustBuffers(&f->Buffers,0,0,FifoMax);
 		Unlink(&f->ObjNode, FALSE);
 		FreePort(f->RDelayPort);
 		FreePort(f->WDelayPort);		
+		FifoCancelSelect(f,f->SelectPort);
+		FifoCancelSelect(f,f->WriteSelectPort);
+		FifoCancelSelect(f,f->ReadException);
+		FifoCancelSelect(f,f->WriteException);
 		Free(f);
 		return;
 	}
@@ -666,16 +705,16 @@ void FifoClose(Fifo *f, word mode)
 	AbortPort(f->RDelayPort,EC_Error|EG_Exception|0xaaaa);
 	AbortPort(f->WDelayPort,EC_Error|EG_Exception|0xaaaa);
 	if(f->Written && f->Writers==0 && f->SelectPort) {
-		SendException(f->SelectPort,O_ReadOnly);f->SelectPort=NullPort;
+		FifoNotifySelect(f,f->SelectPort,O_ReadOnly);f->SelectPort=NullPort;
 	}
 	if(f->Read && f->Readers==0 && f->WriteSelectPort) {
-		SendException(f->WriteSelectPort,O_WriteOnly);f->WriteSelectPort=NullPort;
+		FifoNotifySelect(f,f->WriteSelectPort,O_WriteOnly);f->WriteSelectPort=NullPort;
 	}
 	if(f->Written && f->Writers==0 && f->ReadException) {
-		SendException(f->ReadException,f->ReadExceptionMode);f->ReadException=NullPort;
+		FifoNotifySelect(f,f->ReadException,f->ReadExceptionMode);f->ReadException=NullPort;
 	}
 	if(f->Read && f->Readers==0 && f->WriteException) {
-		SendException(f->WriteException,f->WriteExceptionMode);f->WriteException=NullPort;
+		FifoNotifySelect(f,f->WriteException,f->WriteExceptionMode);f->WriteException=NullPort;
 	}
 	Signal(&f->ObjNode.Lock);
 }
