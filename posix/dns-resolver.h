@@ -5,7 +5,7 @@
 #include <sys/time.h>
 
 #ifndef KTM_RESOLV_CONF
-#define KTM_RESOLV_CONF "/helios/etc/resolv.conf"
+#define KTM_RESOLV_CONF "/helios/etc/resolv.cnf"
 #endif
 #ifndef KTM_DNS_PORT
 #define KTM_DNS_PORT 53
