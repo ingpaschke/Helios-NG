@@ -230,7 +230,12 @@ int ios_tls_start(int fd,const void *data,unsigned size)
     p->fd=fd;p->front=pair[0];p->back=pair[1];p->refs=2;
     p->timeout=get32(wire+4);p->state=IOS_TLS_NEGOTIATING;
     memcpy(p->host,wire+8,256);pthread_mutex_init(&p->lock,NULL);
-    error=pthread_create(&thread,NULL,worker,p);
+    /* Workers start with every signal blocked: the server's handlers (SIGURG's
+     * oobdata walks the socket list) must only run on the coroutine thread. */
+    {sigset_t all,old;sigfillset(&all);
+     pthread_sigmask(SIG_SETMASK,&all,&old);
+     error=pthread_create(&thread,NULL,worker,p);
+     pthread_sigmask(SIG_SETMASK,&old,NULL);}
     if(error){close(p->network);close(pair[0]);close(pair[1]);pthread_mutex_destroy(&p->lock);free(p);errno=error;return -1;}
     pthread_detach(thread);p->next=connections;connections=p;
     return 0;
