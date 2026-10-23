@@ -170,7 +170,7 @@ int getch(int timeout)
 
 void clrscrn()
 {
-	fputs("\033[2J\033[H",stdout);
+	fputs("\033[H\033[2J",stdout);
 	physx = physy = 0;
 }
 
