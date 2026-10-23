@@ -260,7 +260,13 @@ Conode *myco;
    Request_Return(EC_Error + SS_InterNet + EG_Unknown + EO_Socket, 0L, 0L);
   else
 #if LINUX
-     Internet_OpenSocket((SockEntry *)node);
+   { SockEntry *d = (SockEntry *)node;
+				/* a new user of an open socket stream; a */
+				/* ReOpen comes from an existing user     */
+     if (d->stream_open && !(mcb->MsgHdr.FnRc & 0x1 /* FF_ReOpen */))
+       d->ObjNode.account++;
+     Internet_OpenSocket(d);
+   }
 #else
      NewStream(Type_Socket, Flags_Closeable|Flags_Selectable, (WORD) 0,
              Internet_Handlers );
