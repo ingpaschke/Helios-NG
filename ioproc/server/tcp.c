@@ -398,10 +398,7 @@ Conode *myco;
 word Internet_TidyStream(Conode *myco)
 {
     SockEntry *d = Dir_find_socket(myco);
-    /* A stream with no request for StreamTimeout has no live user unless
-     * a select is still outstanding; close it rather than keep the host
-     * socket until the server exits. */
-    if (d != NULL && myco->type == CoTimeout && d->selfn != 0) return TRUE;
+    if (d != NULL && myco->type == CoTimeout) return TRUE;
     if (d != NULL) {
         clearselect(myco, d);
         ios_net_close(d->fd);
