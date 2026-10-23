@@ -175,7 +175,8 @@ static int vfork_start(void)
 	int pcb = 0;
 
 	for( i = 1; i < childvecsize ; i++ ) 
-		if( childvec[i].pid == 0 ) { pcb = i; break; }
+		if( childvec[i].pid == 0 &&
+		    childvec[i].status != PCB_Reserved ) { pcb = i; break; }
 	
 	/* if the childvec is full, re-allocate it */
 	if( i == childvecsize )

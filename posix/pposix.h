@@ -56,6 +56,10 @@ typedef struct pcb
   }
 PCB;	
 
+/* status of a slot that hu_spawn_native() holds while it talks to the	*/
+/* process manager without forklock; its pid stays 0 meanwhile.		*/
+#define PCB_Reserved	(MinInt+1)
+
 #define fdvecinc	20
 #define childvecinc	20
 

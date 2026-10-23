@@ -61,15 +61,19 @@ int hu_spawn_native(pid_t *result,const char *name,const struct hu_spawn_actions
         manager=Locate(NULL,target);if(!manager){e=ENOENT;goto done;}
         code=Load(loader,source);if(!code){e=posix_error(Result2(source));goto done;}
     }
+    /* Reserve a child slot, then talk to the process manager without
+     * forklock: it may be remote and slow, and waiter() and waitpid()
+     * need the lock meanwhile. childvec may move; keep only the index. */
     Wait(&forklock);locked=1;
-    for(i=1;i<childvecsize;i++)if(!childvec[i].pid){slot=i;break;}
+    for(i=1;i<childvecsize;i++)if(!childvec[i].pid&&childvec[i].status!=PCB_Reserved){slot=i;break;}
     if(!slot) {
         PCB *v=Malloc((childvecsize+childvecinc)*sizeof(PCB));
         if(!v){e=ENOMEM;goto done;}
         memcpy(v,childvec,childvecsize*sizeof(PCB));memset(v+childvecsize,0,childvecinc*sizeof(PCB));
         Free(childvec);childvec=v;slot=childvecsize;childvecsize+=childvecinc;
     }
-    memset(childvec+slot,0,sizeof(PCB));
+    memset(childvec+slot,0,sizeof(PCB));childvec[slot].status=PCB_Reserved;
+    Signal(&forklock);locked=0;
     program=Execute(manager?manager:UserTFM,code);
     if(!program){e=posix_error(Result2(code));goto done;}
     stream=Open(program,NULL,O_ReadWrite);if(!stream){e=posix_error(Result2(program));goto done;}
@@ -79,6 +83,7 @@ int hu_spawn_native(pid_t *result,const char *name,const struct hu_spawn_actions
     objects[OV_Session]=Session;objects[OV_TFM]=UserTFM;objects[OV_TForce]=program;
     env.Argv=(char **)argv;env.Envv=vars;env.Objv=objects;env.Strv=fdv.streams;
     rc=SendEnv(stream->Server,&env);if(rc<0){e=posix_error(rc);goto done;}
+    Wait(&forklock);locked=1;
     childvec[slot].pid=nextpid++;childvec[slot].pgrp=childvec[0].pgrp;
     childvec[slot].status=MinInt;childvec[slot].prog=program;childvec[slot].stream=stream;
     childvec[slot].starttime=(int)_cputime();
@@ -86,7 +91,7 @@ int hu_spawn_native(pid_t *result,const char *name,const struct hu_spawn_actions
     *result=childvec[slot].pid;program=NULL;stream=NULL;
 done:
     if(e&&program){if(stream)SendSignal(stream,SIGKILL);else Delete(program,NULL);}
-    if(e&&slot)memset(childvec+slot,0,sizeof(PCB));
+    if(e&&slot){if(!locked){Wait(&forklock);locked=1;}memset(childvec+slot,0,sizeof(PCB));}
     if(locked)Signal(&forklock);
     if(stream)Close(stream);if(program)Close(program);
     if(code&&code!=source)Close(code);if(source)Close(source);
