@@ -60,6 +60,7 @@ static Matrix		mode_to_matrix( mode_t mode );
 #endif
 
 static int		_close( fdentry * f );
+static void		releasepstream( Pstream * p );
 static int		_dup( int fd, int low );
 static int		addint( char * s, word i );
 static int		posix_error( word e );
@@ -970,11 +971,26 @@ done:
 	return fd2;
 }
 
+/* Detach the Pstream from its slot before releasing it, so that	*/
+/* abortfdv() never sees a slot pointing at a freed Pstream.		*/
 static int _close(fdentry *f)
 {
 	Pstream *p;
 
+	Wait( &fdlock );
 	p = f->pstream;
+	f->pstream = NULL;
+	Signal( &fdlock );
+
+	releasepstream(p);
+	
+	return 0;
+}
+
+static void releasepstream(Pstream *p)
+{
+	if( p == NULL ) return;
+	
 	--p->refs;
 	
 	if( p->refs == 0 )
@@ -982,8 +998,6 @@ static int _close(fdentry *f)
 		Close(p->stream);
 		Free(p);
 	}
-	
-	return 0;
 }
 
 static int posix_error(word e)
@@ -1059,7 +1073,9 @@ again:
 	goto again;
 	
 gotfd:
+	/* The slot stays without a Pstream until its open completes.	*/
 	fdvec[fd].flags = FD_ALLOC;		
+	fdvec[fd].pstream = NULL;
 
 bad:
 	Signal(&fdlock);
@@ -1089,7 +1105,10 @@ static void freefd(int fd)
 	Wait(&fdlock);
 
 	if( fd >= 0 && fd < fdvecsize && (fdvec[fd].flags & FD_ALLOC) )
+	{
 		fdvec[fd].flags = 0;
+		fdvec[fd].pstream = NULL;
+	}
 	
 	Signal(&fdlock);
 }
@@ -1133,7 +1152,7 @@ static Stream **marshalfdv(void)
 	Wait( &fdlock );
 	for( i = 0 ; i < fdvecsize; i++ )
 	{
-		if( fdvec[i].flags & FD_ALLOC )
+		if( (fdvec[i].flags & FD_ALLOC) && fdvec[i].pstream != NULL )
 		{
 			if( (fdvec[i].flags & FD_CLOEXEC) == 0 )
 			{
@@ -1162,7 +1181,8 @@ static fdentry *savefdv(void)
 	Wait( &fdlock );
 	for( i = 0 ; i < fdvecsize ; i++ )
 	{
-		if( fdvec[i].flags & FD_ALLOC ) fdvec[i].pstream->refs++;
+		if( (fdvec[i].flags & FD_ALLOC) && fdvec[i].pstream != NULL )
+			fdvec[i].pstream->refs++;
 		sfdvec[i] = fdvec[i];
 	}	
 	sfdvec[i].flags = -1;
@@ -1178,7 +1198,12 @@ static void restorefdv(fdentry *sfdvec)
 	for( i = 0 ; i < fdvecsize && (sfdvec[i].flags != -1); i++ )
 	{
 		fdentry *f = &fdvec[i];
-		if( f->flags & FD_ALLOC ) _close(f);
+		if( f->flags & FD_ALLOC )
+		{
+			Pstream *p = f->pstream;
+			f->pstream = NULL;
+			releasepstream(p);
+		}
 		fdvec[i] = sfdvec[i];
 	}
 	Signal( &fdlock );
@@ -1198,6 +1223,7 @@ static void abortfdv(bool ttyonly)
 	{
 		fdentry *f = &fdvec[i];
 		unless( f->flags & FD_ALLOC ) continue;
+		if( f->pstream == NULL ) continue;	/* open in progress */
 		if( ttyonly &&
 		    (f->pstream->stream->Flags & Flags_Interactive) == 0 )
 			continue;
