@@ -78,6 +78,11 @@ int fn (wait3, (void *, int, void *));
 
 #endif  /* SOLARIS */
 
+#if LINUX
+#include <sys/resource.h>
+#include <poll.h>
+#endif
+
 #if (0)
 	/* Was needed for RISCiX 1.1 */
 #include <pwd.h>
@@ -262,9 +267,35 @@ string termcap_cls, termcap_ceol, termcap_move, termcap_inv, termcap_nor;
 /*@@@ */
 string termcap_bell, termcap_ks, termcap_ke;
 
+#if LINUX
+/* Every Helios stream that the server opens holds a host descriptor, and
+ * the usual soft limit of 1024 is soon reached by a busy session. Raise it
+ * towards the hard limit, but cap it: each stream also costs a coroutine
+ * stack, which a 32-bit build cannot afford for an unbounded number. */
+#define IOS_NOFILE_TARGET 4096
+
+PRIVATE void raise_fd_limit(void)
+{ struct rlimit rl;
+  rlim_t want = IOS_NOFILE_TARGET;
+
+  if (getrlimit(RLIMIT_NOFILE, &rl) ne 0) return;
+  if ((rl.rlim_max ne RLIM_INFINITY) && (rl.rlim_max < want))
+   want = rl.rlim_max;
+  if ((rl.rlim_cur ne RLIM_INFINITY) && (rl.rlim_cur >= want)) return;
+  rl.rlim_cur = want;
+  if (setrlimit(RLIMIT_NOFILE, &rl) ne 0)
+   printf(" Helios: unable to raise the descriptor limit to %ld.\n",
+          (long) want);
+}
+#endif
+
 void unix_initialise_devices()
 { char *term_env = getenv("TERM"), term[128];
   int  x;
+
+#if LINUX
+  raise_fd_limit();
+#endif
 
 #if ETC_DIR
   initialise_etc_directory();
@@ -1652,7 +1683,15 @@ unix_window *handle;
          /* the escape key deserves a special case, see dumb_read for details */
   if ((handle->how_many eq 1)  && 
       (handle->buf[0] eq 0x1b) && 
-      (handle->matching eq -1)) 
+      (handle->matching eq -1))
+#if LINUX
+  { struct pollfd p;	/* the pty may be numbered beyond FD_SETSIZE */
+
+    p.fd = handle->child; p.events = POLLIN; p.revents = 0;
+    if (poll(&p, 1, 250) <= 0)
+     { handle->buf_index = 0; handle->how_many = 0;  return(0x1B); }
+  }
+#else
   { fd_set t_rd_mask;
     struct timeval timelim;
       
@@ -1668,6 +1707,7 @@ unix_window *handle;
     if (select(handle->child+1, &t_rd_mask, NULL, NULL, &timelim) <= 0)
      { handle->buf_index = 0; handle->how_many = 0;  return(0x1B); }
   }
+#endif /* LINUX */
 
   while (handle->how_many > 0) 
     { int x = add_to_window(handle->buf[handle->buf_index++], handle);

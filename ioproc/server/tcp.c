@@ -40,6 +40,7 @@
 #include <stdlib.h>
 #if LINUX
 #include "linux/net_compat.h"
+#include <poll.h>
 #else
 #endif /* LINUX */
 
@@ -2723,6 +2724,17 @@ void oobdata()
 {
 	SockEntry *node;
 	List *list = (List *) &(Internet_extra);
+#if LINUX
+	struct pollfd p;	/* sockets may be numbered beyond FD_SETSIZE */
+
+  	for (node = (SockEntry *) list->head;
+       		node->ObjNode.node.next ne (Node *) NULL;
+       		node = (SockEntry *) node->ObjNode.node.next)
+	{
+	   p.fd = node->fd; p.events = POLLPRI; p.revents = 0;
+	   node->Oob = (poll(&p, 1, 0) > 0) && (p.revents & POLLPRI);
+	}
+#else
 	fd_set exfds;
 	struct timeval tim;
 
@@ -2758,6 +2770,7 @@ void oobdata()
 #endif /* LINUX */
 		node->Oob = FALSE;
 	}
+#endif /* LINUX */
 }
 
 /************************************************************************/

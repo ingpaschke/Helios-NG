@@ -122,6 +122,9 @@
 #else
 #include "../helios.h"
 #endif
+#if LINUX
+#include <poll.h>
+#endif
 
 #if !SOLARIS
 typedef struct sockaddr		sockaddr;
@@ -1212,12 +1215,20 @@ void tidy_link()
 
 PRIVATE void read_delay()
 {
-  fd_set rdmask;	
+#if LINUX
+  struct pollfd p;	/* a reopened link may be numbered beyond FD_SETSIZE */
+
+  if (link_table[current_link].flags & Link_flags_not_selectable)
+   return;
+  p.fd = link_fd; p.events = POLLIN; p.revents = 0;
+  (void)poll(&p, 1, 100);
+#else
+  fd_set rdmask;
   struct timeval timelim;  /* used for selects on link */
 
   if (link_table[current_link].flags & Link_flags_not_selectable)
    return;
-   
+
   FD_ZERO(&rdmask);
   FD_SET(link_fd,&rdmask);
 #if SM90
@@ -1227,6 +1238,7 @@ PRIVATE void read_delay()
 #endif
   timelim.tv_usec = 100000;
   (void)select(link_fd + 1, &rdmask, NULL, NULL, &timelim);
+#endif /* LINUX */
 }
 
 PRIVATE WORD gen_byte_from_link(where)
@@ -1310,7 +1322,13 @@ PRIVATE WORD null_wrrdy()
 
 PRIVATE WORD select_rdrdy()
 {
-  fd_set rdmask;	
+#if LINUX
+  struct pollfd p;
+
+  p.fd = link_fd; p.events = POLLIN; p.revents = 0;
+  return((poll(&p, 1, 0) > 0) ? TRUE : FALSE);
+#else
+  fd_set rdmask;
   struct timeval timelim;  /* used for selects on link */
 
   FD_ZERO(&rdmask);
@@ -1327,6 +1345,7 @@ PRIVATE WORD select_rdrdy()
       return(FALSE);
     }
   return(TRUE);
+#endif /* LINUX */
 }
 
 PRIVATE void gen_reset()
