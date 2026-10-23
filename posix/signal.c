@@ -793,7 +793,7 @@ static void _raise_pending_sigs(bool async, bool locked)
 	/* raised or want to raise. If it is non zero at the	*/
 	/* end of the loop, we must abort all IO operations	*/
 
-	if( Async && (~mask.mask & mask.pending) ) 
+	if( Async && (todo = ~mask.mask & mask.pending) != 0 )
 	{
 		EmptySelect *w;
 		for(w = empty_selects; w != NULL; w = w->next)
@@ -802,8 +802,10 @@ static void _raise_pending_sigs(bool async, bool locked)
 			w->port = NullPort;
 		}
 _Trace(0xCCCC000b,MyTask,0);
-		/* abort any I/O operations */
-		abortfdv();
+		/* Abort any I/O operations. A window resize arrives	*/
+		/* many times a second while a window is dragged, and	*/
+		/* only a terminal read or select needs waking for it.	*/
+		abortfdv(todo == S(SIGWINCH));
 		
 		/* abort any sleep or pause calls */
 		if( PausePort != NullPort ) AbortPort(PausePort,123);

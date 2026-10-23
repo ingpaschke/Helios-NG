@@ -133,7 +133,7 @@ extern struct sigaction sigactions[];
 extern Stream **marshalfdv(void);
 extern fdentry *savefdv(void);
 extern void	init_fileio(Environ *env);
-extern void	abortfdv(void);
+extern void	abortfdv(bool ttyonly);
 extern int	posix_error(word);
 extern void	restorefdv(fdentry *sfdvec);
 #endif

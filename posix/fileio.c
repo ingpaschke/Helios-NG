@@ -1186,7 +1186,10 @@ static void restorefdv(fdentry *sfdvec)
 	Free(sfdvec);
 }
 
-static void abortfdv(void)
+/* With ttyonly set, only interactive streams are aborted: enough to	*/
+/* wake a read or select on the terminal, without disturbing transfers	*/
+/* on files, pipes and sockets.						*/
+static void abortfdv(bool ttyonly)
 {
 	int i;
 
@@ -1194,7 +1197,11 @@ static void abortfdv(void)
 	for( i = 0 ; i < fdvecsize ; i++ )
 	{
 		fdentry *f = &fdvec[i];
-		if( f->flags & FD_ALLOC ) Abort(f->pstream->stream);
+		unless( f->flags & FD_ALLOC ) continue;
+		if( ttyonly &&
+		    (f->pstream->stream->Flags & Flags_Interactive) == 0 )
+			continue;
+		Abort(f->pstream->stream);
 	}
 	Signal( &fdlock );
 }
