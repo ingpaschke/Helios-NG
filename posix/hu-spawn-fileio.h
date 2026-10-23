@@ -1,9 +1,17 @@
 #include "hu-spawn.h"
 /* Included after fileio.c: all descriptor-table access stays in Posix. */
+/* A CopyStream copy shares its parent's Server port, and closing it as a
+ * served stream would free that port under the parent's descriptor: drop
+ * only the copy. Pipe copies are independent and SendEnv closes them.
+ * Streams opened for the child are closed: the child ReOpens its own. */
 void hu_snapshot_free(struct hu_fd_snapshot *v)
 {
     int i;
-    for(i=0;i<v->used;i++)Close(v->owned[i]);
+    for(i=0;i<v->used;i++) {
+        Stream *s=v->owned[i];
+        if(i<v->copies&&s->Type!=Type_Pipe)s->Type=Type_Pseudo;
+        Close(s);
+    }
     if(v->streams)Free(v->streams);if(v->owned)Free(v->owned);if(v->flags)Free(v->flags);
     memset(v,0,sizeof(*v));
 }
@@ -35,7 +43,7 @@ int hu_snapshot(struct hu_fd_snapshot *v,int wanted,const struct hu_spawn_action
         else {
             Stream *s=CopyStream(fdvec[i].pstream->stream);
             if(!s){e=posix_error(Result2(fdvec[i].pstream->stream));goto done;}
-            v->streams[i]=s;v->owned[v->used++]=s;
+            v->streams[i]=s;v->owned[v->used++]=s;v->copies=v->used;
         }
     }
 done:

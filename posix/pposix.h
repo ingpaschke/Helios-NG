@@ -165,6 +165,7 @@ struct hu_fd_snapshot {
     Stream **streams,**owned;
     word *flags;
     int count,used,capacity;
+    int copies;     /* owned[0..copies-1] share their parent's server port */
 };
 struct hu_spawn_actions;struct hu_spawn_attr;
 extern int hu_snapshot(struct hu_fd_snapshot *,int,const struct hu_spawn_actions *,const struct hu_spawn_attr *);
