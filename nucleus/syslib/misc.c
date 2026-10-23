@@ -880,7 +880,7 @@ static WORD IOCMsg(MCB *m, void *data)
 {
 	word r;
 	MCB t;
-	word time;
+	word time = 0;
 
 	/* A failed NewPort cannot receive a reply. Retrying such a request
 	 * just creates more IOC workers while the port table is full. */
@@ -898,6 +898,18 @@ static WORD IOCMsg(MCB *m, void *data)
 	forever
 	{
 	  extern word _ldtimer( int );
+		PortInfo reply_info;
+
+		/* Abort can free the reply port after the request is built.
+		 * XchMsg sends before checking its receive port, so retrying
+		 * with a dead reply port can create unclaimed IOC streams.
+		 * A free entry can still have the same cycle: check its type. */
+		if( GetPortInfo(t.MsgHdr.Reply, &reply_info) != Err_Null ||
+		    reply_info.Type != T_Local )
+		{
+			r = EC_Error|SS_SysLib|EG_Exception|EE_Abort;
+			goto done;
+		}
 	  
 		time = _ldtimer(0);
 		
