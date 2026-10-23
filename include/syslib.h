@@ -424,6 +424,7 @@ extern word	(Abort)		(Object *object);
 extern Date 	GetDate		(void);
 extern void 	Exit		(word code);
 extern void 	TidyUp		(void);
+extern word 	ForceCloseStreams(void);
 extern Stream *	NewStream	(string path, Capability *cap, word mode);
 extern Stream *	PseudoStream	(Object *object, word mode);
 extern Stream * CopyStream	(Stream *stream);

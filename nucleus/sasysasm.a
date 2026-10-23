@@ -124,6 +124,10 @@ _def 'EG_WrongFn	[#000c0000]
 .DefaultCapability:
 	ret
 
+.ForceCloseStreams:
+	ldc	0
+	ret
+
 .Exit:
 	start
 

@@ -100,6 +100,7 @@ typedef struct TaskEntry {
 	bool		Running;	/* true if task is running	*/
 	word		KillState;	/* task deletion state		*/
 	Port		SignalPort;	/* port for signal delivery	*/
+	bool		Forced;		/* killed by procman, no TidyUp	*/
 } TaskEntry;
 #define Status		ObjNode.Account	/* visible status word		*/
 
@@ -550,7 +551,8 @@ int main()
 	MyTaskEntry.ProgInfoSent = 0;
 	MyTaskEntry.Code = 0;
 	MyTaskEntry.KillState = 0;
-	
+	MyTaskEntry.Forced = false;
+
 	/* install an IOC port for processor manager */
 	MyTask->IOCPort = NewPort();
 
@@ -860,6 +862,7 @@ PMTRACE(0x01);
 	entry->ProgInfoSent	= 0;
 	entry->TermCode	 = 0;
 	entry->KillState = 0;
+	entry->Forced = false;
 	entry->SignalPort = NullPort;
 
 	IOCArg = (TaskEntry **)NewProcess(IOCStackSize,IOC,sizeof(Task *));
@@ -2146,6 +2149,22 @@ PMTRACE(0x09);
 		Wait(&entry->ObjNode.Lock);
 		entry->Status += 1000;
 
+		/* A task killed by procman never ran TidyUp, so its	*/
+		/* servers still hold whatever it had open. Close its	*/
+		/* served streams now, while KillTask has not yet freed	*/
+		/* the ports they are reached through. This runs in the	*/
+		/* task's module table to reach SysLib's stream list.	*/
+		if( entry->Forced && task->ModTab != NULL )
+		{
+			e = CallWithModTab(0,0,(WordFnPtr)ForceCloseStreams,
+					task->ModTab);
+#ifdef PMDEBUG
+			if(debugging(DB_TASKS))
+				dbg("Forced kill %s closed %d streams",
+					entry->ObjNode.Name,e);
+#endif
+		}
+
 		Wait(&KillLock);
 		e = KillTask(task);
 		Signal(&KillLock);
@@ -2847,6 +2866,8 @@ PMTRACE(0x0f);
 		break;
 	
 	default:
+		/* The task will not tidy up: mark it for HandleException */
+		t->Forced = true;
 		InitMCB(m,0,t->Task->IOCPort,NullPort,
 			EC_Error|SS_ProcMan|EG_Exception|EE_Kill);
 		MarshalWord(m,0xFF80|SIGKILL);

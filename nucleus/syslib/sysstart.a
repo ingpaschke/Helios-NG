@@ -22,7 +22,7 @@ Resident
 [
 	name	SysLib 
 	slot 	2 
-	version	1000
+	version	1001
 
 	static
 	[
@@ -149,6 +149,10 @@ _if _defp 'helios.TRAN
 
 		extern func		PreallocMsgBufs
 		extern func		DefaultCapability
+
+		-- Appended to preserve the resident ABI: used by procman
+		-- to close a force-killed task's served streams.
+		extern func		ForceCloseStreams
 		
 		-- New externals MUST go just before this comment
 

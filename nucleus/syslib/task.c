@@ -621,6 +621,55 @@ void TidyUp()
 
 }
 
+/*--------------------------------------------------------
+-- ForceCloseStreams					--
+--							--
+-- Send a close to the server of every served closeable	--
+-- stream of this task without touching anything else.	--
+-- Procman calls this with the module table of a task	--
+-- it is about to kill by force, so that the servers	--
+-- (in particular the I/O Server) release what the task	--
+-- had open. The task may still have threads running or	--
+-- wedged on StreamLock, so no locks are taken, nothing	--
+-- is freed and the walk is bounded. Pipes keep their	--
+-- own close protocol and are left to port death.	--
+-- Returns the number of closes sent.			--
+--							--
+--------------------------------------------------------*/
+
+#define ForceCloseMax	1024	/* bound on list walk		*/
+
+PUBLIC word ForceCloseStreams(void)
+{
+	Node	*n;
+	word	count = 0;
+	word	limit = ForceCloseMax;
+
+	if( MyTask == NULL ) return 0;
+
+	for( n = Streams.Head; n != NULL && n->Next != NULL; n = n->Next )
+	{
+		Stream *s = (Stream *)n;
+
+		if( --limit < 0 ) break;
+
+		if( !InPool(n,&MyTask->MemPool) ) break;
+
+		if( s->Type == Type_Pseudo || s->Type == Type_Pipe ) continue;
+
+		if( closebits_(s->Flags) !=
+		    closebits_(Flags_Stream|Flags_Closeable|Flags_Server) )
+			continue;
+
+		if( s->Server == NullPort ) continue;
+
+		SendException(s->Server,FC_GSP+FG_Close|s->FnMod);
+		count++;
+	}
+
+	return count;
+}
+
 
 /*--------------------------------------------------------
 -- Alarm						--
