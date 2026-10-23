@@ -395,8 +395,18 @@ int PASCAL NEAR ttgetc(void)
     if (unGotChar == 0)
     {
 #endif    
-        while (Read(Heliosno(stdin), &cc, 1, OneSec/4) != 1)
-            HandleScreenSize();
+        {   word n;
+            while ((n = Read(Heliosno(stdin), &cc, 1, OneSec/4)) != 1)
+            {   /* 0 is a timeout and is the normal idle case. A negative */
+                /* result (stream broken, window closed) never recovers, */
+                /* so leave instead of spinning at full speed on it.     */
+                if (n < 0)
+                {   helioskclose();
+                    exit(1);
+                }
+                HandleScreenSize();
+            }
+        }
 #if TYPEAH        
     }
     else

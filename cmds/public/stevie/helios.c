@@ -57,6 +57,18 @@ static void resize_terminal(void)
     }
     P(P_LI) = Rows;
     screenclear();
+    /*
+     * Botchar is only maintained by updatescreen(), so after the buffers
+     * have been reallocated it still describes the old screen height.
+     * cursupdate() decides whether to scroll by comparing Curschar with
+     * Botchar and then derives Cursrow/Cline_row by counting from
+     * Topchar; with a stale Botchar on a shrink it can leave Cline_row
+     * at or beyond the new Rows, and the next updateline() would write
+     * outside the Rows*Columns screen buffers. Redraw once first so that
+     * Botchar matches the new size, then let cursupdate() scroll the
+     * cursor line back into view and redraw again.
+     */
+    updatescreen();
     cursupdate();
     updatescreen();
     windgoto(Cursrow, Curscol);
@@ -76,9 +88,21 @@ inchar( void )
 
 	do
 	{
+		word n;
+
 		resize_terminal();
-		while (Read(Heliosno(stdin), &c, 1, OneSec/4) != 1)
+		while ((n = Read(Heliosno(stdin), &c, 1, OneSec/4)) != 1)
+		{
+			/*
+			 * A timeout returns 0 and is the normal idle case. A
+			 * negative result is a real error (stream broken, window
+			 * closed) which will not go away, so stop instead of
+			 * spinning at full speed on it.
+			 */
+			if (n < 0)
+				windexit(1);
 			resize_terminal();
+		}
 	} while (c == NUL);
 
 	if (c == 0x9b)

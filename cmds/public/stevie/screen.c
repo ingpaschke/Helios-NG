@@ -265,6 +265,15 @@ lfiletonext()
 	coff = P(P_NU) ? 8 : 0;
 
 	/*
+	 * Cline_row is computed by cursupdate() and can be stale, for
+	 * example after the window has shrunk. Never index Nextscreen
+	 * beyond Rows*Columns; returning FALSE makes updateline() fall
+	 * back to a full updatescreen(), which does its own bounds.
+	 */
+	if (Cline_row < 0 || Cline_row >= Rows)
+		return FALSE;
+
+	/*
 	 * This should be done more efficiently.
 	 */
 	if (P(P_NU))
@@ -347,6 +356,9 @@ lfiletonext()
 		if ( col >= Columns ) {
 			row++;
 			col = 0;
+			/* the line wraps off the bottom of the screen */
+			if ( row >= Rows )
+				return FALSE;
 		}
 		/* store the character in Nextscreen */
 		*screenp++ = c;
