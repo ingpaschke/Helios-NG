@@ -876,11 +876,14 @@ XchMsg1( MCB * mcb )
 --							--
 --------------------------------------------------------*/
 
+#define IOCMsgMaxRetries	16
+
 static WORD IOCMsg(MCB *m, void *data)
 {
 	word r;
 	MCB t;
 	word time = 0;
+	int tries = 0;
 
 	/* A failed NewPort cannot receive a reply. Retrying such a request
 	 * just creates more IOC workers while the port table is full. */
@@ -921,6 +924,15 @@ static WORD IOCMsg(MCB *m, void *data)
 		/* if the result is successful, or an error too serious	*/
 		/* for us to handle here, return.			*/
 		if( (r >= Err_Null) || ((r&EC_Mask) >= EC_Error) ) goto done;
+
+		/* A warning that persists will not go away by sending the
+		 * request again, and every send can cost the server a new
+		 * stream. Give up and report it as an error. */
+		if( ++tries >= IOCMsgMaxRetries )
+		{
+			r = (r & ~EC_Mask) | EC_Error;
+			goto done;
+		}
 
 		/* otherwise increment the retry count and do it again	*/
 		t.MsgHdr.FnRc = (t.MsgHdr.FnRc & ~FR_Mask) |
