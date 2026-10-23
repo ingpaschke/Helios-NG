@@ -64,11 +64,20 @@ typedef struct Fifo {
 #define FifoMax		1024		/* byte in each block		*/
 #define FifoCapacity (16*1024)
 
+/* Where an open stream's positions start in the fifo. A stream counts	*/
+/* from 0 whatever the fifo already holds, so its first read or write	*/
+/* fixes the offset, see FifoRead and FifoWrite.			*/
+typedef struct FifoBase {
+	word		Offset;		/* added to the stream position	*/
+	word		Fixed;		/* true once Offset is known	*/
+} FifoBase;
+
 DirNode		Root;			/* root of fifo directory	*/
 
 static Fifo *CreateFifo(DirNode *d, string pathname, word mode);
-void FifoRead(MCB *m, Fifo *f);
-void FifoWrite(MCB *m, Fifo *f);
+void FifoRead(MCB *m, Fifo *f, FifoBase *base);
+void FifoWrite(MCB *m, Fifo *f, FifoBase *base);
+static void FifoGetSize(MCB *m, Fifo *f);
 void FifoClose(Fifo *f, word isreader);
 
 static void do_open(ServInfo *);
@@ -213,6 +222,10 @@ static void do_open(ServInfo *servinfo)
 	word mode = req->Arg.Mode;
 	byte *data = m->Data;
 	char *pathname = servinfo->Pathname;
+	FifoBase rbase, wbase;
+
+	rbase.Offset = rbase.Fixed = 0;
+	wbase = rbase;
 
 	d = (DirNode *)GetTargetDir( servinfo);
 
@@ -280,7 +293,10 @@ static void do_open(ServInfo *servinfo)
 
 		e = GetMsg(m);
 
-		/* Idle descriptors still own their reader/writer references. */
+		/* Idle descriptors still own their reader/writer references.
+		 * Nothing tells a dead client from an idle one here: the
+		 * client, or ProcMan on its behalf (ForceCloseStreams), sends
+		 * FG_Close. */
 		if( e == EK_Timeout ) continue;
 		/* Abort interrupts a client's outstanding I/O when a POSIX signal
 		 * arrives. It does not close the descriptor. In particular, idle
@@ -298,7 +314,7 @@ static void do_open(ServInfo *servinfo)
 		{
 		case FG_Read:
 			f->Read = true;
-			FifoRead(m,f);
+			FifoRead(m,f,&rbase);
 			if( f->SelectPort != NullPort )
 			{
 				FifoCancelSelect(f,f->SelectPort);
@@ -315,7 +331,7 @@ static void do_open(ServInfo *servinfo)
 
 		case FG_Write:
 			f->Written = true;
-			FifoWrite(m,f);
+			FifoWrite(m,f,&wbase);
 			if( f->SelectPort != NullPort && data_available(f) > 0 )
 			{
 				FifoNotifySelect(f,f->SelectPort,O_ReadOnly);
@@ -329,15 +345,7 @@ static void do_open(ServInfo *servinfo)
 			return;
 
 		case FG_GetSize:
-			InitMCB(m,0,m->MsgHdr.Reply,NullPort,Err_Null);
-			MarshalWord(m,data_available(f));
-			/* Optional second word: hu_poll readiness, no data consumed. */
-			MarshalWord(m,
-				((data_available(f)>0 || (f->Written && f->Writers==0))?1:0) |
-				((data_available(f)<FifoCapacity)?2:0) |
-				((f->Read && f->Readers==0)?8:0) |
-				((f->Written && f->Writers==0)?16:0));
-			PutMsg(m);
+			FifoGetSize(m,f);
 			break;
 
 		case FG_Seek:
@@ -504,6 +512,7 @@ static void do_delete(ServInfo *servinfo)
 		FifoCancelSelect(f,f->WriteSelectPort);
 		FifoCancelSelect(f,f->ReadException);
 		FifoCancelSelect(f,f->WriteException);
+		servinfo->TargetLocked = FALSE;	/* to stop ServLib worker indirection through Free'd target on unlock */
 		Free(f);
 		ErrorMsg(m,Err_Null);
 	}
@@ -528,13 +537,25 @@ static void do_serverinfo(ServInfo *servinfo)
 --------------------------------------------------------*/
 
 
-void FifoRead(MCB *m, Fifo *f)
+void FifoRead(MCB *m, Fifo *f, FifoBase *base)
 {
 	ReadWrite *rw = (ReadWrite *)m->Control;
-	word pos = rw->Pos;
+	word pos;
 	word rwsize = rw->Size;
 	word timeout = rw->Timeout;
 	word e = Err_Null;
+
+	/* The first read of a stream fixes its offset. A position before	*/
+	/* the data still held for a retry cannot be a retry of this	*/
+	/* stream's reads, so the stream continues from the current	*/
+	/* read position.						*/
+	if( !base->Fixed )
+	{
+		base->Fixed = true;
+		if( rw->Pos < f->ReadPos ) base->Offset = f->CreadPos - rw->Pos;
+	}
+	rw->Pos += base->Offset;
+	pos = rw->Pos;
 
 	if( pos < f->ReadPos )
 	{
@@ -611,11 +632,23 @@ Again:
 --							--
 --------------------------------------------------------*/
 
-void FifoWrite(MCB *m, Fifo *f)
+void FifoWrite(MCB *m, Fifo *f, FifoBase *base)
 {
 	ReadWrite *rw = (ReadWrite *)m->Control;
-	word pos = rw->Pos;
+	word pos;
 	word timeout=rw->Timeout, available;
+
+	/* The first write of a stream appends to whatever the fifo holds	*/
+	/* (data retained from an earlier writer, or another writer's	*/
+	/* output) and fixes the stream's offset. Later writes keep it,	*/
+	/* so a retry still overlaps the write it repeats.		*/
+	if( !base->Fixed )
+	{
+		base->Offset = f->Upb - rw->Pos;
+		base->Fixed = true;
+	}
+	rw->Pos += base->Offset;
+	pos = rw->Pos;
 
 /*dbg("FifoWrite f %x pos %d size %d",f,pos,size);*/
 
@@ -670,6 +703,29 @@ void FifoWrite(MCB *m, Fifo *f)
 	f->ObjNode.Dates.Modified = GetDate();
 
 	AbortPort(f->RDelayPort,EC_Error|EG_Exception|EE_Abort);
+}
+
+/*--------------------------------------------------------
+-- FifoGetSize						--
+-- 							--
+-- Reply with the amount of unread data. The second	--
+-- word is the hu_poll readiness mask, consumed by	--
+-- helios-unix; every GetSize client must therefore	--
+-- supply a two word control buffer (SysLib GetFileSize	--
+-- does).						--
+--							--
+--------------------------------------------------------*/
+
+static void FifoGetSize(MCB *m, Fifo *f)
+{
+	InitMCB(m,0,m->MsgHdr.Reply,NullPort,Err_Null);
+	MarshalWord(m,data_available(f));
+	MarshalWord(m,
+		((data_available(f)>0 || (f->Written && f->Writers==0))?1:0) |
+		((data_available(f)<FifoCapacity)?2:0) |
+		((f->Read && f->Readers==0)?8:0) |
+		((f->Written && f->Writers==0)?16:0));
+	PutMsg(m);
 }
 
 /*--------------------------------------------------------

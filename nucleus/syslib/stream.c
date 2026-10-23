@@ -614,17 +614,18 @@ PUBLIC WORD
 GetFileSize( Stream * stream )
 {
 	word e = Err_Null;
-	word res = 0;
+	word res[2];		/* size, and the fifo's readiness word	*/
 	MCB mcb;
 	Port server,reply;
-	
+
 #ifdef SYSDEB
 	SysDebug(stream)("GetFileSize(%S)",stream);
 #endif
 
 	if( (e = CheckStream(stream,C_ReOpen)) != Err_Null ) return e;
 
-	mcb.Control = &res;
+	res[0] = res[1] = 0;
+	mcb.Control = res;
 	mcb.MsgHdr.Reply = NullPort;	/* for done: before InitMCB */
 
 	Wait(&stream->Mutex);
@@ -640,13 +641,13 @@ GetFileSize( Stream * stream )
 	
 done:
 #ifdef SYSDEB
-	SysDebug(stream)("GetFileSize: %d error %E",res,e);
+	SysDebug(stream)("GetFileSize: %d error %E",res[0],e);
 	if( mcb.MsgHdr.Reply != NullPort ) SysDebug(error)("GetFileSize: Non-Null Reply port %x",mcb.MsgHdr.Reply);
 #endif
 	if( mcb.MsgHdr.Reply != NullPort ) FreePort(mcb.MsgHdr.Reply);
 	stream->Result2 = e;
 	Signal(&stream->Mutex);
-	return res;
+	return res[0];
 
 }
 
