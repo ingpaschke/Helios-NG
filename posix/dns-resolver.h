@@ -238,7 +238,12 @@ static int ktm_dns_query(struct ktm_dns_work *w,int type,unsigned char *address)
                 }
             }
             close(fd);
-            if(n>=12&&(w->answer[2]&2))n=ktm_dns_tcp(w,&server,qlen,deadline);
+            if(n>=12&&(w->answer[2]&2)) {
+                /* Truncated reply: retry over TCP with a fresh time budget,
+                   not whatever is left of the UDP window. */
+                deadline=ktm_dns_millis()+w->config.timeout*1000;
+                n=ktm_dns_tcp(w,&server,qlen,deadline);
+            }
             status=n<0?2:ktm_dns_parse(w,n,type,address);
             if(status==0||status==1)return status;
             if(status==3)goto alias;

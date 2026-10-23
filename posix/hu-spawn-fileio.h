@@ -28,7 +28,10 @@ int hu_snapshot(struct hu_fd_snapshot *v,int wanted,const struct hu_spawn_action
     if(!v->streams||!v->owned||!v->flags){e=ENOMEM;goto done;}
     for(i=0;i<v->count;i++){v->streams[i]=(Stream *)MinInt;v->flags[i]=0;}
     v->streams[v->count]=NULL;
-    for(i=0;i<fdvecsize;i++)if(fdvec[i].flags & FD_ALLOC) {
+    /* A slot with FD_ALLOC set but no pstream is an open in progress in
+       another thread (fileio.c allocates the slot before the open
+       completes); it has no stream to inherit yet, so skip it. */
+    for(i=0;i<fdvecsize;i++)if((fdvec[i].flags & FD_ALLOC) && fdvec[i].pstream!=NULL) {
         v->flags[i]=fdvec[i].flags;
         keep=!(fdvec[i].flags&FD_CLOEXEC)&&!(attr&&attr->closefrom&&i>=attr->closefrom);
         needed=0;
