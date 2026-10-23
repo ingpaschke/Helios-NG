@@ -136,6 +136,7 @@ typedef struct Conode_str { Node node;           /* conodes held in linked list 
 #define CoFlag_FileStream   0x0004
 #define CoFlag_Waiting      0x0008
 #define CoFlag_EOFed        0x0010
+#define CoFlag_Served       0x0020    /* stream has handled a request */
 #else
 #define CoFlag_Floppy       0x0001L
 #define CoFlag_CtrlCed      0x0002L

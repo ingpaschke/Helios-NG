@@ -1015,6 +1015,14 @@ PRIVATE int Server()
 **/
 
 PRIVATE word StreamTimeout;
+#if LINUX
+/* A file stream that has served no request since its Open has no client
+ * that knows about it, typically because the reply to a retried Open went
+ * to a dead port. Reclaim its host descriptor early; a live client that
+ * merely had nothing to do yet will ReOpen the stream transparently. */
+PRIVATE word UnusedStreamTimeout;
+#define DefaultUnusedStreamTimeout ((word) 2L * 60L * OneSec)
+#endif
 
 PRIVATE word Init()
 { int i;
@@ -1027,6 +1035,11 @@ PRIVATE word Init()
   if (StreamTimeout eq Invalid_config)
    StreamTimeout = DefaultStreamTimeout;
   StreamTimeout  = divlong( StreamTimeout, time_unit);
+#if LINUX
+  UnusedStreamTimeout = divlong( DefaultUnusedStreamTimeout, time_unit);
+  if (UnusedStreamTimeout > StreamTimeout)
+   UnusedStreamTimeout = StreamTimeout;
+#endif
 
   Startup_Time = get_unix_time();
   initial_stamp = clock();
@@ -1801,7 +1814,14 @@ Conode *myco;
                  (word) strlen(mcb->Data) + 1L);
 
   forever
-   { myco->timelimit   = Now + StreamTimeout;
+   {
+#if LINUX
+     myco->timelimit   = Now +
+        (((myco->flags & (CoFlag_FileStream | CoFlag_Served)) eq
+          CoFlag_FileStream) ? UnusedStreamTimeout : StreamTimeout);
+#else
+     myco->timelimit   = Now + StreamTimeout;
+#endif
      myco->type        = 0L; 
      Suspend();                         /* wait for the next request          */
      if (myco->type eq CoSuicide)       /* which may be an order to die       */
@@ -1817,6 +1837,9 @@ Conode *myco;
                                    /* e.g. because there is an event handler  */
          Seppuku();
        }
+#if LINUX
+     myco->flags |= CoFlag_Served;
+#endif
                              /* The message may be part of a private protocol */
 #if internet_supported
      if (((mcb->MsgHdr).FnRc & FC_Mask) ne FC_GSP || 

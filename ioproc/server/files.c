@@ -1417,6 +1417,39 @@ typedef struct { Node       node;
                  int        busy;     /* in a multi-message read or write */
 } File_extra;
 
+#if LINUX
+/**
+*** A client that resends an Open whose replies never reach it makes the
+*** server open the same file again and again, and none of those streams is
+*** ever used. Keep at most Max_unused_streams such streams per name, closing
+*** the least recently opened one. Streams that have served a request are
+*** never closed here.
+**/
+#define Max_unused_streams 32
+
+PRIVATE void limit_unused_streams(Conode *myco)
+{ Node   *node;
+  Conode *oldest = (Conode *) NULL;
+  int    count = 0;
+
+  for (node = Open_files_list.head; node->next ne (Node *) NULL;
+       node = node->next)
+   { Conode *conode = ((File_extra *) node)->conode;
+     if ((conode->flags & CoFlag_Served) || ((File_extra *) node)->busy)
+      continue;
+     if (strcmp(conode->name, myco->name)) continue;
+     count++;
+     oldest = conode;        /* the list is kept most recent first */
+   }
+
+  if (count >= Max_unused_streams)
+   { Debug(Open_Flag, ("Closing an unused stream for %s", &(myco->name[1])));
+     oldest->type = CoSuicide;
+     StartCo(oldest);
+   }
+}
+#endif
+
 word File_InitStream(myco)
 Conode *myco;
 { File_extra *extra;
@@ -1437,7 +1470,12 @@ Conode *myco;
 #endif /* LINUX */
 #endif
 
+#if LINUX
+  myco->flags = (parentco->flags & ~CoFlag_Served) | CoFlag_FileStream;
+  limit_unused_streams(myco);
+#else
   myco->flags = parentco->flags | CoFlag_FileStream;
+#endif
 
 #if files_cannot_be_opened_twice
 /**
