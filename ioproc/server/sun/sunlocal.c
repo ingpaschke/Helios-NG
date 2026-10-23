@@ -281,7 +281,7 @@ PRIVATE void raise_fd_limit(void)
   if (getrlimit(RLIMIT_NOFILE, &rl) ne 0) return;
   if ((rl.rlim_max ne RLIM_INFINITY) && (rl.rlim_max < want))
    want = rl.rlim_max;
-  if ((rl.rlim_cur ne RLIM_INFINITY) && (rl.rlim_cur >= want)) return;
+  if ((rl.rlim_cur eq RLIM_INFINITY) || (rl.rlim_cur >= want)) return;
   rl.rlim_cur = want;
   if (setrlimit(RLIMIT_NOFILE, &rl) ne 0)
    printf(" Helios: unable to raise the descriptor limit to %ld.\n",

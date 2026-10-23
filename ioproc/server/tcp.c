@@ -1542,6 +1542,16 @@ try_again:
 	   if(idata == size)
 		 goto dowrite;		/* got it all */
 
+	   /* The holding buffer is IOCDataMax bytes and the immediate data	*/
+	   /* must be a prefix of the requested transfer. Reject anything	*/
+	   /* else before copying: the link layer only bounds DataSize by	*/
+	   /* maxdata, so a malformed message could overrun the buffer.	*/
+	   if(idata > IOCDataMax || idata > size)
+	   {
+	      Request_Return(SS_InterNet|EC_Error|EG_WrongSize|EO_Message,0L,0L);
+	      return ;
+	   }
+
 	   if((buf = (char *)malloc(IOCDataMax)) == NULL)	/* holding buffer */
 	   {
 	      Request_Return(SS_InterNet|EC_Error|EG_NoMemory|EO_Socket,0L,0L);
@@ -2659,7 +2669,22 @@ Conode *myco;
 		return ;
 	}
 	
-	e = ioctl(d->fd,FIONREAD,&size);
+	/* Under TLS the kernel socket holds ciphertext; ask the plaintext	*/
+	/* side instead, as net_compat.c does for the FIONREAD ioctl. While	*/
+	/* the handshake is still running nothing is readable yet.		*/
+	{
+		int io = ios_tls_fd(d->fd,0);
+
+		if( io < 0 && errno == EAGAIN )
+		{
+			size = 0;
+			e = 0;
+		}
+		else if( io < 0 )
+			e = -1;
+		else
+			e = ioctl(io,FIONREAD,&size);
+	}
 
 	if( e == -1 )
 	{
@@ -2667,7 +2692,7 @@ Conode *myco;
 		Request_Return(SS_InterNet|EC_Error|EG_Errno|errno, 0L, 0L);
 		return ;
 	}
-	
+
 	mcb->Control[0] = size;
 	Request_Return(ReplyOK, 1L, 0L);
 		

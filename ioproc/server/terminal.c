@@ -2181,6 +2181,8 @@ PRIVATE void fn( cursor_next,       (int));
 PRIVATE void fn( cursor_prev,       (int));
 PRIVATE void fn( move_cursor,       (int, int));
 PRIVATE void fn( erase_endofscreen, (void));
+PRIVATE void fn( erase_startofscreen, (void));
+PRIVATE void fn( erase_wholescreen, (void));
 PRIVATE void fn( erase_endofline,   (void));
 PRIVATE void fn( insert_line,       (void));
 PRIVATE void fn( delete_line,       (void));
@@ -2473,7 +2475,17 @@ Window *window;
                          (screen->gotdigits > 1) ? (screen->args[1] - 1) : 0);
                 goto end;
 
-	 case 'J':  erase_endofscreen(); goto end;
+	 case 'J':  if (screen->gotdigits > 0)
+                 { if (screen->args[0] eq 2)
+                    erase_wholescreen();
+                   elif (screen->args[0] eq 1)
+                    erase_startofscreen();
+                   else
+                    erase_endofscreen();
+                 }
+                else
+                 erase_endofscreen();
+                goto end;
 
 	 case 'K':  erase_endofline(); goto end;
 
@@ -2681,6 +2693,35 @@ PRIVATE void erase_endofscreen()
   else
     refresh_screen(Cur_y, LastRow);
 
+  use_mark();
+}
+
+/**
+*** ESC [ 1 J : erase from the top of the screen to the cursor inclusive,
+*** leaving the cursor where it is.
+**/
+PRIVATE void erase_startofscreen()
+{ register int i, j;
+
+  set_mark();
+
+  for (i = 0; i <= Cur_y; i++)
+   for (j = 0; j <= ((i eq Cur_y) ? Cur_x : LastCol); j++)
+    map[i][j] = ' ';
+
+  refresh_screen(0, Cur_y);
+
+  use_mark();
+}
+
+/**
+*** ESC [ 2 J : erase the whole screen. clear_screen() homes the cursor as a
+*** side effect, so the mark puts it back where the application left it.
+**/
+PRIVATE void erase_wholescreen()
+{
+  set_mark();
+  clear_screen();
   use_mark();
 }
 

@@ -278,7 +278,14 @@ int ios_tls_poll(struct pollfd *fds,nfds_t count,int timeout)
     free(copy);return n;
 }
 int ios_tls_shutdown(int fd,int how)
-{TLS *p=lookup(fd);return shutdown(p?p->front:fd,how);}
+{
+    TLS *p=lookup(fd);
+    /* TLS has no read-side half close. SHUT_RD on front would make the
+     * worker's next send(back) fail with EPIPE and tear the whole
+     * connection down, so treat it as a no-op on a TLS stream. */
+    if(p && how==SHUT_RD)return 0;
+    return shutdown(p?p->front:fd,how);
+}
 void ios_tls_forget(int fd)
 {
     TLS **slot=&connections,*p;

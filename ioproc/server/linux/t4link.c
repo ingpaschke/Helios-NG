@@ -153,7 +153,8 @@ PRIVATE void t4_disconnect(void)
 {
   if (link_fd >= 0)
    { t4_tracef("disconnect (in %ld out %ld bytes)", t4_bytes_in, t4_bytes_out);
-     dup2(t4_dead_fd, link_fd);   /* closes the socket */
+     if (dup2(t4_dead_fd, link_fd) < 0)   /* closes the socket */
+      ServerDebug("t4: dup2 on disconnect failed (%s)", strerror(errno));
    }
 }
 
@@ -174,7 +175,13 @@ PRIVATE void t4_connect(void)
   if (link_fd < 0)
    link_fd = s;                   /* first connection picks the number */
   elif (s != link_fd)
-   { dup2(s, (int) link_fd);
+   { if (dup2(s, (int) link_fd) < 0)
+      { ServerDebug("t4: cannot move connection onto descriptor %d (%s)",
+                    (int) link_fd, strerror(errno));
+        close(s);
+        t4_dead = 1;
+        return;
+      }
      close(s);
    }
   t4_dead = 0;
@@ -342,6 +349,15 @@ int   timeout;
       { if (!t4_dead)
          t4_tracef("read timeout after %d ms, got %d of %d", ms, amount,
                    count);
+        /* A timeout before the first byte is a normal idle poll. A      */
+        /* timeout part way through a block leaves the rest of the       */
+        /* message in the stream, and on a TCP transport there is no way */
+        /* to resynchronise the framing, so treat it as a broken link.   */
+        if (amount > 0 && amount < count)
+         { t4_tracedata("R", (unsigned char *) data, amount, count);
+           t4_link_broken("short read mid-message");
+           return count - amount;
+         }
         break;
       }
      if (t4_byte_us > 0) t4_sleep_us((long) t4_byte_us);
