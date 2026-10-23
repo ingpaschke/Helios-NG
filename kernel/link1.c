@@ -685,8 +685,13 @@ void IntelligentServer(LinkInfo *link)
 		case Proto_Xoff:
 			/* mark the Xoff before its worker runs, so	*/
 			/* that an Xon arriving first is kept		*/
+			/* While an Xoff is pending or in force, a	*/
+			/* further Xoff cancels any Xon kept since.	*/
 			if( link->Flags & (Link_Flags_stopped|Link_Flags_xoffwait) )
+			{
+				link->Flags &= ~Link_Flags_xonpending;
 				continue;
+			}
 			link->Flags |= Link_Flags_xoffwait;
 			unless( NewWorker(HandleXoff,link) )
 				link->Flags &= ~Link_Flags_xoffwait;
