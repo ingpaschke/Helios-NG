@@ -19,6 +19,10 @@ tools/build-t800/build.sh            # into build-t800/ in this checkout
 tools/build-t800/build.sh /tmp/hb    # or into another directory
 ```
 
+The output directory must be empty, missing, or one that `build.sh` made
+before (it leaves a `.build-t800` file there): its `src`, `prod`, `tmp` and
+`logs` are deleted at the start of every build.
+
 The result is `build-t800/prod/TRAN`, a complete Helios tree (`bin`,
 `lib`, `include`, `etc`, ...), with the X server `bin/xhelios` and its
 drivers (`X11/xhelios`). `build-t800/logs` has one log per
@@ -40,7 +44,8 @@ library of the same directory exists.
 
 `build.sh` uses `make -k`, so a component builds as much as it can, and
 counts the components whose make failed; their logs say why. A complete
-build reports none.
+build reports none and exits with status 0; any failed component makes the
+exit status 1.
 
 Two passes are expected and not counted: the nucleus is built once before
 `servers/servtask` (log `nucleus-pass1.txt`, which shows errors for the

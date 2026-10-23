@@ -4,9 +4,13 @@
 #
 # Usage: tools/build-t800/build.sh [OUT]
 #
-#   OUT     build directory (default: build-t800 beside this checkout's
-#           top directory); OUT/prod/TRAN is the resulting Helios tree
-#           (bin, lib, include, etc.), OUT/logs one log per component
+#   OUT     build directory (default: build-t800 in this checkout's top
+#           directory); OUT/prod/TRAN is the resulting Helios tree
+#           (bin, lib, include, etc.), OUT/logs one log per component.
+#           OUT must be empty, missing, or a directory build.sh made:
+#           its src, prod, tmp and logs are replaced
+#
+# The exit status is 0 only if every component built.
 #
 # Environment:
 #   T800    the llvm-t800 installation (default /opt/llvm-t800): its
@@ -30,6 +34,16 @@ REPO=$(cd "$BUILDT800/../.." && pwd)
 OUT=${1:-$REPO/build-t800}
 mkdir -p "$OUT"
 OUT=$(cd "$OUT" && pwd)
+# OUT/src, prod, tmp and logs are deleted below: never do that to a
+# directory that build.sh did not make
+if [ ! -f "$OUT/.build-t800" ]; then
+	if [ -n "$(ls -A "$OUT")" ] &&
+	   ! { [ -d "$OUT/src" ] && [ -d "$OUT/logs" ] && [ -d "$OUT/host" ]; }; then
+		echo "build.sh: $OUT is not empty and not a build directory" >&2
+		exit 1
+	fi
+	touch "$OUT/.build-t800"
+fi
 T800=${T800:-/opt/llvm-t800}
 JOBS=${JOBS:-1}
 
@@ -76,7 +90,11 @@ failed=0
 mk() {	# mk DIR [target [log suffix]]
 	local d=$1 t=${2:-install}
 	local log=$LOGS/$(echo "$d" | tr / _)${2:+-$2}${3:+-$3}.txt
-	[ -f "$HSRC/$d/TRAN/makefile" ] || return 0
+	if [ ! -f "$HSRC/$d/TRAN/makefile" ]; then
+		echo "  $d FAILED (no TRAN/makefile)"
+		failed=$((failed + 1))
+		return 0
+	fi
 	if make -k -j"$JOBS" -C "$HSRC/$d/TRAN" $t > "$log" 2>&1; then
 		echo "  $d $t"
 	else
@@ -134,3 +152,4 @@ echo "build.sh: the rest"
 for d in $LIBS $NET $SERVERS $CMDS $TCPIP $HFS $EXTRA $X11; do mk "$d"; done
 
 echo "build.sh: $HPROD ($failed components with errors)"
+[ "$failed" -eq 0 ]
