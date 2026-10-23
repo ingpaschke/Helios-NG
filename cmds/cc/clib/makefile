@@ -135,14 +135,14 @@ SOURCES		= $(SOURCES.c) $(SOURCES.a) \
 
 # C source files
 SOURCES.c	= stdio.c ctype.c string.c printf.c fpprintf.c \
-		scanf.c stdlib.c sort.c alloc.c time.c error.c \
+		scanf.c stdlib.c sort.c alloc.c time.c timezone.c error.c \
 		locale.c posixsys.c
 
 # AMPP source files
 SOURCES.a	= clibstar.a cstart.a modend.a
 
 # C header files
-HEADERS.c	= sysdep.h norcrosys.h fplib.h
+HEADERS.c	= sysdep.h norcrosys.h fplib.h timezone.h
 
 # AMPP macro files
 HEADERS.m	=
@@ -183,10 +183,11 @@ endif
 # Generic targets and their dependencies:
 
 OBJECTS = clibstar.p stdio.p ctype.p string.p printf.p fpprintf.p \
-	scanf.p stdlib.p sort.p alloc.p time.p error.p \
+	scanf.p stdlib.p sort.p alloc.p time.p timezone.p error.p \
 	locale.p posixsys.p $(XOBJECTS)	modend.p
 
 $(OBJECTS): sysdep.h norcrosys.h
+time.p timezone.p locale.p: timezone.h
 
 # Posix C library
 clib.i: $(OBJECTS) $(LIBDEFS)

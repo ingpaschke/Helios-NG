@@ -40,6 +40,13 @@ extern char *asctime(const struct tm *timeptr);
 extern char *ctime(const time_t *timer);
 extern struct tm *gmtime(const time_t *timer);
 extern struct tm *localtime(const time_t *timer);
+/* Timezone selection: TZ, then /helios/etc/timezone, otherwise UTC. */
+extern void tzset(void);
+extern char *tzname[2];
+extern long timezone;
+extern int daylight;
+extern struct tm *gmtime_r(const time_t *, struct tm *);
+extern struct tm *localtime_r(const time_t *, struct tm *);
 extern size_t strftime(char *s, size_t maxsize,
                        const char *format, const struct tm *timeptr);
 

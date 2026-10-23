@@ -24,6 +24,9 @@ Compared with upstream `master` at `1fe8f65e`, SP2 includes:
   redirection and processor selection, IPv4 DNS resolution, socket shutdown,
   shared descriptor status and terminal-resize signal delivery. The resolver configuration is
   `/helios/etc/resolv.cnf`, using an Atari-compatible filename.
+- **Timezones:** the C library supports named TZif files and POSIX `TZ` rules,
+  daylight saving, UTC conversion and `%Z`/`%z` formatting. The system default
+  is read from `/helios/etc/timezone`; named files live in `/helios/etc/zoneinfo`.
 - **Linux I/O server:** native x86-64 and AArch64 builds, an i386 build,
   `/internet` access through Linux sockets, optional OpenSSL TLS support and
   a link-driver registration interface.

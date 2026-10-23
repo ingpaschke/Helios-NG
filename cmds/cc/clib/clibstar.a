@@ -26,7 +26,7 @@ Resident
 [
 	name 	Clib
 	slot	7
-	version	1000
+	version	1001
 
 	static
 	[
@@ -209,6 +209,14 @@ _test _defp 'helios.C40
 		extern func	    	__rand
 		extern func		__srand
 
+		-- Timezone additions are appended to preserve the resident ABI.
+		extern func		tzset
+		extern func		gmtime_r
+		extern func		localtime_r
+		extern vec	8	tzname
+		extern word		timezone
+		extern word		daylight
+
 _test _defp 'helios.C40
 [
 	    	inittab		_ctype	256
@@ -270,6 +278,8 @@ _if _false_
 		stub	_Mark
 		stub	GetMsg
 		stub	NewPort
+		stub	Wait
+		stub	Signal
 
 		_if _or _defp 'helios.C40 _defp 'helios.arm 
 		[
@@ -331,6 +341,7 @@ _if _false_
 		stub	exit
 		stub	abort
 		stub	fcntl
+		stub	getenv
 		stub	_posix_exception_handler
 
 		-- Util
