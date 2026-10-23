@@ -1137,11 +1137,14 @@ static bool DoGetSize(MCB *mcb, SockEntry *s)
 static bool DoShutdown(MCB *mcb, SockEntry *s, int fn)
 {
 	word e;
-	word how = 0;
-	
-	if( fn & O_ReadOnly ) how |= FREAD;
-	if( fn & O_WriteOnly ) how |= FWRITE;
-	
+	word how;
+
+	/* soshutdown() expects the BSD convention 0 = receive, 1 = send,	*/
+	/* 2 = both (it does how++ and then tests FREAD/FWRITE itself).	*/
+	/* The Helios direction bits are O_ReadOnly 1, O_WriteOnly 2,	*/
+	/* O_ReadWrite 3, so subtract one rather than or-ing FREAD/FWRITE.	*/
+	how = (fn & O_ReadWrite) - 1;
+
 	e = syscall(s,shutdown,s,how);
 	
 	ErrorMsg(mcb,e?EC_Error|EG_Errno|e:0);
