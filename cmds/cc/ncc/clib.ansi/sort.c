@@ -187,7 +187,7 @@ void qsort(void *base, size_t nmemb, size_t size,
 /* This uses a quicksort method, but one that is arranged to complete in */
 /* about n*log(n) steps for sorted and inverse sorted inputs.            */
     char *b, *endp;
-    if (size == 0) return;
+    if (size == 0 || nmemb < 2) return;
     if (nmemb > SUBDIVISION_LIMIT)
         partition_sort(base, nmemb, size, compar);
 /* Now I do an insertion sort on the array that is left over. This makes */
