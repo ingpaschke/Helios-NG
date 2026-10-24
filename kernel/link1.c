@@ -1118,8 +1118,19 @@ word _Configure(LinkConf newconf,bool sendrecon)
 		}
 		else
 		{
+			word deadline = AddTimes(Timer(),LinkTxTimeout);
+
 			/* a dumb link guardian is just waiting	*/
 			/* on the sync list, re-start it.	*/
+			/* The previous mode change may have caught the guardian
+			 * sleeping rather than blocked in LinkRx. Wait until it
+			 * has actually entered its dumb-mode wait before resuming
+			 * it; Sync is otherwise NULL and no saved state exists. */
+			while( link->Sync == NULL )
+			{
+				if( After(Timer(),deadline) ) return Err_Timeout;
+				Sleep(1000);
+			}
 			Resume(link->Sync->state);
 			link->Sync = NULL;
 			link->State = newconf.State;
