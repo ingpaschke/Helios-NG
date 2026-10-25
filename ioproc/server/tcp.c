@@ -489,7 +489,7 @@ int sfd, fncode;
 		}
 
 #if LINUX
-	if(ios_tls_shutdown(sfd,how) == -1)
+	if(ios_net_shutdown(sfd,how) == -1)
 #else
 	if(shutdown(sfd,how) == -1)
 #endif /* LINUX */
@@ -2140,7 +2140,7 @@ done:
 #if LINUX
     /* A failed, unacknowledged stream send must not leave a live stream
      * whose next successful send silently follows the truncated message. */
-    if (error && stream_socket && sent > 0) ios_tls_shutdown(d->fd,2);
+    if (error && stream_socket && sent > 0) ios_net_shutdown(d->fd,2);
     if (polling) PostInsert(Remove(&myco->node),Heliosnode);
     myco->type = CoReady;
     mcb->MsgHdr.Reply = reply;
@@ -2673,7 +2673,7 @@ Conode *myco;
 	/* side instead, as net_compat.c does for the FIONREAD ioctl. While	*/
 	/* the handshake is still running nothing is readable yet.		*/
 	{
-		int io = ios_tls_fd(d->fd,0);
+		int io = ios_net_fd(d->fd,0);
 
 		if( io < 0 && errno == EAGAIN )
 		{

@@ -15,14 +15,21 @@
 #define POLLRDHUP 0x2000
 #endif
 
-int ios_net_close(int fd){ios_tls_forget(fd);return close(fd);}
+int ios_net_fd(int fd,int writing)
+{return ios_ssh_active(fd)?ios_ssh_fd(fd,writing):ios_tls_fd(fd,writing);}
+int ios_net_poll(struct pollfd *fds,nfds_t count,int timeout)
+{return ios_ssh_poll(fds,count,timeout);}
+int ios_net_shutdown(int fd,int how){return ios_ssh_shutdown(fd,how);}
+static int stream_eof(int fd)
+{return ios_ssh_active(fd)?ios_ssh_eof(fd):ios_tls_eof(fd);}
+int ios_net_close(int fd){ios_ssh_forget(fd);ios_tls_forget(fd);return close(fd);}
 ssize_t ios_net_read(int fd,void *data,size_t size)
-{int io=ios_tls_fd(fd,0);ssize_t n;if(io<0)return -1;n=read(io,data,size);return n==0 && size?ios_tls_eof(fd):n;}
+{int io=ios_net_fd(fd,0);ssize_t n;if(io<0)return -1;n=read(io,data,size);return n==0 && size?stream_eof(fd):n;}
 ssize_t ios_net_write(int fd,const void *data,size_t size)
-{int io=ios_tls_fd(fd,1);return io<0?-1:write(io,data,size);}
+{int io=ios_net_fd(fd,1);return io<0?-1:write(io,data,size);}
 ssize_t ios_net_sendmsg(int fd,const struct msghdr *msg,int flags)
 {
-    int io=ios_tls_fd(fd,1);struct msghdr plain;
+    int io=ios_net_fd(fd,1);struct msghdr plain;
     if(io<0)return -1;
     if(io==fd)return sendmsg(io,msg,flags);
     if((flags&MSG_OOB) || msg->msg_controllen){errno=EOPNOTSUPP;return -1;}
@@ -31,7 +38,7 @@ ssize_t ios_net_sendmsg(int fd,const struct msghdr *msg,int flags)
 }
 ssize_t ios_net_recvmsg(int fd,struct msghdr *msg,int flags)
 {
-    int io=ios_tls_fd(fd,0);ssize_t n;struct msghdr plain;
+    int io=ios_net_fd(fd,0);ssize_t n;struct msghdr plain;
     if(io<0)return -1;
     if(io==fd)return recvmsg(io,msg,flags);
     if(flags&MSG_OOB){errno=EOPNOTSUPP;return -1;}
@@ -42,21 +49,21 @@ ssize_t ios_net_recvmsg(int fd,struct msghdr *msg,int flags)
         if(msg->msg_name && getpeername(fd,msg->msg_name,&msg->msg_namelen)<0)
             msg->msg_namelen=0;
     }
-    return n==0?ios_tls_eof(fd):n;
+    return n==0?stream_eof(fd):n;
 }
 ssize_t ios_net_recvfrom(int fd,void *data,size_t size,int flags,struct sockaddr *addr,socklen_t *len)
 {
-    int io=ios_tls_fd(fd,0);ssize_t n;
+    int io=ios_net_fd(fd,0);ssize_t n;
     if(io<0)return -1;
     if(io==fd)return recvfrom(io,data,size,flags,addr,len);
     if(flags&MSG_OOB){errno=EOPNOTSUPP;return -1;}
     n=recvfrom(io,data,size,flags,NULL,NULL);
     if(n>=0 && addr && len && getpeername(fd,addr,len)<0)*len=0;
-    return n==0 && size?ios_tls_eof(fd):n;
+    return n==0 && size?stream_eof(fd):n;
 }
 ssize_t ios_net_sendto(int fd,const void *data,size_t size,int flags,const struct sockaddr *addr,socklen_t len)
 {
-    int io=ios_tls_fd(fd,1);if(io<0)return -1;
+    int io=ios_net_fd(fd,1);if(io<0)return -1;
     if(io!=fd){if(flags&MSG_OOB){errno=EOPNOTSUPP;return -1;}addr=NULL;len=0;}
     return sendto(io,data,size,flags,addr,len);
 }
@@ -127,7 +134,9 @@ int ios_net_set(int fd, int level, uint32_t name, const void *data,
                 unsigned size, int *nonblocking)
 {
     int opt;
+    if(level==IOS_SOL_SSH)return ios_ssh_set(fd,name,data,size);
     if(level==IOS_SOL_TLS) {
+        if(ios_ssh_active(fd)){errno=EALREADY;return -1;}
         if(name==IOS_TLS_CLIENT)return ios_tls_start(fd,data,size);
         errno=ENOPROTOOPT;return -1;
     }
@@ -166,6 +175,7 @@ int ios_net_get(int fd, int level, uint32_t name, void *data, unsigned *size)
 {
     int opt, rc;
     socklen_t len = *size;
+    if(level==IOS_SOL_SSH)return ios_ssh_get(fd,name,data,size);
     if(level==IOS_SOL_TLS) {
 #ifdef IOS_TLS
         if(name==IOS_TLS_CAPS && *size>=4){memcpy(data,"HTL1",4);*size=4;return 0;}
@@ -182,7 +192,7 @@ int ios_net_get(int fd, int level, uint32_t name, void *data, unsigned *size)
             struct pollfd p;
             uint32_t bits = 0;
             p.fd = fd; p.events = POLLIN|POLLOUT|POLLPRI|POLLRDHUP; p.revents = 0;
-            if (ios_tls_poll(&p,1,0) < 0) return -1;
+            if (ios_net_poll(&p,1,0) < 0) return -1;
             if (p.revents & POLLIN) bits |= 1;
             if (p.revents & POLLOUT) bits |= 2;
             if (p.revents & POLLPRI) bits |= 4;
@@ -199,7 +209,7 @@ int ios_net_get(int fd, int level, uint32_t name, void *data, unsigned *size)
         }
         *size = 4;
         if(cmd==FIONREAD) {
-            int io=ios_tls_fd(fd,0);
+            int io=ios_net_fd(fd,0);
             if(io<0 && errno==EAGAIN){memset(data,0,4);return 0;}
             if(io<0)return -1;
             return ioctl(io,cmd,data);

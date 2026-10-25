@@ -15,6 +15,10 @@ IOS_BUILD_DIR and IOS_OUT choose the build directory and executable path.
 
 IOS_TLS=1 enables OpenSSL for native builds. TLS_CFLAGS and TLS_LIBS select
 its headers and libraries; the defaults link against libssl and libcrypto.
+IOS_SSH=1 enables the optional SSH session provider using libssh2. SSH_CFLAGS
+and SSH_LIBS select that library (default -lssh2). It requires a native build.
+SSH network operations run in workers; terminal data, authentication and
+window-size controls use the Helios socket service without blocking coroutines.
 
 The built-in t4 LinkIO backend connects to the emulator. IOS_LINK_SOURCES
 accepts a space-separated list of C sources for an additional link driver.

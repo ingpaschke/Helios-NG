@@ -7,6 +7,10 @@
 #include <sys/socket.h>
 #include <poll.h>
 #include "net_tls.h"
+#include "net_ssh.h"
+int ios_net_fd(int,int);
+int ios_net_poll(struct pollfd *,nfds_t,int);
+int ios_net_shutdown(int,int);
 int ios_net_close(int);
 ssize_t ios_net_read(int,void *,size_t);
 ssize_t ios_net_write(int,const void *,size_t);

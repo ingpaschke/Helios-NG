@@ -2448,7 +2448,7 @@ WORD Multiwait()
 #endif /* LINUX */
     }
 #if LINUX
-    selected = ios_tls_poll(wait_fds,wait_count,timeout);
+    selected = ios_net_poll(wait_fds,wait_count,timeout);
     if (selected <= 0) {
         if (selected < 0 && errno != EINTR)
             ServerDebug("Warning: poll failed: errno %d",errno);
