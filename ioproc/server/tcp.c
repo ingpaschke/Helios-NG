@@ -40,6 +40,7 @@
 #include <stdlib.h>
 #if LINUX
 #include "linux/net_compat.h"
+#include "linux/ssh_server.h"
 #include <poll.h>
 #else
 #endif /* LINUX */
@@ -191,6 +192,12 @@ Conode *myco;
   Internet_extra.entries = 0L;
 #if LINUX
   ios_net_identity(MyName, sizeof(MyName), &MyAddr);
+  {
+    int port=get_int_config("ssh_port");
+    if(port!=Invalid_config && port!=0 &&
+       ios_sshd_start(get_config("ssh_bind"),port,get_config("ssh_host_key"))<0)
+        perror("io-server SSH listener");
+  }
 #else
   gethostname(MyName, NameMax);		/* get unix host name */
   h = gethostbyname(MyName);		/* and local name */
@@ -209,6 +216,7 @@ void Internet_TidyServer(myco)
 Conode *myco;
 #if LINUX
 { Node *node;
+  ios_sshd_stop();
   for (node = Internet_extra.list.head; node->next != NULL; node = node->next) {
     SockEntry *d = (SockEntry *)node;
     if (d->fd >= 0) ios_net_close(d->fd);
@@ -245,6 +253,19 @@ void Internet_Open(myco)
 Conode *myco;
 { 
   ObjNode *node;
+#if LINUX
+  /* Host SSH workers publish ordinary selectable streams. Only the
+   * coroutine thread adds socket objects to this directory. */
+  if(strncmp(IOname,"internet/",9)==0 &&
+     (node=(ObjNode *)Dir_find_node(myco))==NULL){
+    int fd=ios_sshd_open(IOname+9);
+    if(fd>=0){
+      SockEntry *d=NewSocket(myco,IOname+9,0);
+      if(!d){close(fd);Request_Return(EC_Error|SS_InterNet|EG_NoMemory|EO_Socket,0L,0L);return;}
+      d->fd=fd;
+    }
+  }
+#endif
 
   /* ServerDebug ("Internet_Open (%s)", myco->name); */
   

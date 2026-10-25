@@ -20,6 +20,23 @@ and SSH_LIBS select that library (default -lssh2). It requires a native build.
 SSH network operations run in workers; terminal data, authentication and
 window-size controls use the Helios socket service without blocking coroutines.
 
+IOS_SSHD=1 enables incoming SSH using libssh; SSHD_CFLAGS and SSHD_LIBS
+select that library (default -lssh). Configure ssh_port, ssh_bind (numeric
+IPv4 address, default 0.0.0.0), and ssh_host_key in the host configuration.
+A zero or absent ssh_port disables the listener. The host-key directory
+must exist and be writable to create a key on first use; existing keys are
+preserved. SSH protocol operations run in bounded worker connections.
+The native login service reads four-byte little-endian connection tokens
+from /internet/sshd and opens /internet/ssh.XXXXXXXX for each token. These
+are selectable Helios streams backed by local socketpairs, without TCP.
+Frames contain a one-byte kind, a two-byte big-endian length (max 4096),
+and payload: A sends username-NUL/password-NUL and receives empty A or F;
+P sets terminal-NUL/16-bit columns/rows; S starts a shell, C a command;
+empty S acknowledges startup. D carries terminal data, W sets dimensions,
+E requests terminal EOF, Q closes, and X carries a 32-bit exit status.
+Helios authenticates users, creates their sessions and terminates them on
+disconnect. The host provides no Linux login, SFTP or port forwarding.
+
 The built-in t4 LinkIO backend connects to the emulator. IOS_LINK_SOURCES
 accepts a space-separated list of C sources for an additional link driver.
 The driver implements ios_linux_extra_link(name), initializes its link

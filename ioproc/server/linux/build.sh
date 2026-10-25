@@ -4,6 +4,7 @@
 # CC, CFLAGS_EXTRA and LDFLAGS support native/cross builds.
 # IOS_TLS=1 enables OpenSSL; TLS_CFLAGS/TLS_LIBS select the dependency.
 # IOS_SSH=1 enables SSH; SSH_CFLAGS/SSH_LIBS select libssh2.
+# IOS_SSHD=1 enables incoming SSH; SSHD_CFLAGS/SSHD_LIBS select libssh.
 # IOS_LINK_SOURCES optionally supplies external link drivers (space-separated).
 set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -89,6 +90,7 @@ fi
 
 TLS_LINK=""
 SSH_LINK=""
+SSHD_LINK=""
 if [ "${IOS_TLS:-0}" = 1 ]; then
   [ "$TARGET" = native ] || { echo "TLS requires IOS_TARGET=native" >&2; exit 1; }
   CFLAGS="$CFLAGS -DIOS_TLS -pthread ${TLS_CFLAGS:-}"
@@ -99,10 +101,15 @@ if [ "${IOS_SSH:-0}" = 1 ]; then
   CFLAGS="$CFLAGS -DIOS_SSH -pthread ${SSH_CFLAGS:-}"
   SSH_LINK="${SSH_LIBS:--lssh2} -pthread"
 fi
+if [ "${IOS_SSHD:-0}" = 1 ]; then
+  [ "$TARGET" = native ] || { echo "SSH server requires IOS_TARGET=native" >&2; exit 1; }
+  CFLAGS="$CFLAGS -DIOS_SSHD -pthread ${SSHD_CFLAGS:-}"
+  SSHD_LINK="${SSHD_LIBS:--lssh} -pthread"
+fi
 OBJS=""
 for s in server files devices tload cofuns debug terminal linkio tcp \
          sun/sunlocal sun/linklib linux/t4link linux/colib_linux linux/termcap_lite \
-         linux/compat linux/net_compat linux/net_tls linux/net_ssh; do
+         linux/compat linux/net_compat linux/net_tls linux/net_ssh linux/ssh_server; do
   (cd "$SRC/$(dirname $s)" && $CC $CFLAGS -c "$SRC/$s.c" -o "$OBJ/$s.o")
   OBJS="$OBJS $OBJ/$s.o"
 done
@@ -122,6 +129,6 @@ if [ "$TARGET" = i386 ]; then
   ld -m elf_i386 -dynamic-linker /lib/ld-linux.so.2 -o "$OUT" \
      "$OBJ/start.o" $OBJS $LIBS
 else
-  $CC ${LDFLAGS:-} -o "$OUT" $OBJS -lm $SSH_LINK $TLS_LINK
+  $CC ${LDFLAGS:-} -o "$OUT" $OBJS -lm $SSH_LINK $SSHD_LINK $TLS_LINK
 fi
 echo "built $OUT"
