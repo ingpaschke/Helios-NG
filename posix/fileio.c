@@ -118,7 +118,7 @@ extern int open(char *name, int oflag, ... )
 	f->pstream = p;
 	f->flags |= oflag;
 	p->status = oflag & FD_GFLMASK;
-    if(oflag & O_NONBLOCK)s->Flags |= HU_STREAM_NONBLOCK;
+	if( oflag & O_NONBLOCK ) s->Flags |= HU_STREAM_NONBLOCK;
 
 	if( oflag & O_APPEND ) lseek(fd, 0, 2);
 
@@ -806,21 +806,25 @@ extern int fcntl(int fd, int cmd, ... )
 	case F_GETFL:
 		return (int)(f->pstream->status & FD_GFLMASK);
 	case F_SETFL:
-    {
-        Pstream *p=f->pstream;
-        word status=(p->status & ~FD_SFLMASK)|(va_arg(a,word)&FD_SFLMASK);
-        int nonblock=(status & O_NONBLOCK)!=0;
-        word e;
-        /* Commit local state only after the server accepts the change.
-         * SetSocketInfo is deliberately used directly (no ioctl recursion). */
-        if((p->stream->Type & ~Type_Flags)==Type_Socket) {
-            e=SetSocketInfo(p->stream,SOL_IOCTL,FIONBIO,&nonblock,sizeof(nonblock));
-            if(e<0){errno=posix_error(e);return -1;}
-        }
-        p->status=status;
-        p->stream->Flags=(p->stream->Flags & ~(Flags_Append|HU_STREAM_NONBLOCK))|(status & O_APPEND)|(nonblock?HU_STREAM_NONBLOCK:0);
-        return 0;
-    }
+	{
+		Pstream *p = f->pstream;
+		word status = (p->status & ~FD_SFLMASK)|(va_arg(a,word)&FD_SFLMASK);
+		int nonblock = (status & O_NONBLOCK) != 0;
+		word e;
+
+		/* Commit local state only after the server accepts the change.
+		 * SetSocketInfo is deliberately used directly (no ioctl recursion). */
+		if( (p->stream->Type & ~Type_Flags) == Type_Socket )
+		{
+			e = SetSocketInfo(p->stream,SOL_IOCTL,FIONBIO,
+					&nonblock,sizeof(nonblock));
+			if( e < 0 ) { errno = posix_error(e); return -1; }
+		}
+		p->status = status;
+		p->stream->Flags = (p->stream->Flags & ~(Flags_Append|HU_STREAM_NONBLOCK)) |
+				   (status & O_APPEND) | (nonblock ? HU_STREAM_NONBLOCK : 0);
+		return 0;
+	}
 	case F_GETLK:
 	case F_SETLK:
 	case F_SETLKW:

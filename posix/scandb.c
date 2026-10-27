@@ -21,10 +21,6 @@
 #include <string.h>
 #include "dns-resolver.h"
 
-
-
-
-
 typedef  int (*IntFnPtr)();	/* pointer to int function	*/
 
 #define	EXACT	1
@@ -47,7 +43,7 @@ struct DBINFO
 	int		upb;		/* end of buffer		*/
 	int		fd;		/* file	descriptor		*/
 	int		unread;		/* last unread char		*/
-	int dns_hosts;
+	int		dns_hosts;	/* hosts lookup may fall back to DNS */
 	int		stayopen;	/* db stayopen flag		*/
 };
 
@@ -76,8 +72,9 @@ extern int opendb(char *name, int mode)
 	CHECKSIGS();
 	if( dbinfo == NULL ) initdb();
 
-    /* A missing hosts file must not disable DNS or numeric addresses. */
-    dbinfo->dns_hosts = !strcmp(name,"/helios/etc/hosts") || !strcmp(name,"/etc/hosts");
+	/* A missing hosts file must not disable DNS or numeric addresses. */
+	dbinfo->dns_hosts = !strcmp(name,"/helios/etc/hosts") ||
+			    !strcmp(name,"/etc/hosts");
 	if( dbinfo->fd == -1 )
 	{
 		dbinfo->fd = open(name,O_RDONLY);
@@ -259,24 +256,37 @@ extern int scandb(char *format, ... )
 	int c = 0;	
 	char *s, *t;
 
-    char dns_name[256];
-    int dns_mode=0, *dns_address=NULL;
-    unsigned char dns_bytes[4];
-    char **dns_result_name=NULL, ***dns_aliases=NULL;
-    /* Preserve the query before the scanner reuses its string/alias buffer. */
-    if(dbinfo->dns_hosts && !strcmp(format,"%a #s %ls")) {
-        va_start(a,format);
-        dns_address=va_arg(a,int *);dns_result_name=va_arg(a,char **);
-        dns_aliases=va_arg(a,char ***);va_end(a);
-        if(*dns_result_name && strlen(*dns_result_name)<sizeof(dns_name)) {
-            strcpy(dns_name,*dns_result_name);dns_mode=1;
-        }
-    }else if(dbinfo->dns_hosts && !strcmp(format,"!a %s %ls")) {
-        int addr;
-        va_start(a,format);addr=va_arg(a,int);
-        dns_result_name=va_arg(a,char **);dns_aliases=va_arg(a,char ***);va_end(a);
-        memcpy(dns_bytes,&addr,4);strcpy(dns_name,"reverse");dns_mode=2;
-    }
+	char dns_name[256];
+	int dns_mode = 0, *dns_address = NULL;
+	unsigned char dns_bytes[4];
+	char **dns_result_name = NULL, ***dns_aliases = NULL;
+
+	/* Preserve the query before the scanner reuses its string/alias buffer. */
+	if( dbinfo->dns_hosts && !strcmp(format,"%a #s %ls") )
+	{
+		va_start(a,format);
+		dns_address = va_arg(a,int *);
+		dns_result_name = va_arg(a,char **);
+		dns_aliases = va_arg(a,char ***);
+		va_end(a);
+		if( *dns_result_name && strlen(*dns_result_name) < sizeof(dns_name) )
+		{
+			strcpy(dns_name,*dns_result_name);
+			dns_mode = 1;
+		}
+	}
+	else if( dbinfo->dns_hosts && !strcmp(format,"!a %s %ls") )
+	{
+		int addr;
+		va_start(a,format);
+		addr = va_arg(a,int);
+		dns_result_name = va_arg(a,char **);
+		dns_aliases = va_arg(a,char ***);
+		va_end(a);
+		memcpy(dns_bytes,&addr,4);
+		strcpy(dns_name,"reverse");
+		dns_mode = 2;
+	}
 	
 	CHECKSIGS();
 	for( c = nextch(); c > 0; c = nextch())
@@ -430,12 +440,15 @@ extern int scandb(char *format, ... )
 	} /* end of line loop */
 
 	va_end(a);
-    if(dns_mode && !ktm_dns_lookup(dns_name,dns_mode==2,dns_bytes,dbinfo->strbuf)) {
-        if(dns_address)memcpy(dns_address,dns_bytes,4);
-        *dns_result_name=dbinfo->strbuf;dbinfo->list[0]=NULL;
-        *dns_aliases=dbinfo->list;
-        CHECKSIGS();return 0;
-    }
+	if( dns_mode && !ktm_dns_lookup(dns_name,dns_mode==2,dns_bytes,dbinfo->strbuf) )
+	{
+		if( dns_address ) memcpy(dns_address,dns_bytes,4);
+		*dns_result_name = dbinfo->strbuf;
+		dbinfo->list[0] = NULL;
+		*dns_aliases = dbinfo->list;
+		CHECKSIGS();
+		return 0;
+	}
 	CHECKSIGS();
 	return 100;
 }

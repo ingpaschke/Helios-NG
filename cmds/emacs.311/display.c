@@ -115,42 +115,46 @@ PASCAL NEAR vtinit()
  * resize leaves the editor and its windows usable at their previous size. */
 int PASCAL NEAR vtresize(int rows, int cols)
 {
-    VIDEO **vs, **ps;
-    int i, oldrows = term.t_mrow;
-    if (rows < 3 || cols < 10 || rows > 32767 || cols > 32767)
-        return FALSE;
-    vs = (VIDEO **)calloc(rows - 1, sizeof(VIDEO *));
-    ps = (VIDEO **)calloc(rows - 1, sizeof(VIDEO *));
-    if (!vs || !ps) goto fail;
-    for (i = 0; i < rows - 1; i++) {
-        vs[i] = (VIDEO *)calloc(1, sizeof(VIDEO) + cols);
-        ps[i] = (VIDEO *)calloc(1, sizeof(VIDEO) + cols);
-        if (!vs[i] || !ps[i]) goto fail;
+	VIDEO **vs, **ps;
+	int i, oldrows = term.t_mrow;
+	if (rows < 3 || cols < 10 || rows > 32767 || cols > 32767) return FALSE;
+	vs = (VIDEO **)calloc(rows - 1, sizeof(VIDEO *));
+	ps = (VIDEO **)calloc(rows - 1, sizeof(VIDEO *));
+	if (!vs || !ps) goto fail;
+	for (i = 0; i < rows - 1; i++) {
+		vs[i] = (VIDEO *)calloc(1, sizeof(VIDEO) + cols);
+		ps[i] = (VIDEO *)calloc(1, sizeof(VIDEO) + cols);
+		if (!vs[i] || !ps[i]) goto fail;
 #if COLOR
-        vs[i]->v_rfcolor = 7;
+		vs[i]->v_rfcolor = 7;
 #endif
 #if INSDEL
-        ps[i]->v_rline = i;
+		ps[i]->v_rline = i;
 #endif
-    }
-    for (i = 0; i < oldrows; i++) {
-        free(vscreen[i]); free(pscreen[i]);
-    }
-    free(vscreen); free(pscreen);
-    vscreen = vs; pscreen = ps;
-    term.t_mrow = rows - 1; term.t_mcol = cols;
-    newsize(TRUE, rows);
-    newwidth(TRUE, cols);
-    ttrow = ttcol = 999;
-    sgarbf = TRUE;
-    return TRUE;
+	}
+	for (i = 0; i < oldrows; i++) {
+		free(vscreen[i]);
+		free(pscreen[i]);
+	}
+	free(vscreen);
+	free(pscreen);
+	vscreen = vs;
+	pscreen = ps;
+	term.t_mrow = rows - 1;
+	term.t_mcol = cols;
+	newsize(TRUE, rows);
+	newwidth(TRUE, cols);
+	ttrow = ttcol = 999;
+	sgarbf = TRUE;
+	return TRUE;
 fail:
-    for (i = 0; i < rows - 1; i++) {
-        if (vs) free(vs[i]);
-        if (ps) free(ps[i]);
-    }
-    free(vs); free(ps);
-    return FALSE;
+	for (i = 0; i < rows - 1; i++) {
+		if (vs) free(vs[i]);
+		if (ps) free(ps[i]);
+	}
+	free(vs);
+	free(ps);
+	return FALSE;
 }
 
 #endif /* HELIOS */

@@ -300,21 +300,25 @@ strftime(
 	      sprintf(ss, "%d", 1900 + tt->tm_year);
 	      break;
 
-            case 'Z':
-            case 'z':
-              if (tt->tm_isdst < 0) continue;
-              {
-                long off;
-                char zone[128];
-                _tzinfo(tt, &off, zone, sizeof(zone));
-                if (c == 'Z') strcpy(buff, zone);
-                else {
-                  char sign = off < 0 ? '-' : '+';
-                  if (off < 0) off = -off;
-                  sprintf(buff, "%c%02ld%02ld", sign, off/3600, off/60%60);
-                }
-              }
-              break;
+	    case 'Z':
+	    case 'z':
+	      if (tt->tm_isdst < 0)
+		continue;
+	      {
+		long off;
+		char zone[128];
+		_tzinfo(tt, &off, zone, sizeof(zone));
+		if (c == 'Z')
+		  strcpy(buff, zone);
+		else
+		  {
+		    char sign = off < 0 ? '-' : '+';
+		    if (off < 0)
+		      off = -off;
+		    sprintf(buff, "%c%02ld%02ld", sign, off/3600, off/60%60);
+		  }
+	      }
+	      break;
 
 	    case '%':
 	      push('%');

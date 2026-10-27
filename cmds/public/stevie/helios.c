@@ -42,22 +42,24 @@ static	char	RCSid[] =
 /* Resize only between input characters, never from a signal handler. */
 static void resize_terminal(void)
 {
-    extern bool_t interactive;
-    Attributes attr;
-    int oldrows = Rows, oldcols = Columns;
-    if (!interactive || State == CMDLINE) return;
-    if (GetAttributes(Heliosno(stdin), &attr) < 0) return;
-    if (attr.Min < 3 || attr.Time < 10 || attr.Min > 32767 || attr.Time > 32767)
-        return;
-    if (attr.Min == Rows && attr.Time == Columns) return;
-    Rows = attr.Min; Columns = attr.Time;
-    if (screenalloc() < 0) {
-        Rows = oldrows; Columns = oldcols;
-        return;
-    }
-    P(P_LI) = Rows;
-    screenclear();
-    /*
+	extern bool_t interactive;
+	Attributes attr;
+	int oldrows = Rows, oldcols = Columns;
+	if (!interactive || State == CMDLINE) return;
+	if (GetAttributes(Heliosno(stdin), &attr) < 0) return;
+	if (attr.Min < 3 || attr.Time < 10 || attr.Min > 32767 || attr.Time > 32767)
+		return;
+	if (attr.Min == Rows && attr.Time == Columns) return;
+	Rows = attr.Min;
+	Columns = attr.Time;
+	if (screenalloc() < 0) {
+		Rows = oldrows;
+		Columns = oldcols;
+		return;
+	}
+	P(P_LI) = Rows;
+	screenclear();
+	/*
      * Botchar is only maintained by updatescreen(), so after the buffers
      * have been reallocated it still describes the old screen height.
      * cursupdate() decides whether to scroll by comparing Curschar with
@@ -68,11 +70,11 @@ static void resize_terminal(void)
      * Botchar matches the new size, then let cursupdate() scroll the
      * cursor line back into view and redraw again.
      */
-    updatescreen();
-    cursupdate();
-    updatescreen();
-    windgoto(Cursrow, Curscol);
-    flushbuf();
+	updatescreen();
+	cursupdate();
+	updatescreen();
+	windgoto(Cursrow, Curscol);
+	flushbuf();
 }
 
 /*

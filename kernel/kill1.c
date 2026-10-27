@@ -170,41 +170,49 @@ Code _KillTask(Task *task)
  */
 void EvictPortWaiters(Pool *pool)
 {
-    RootStruct *root = GetRoot();
-    word btindex, ptindex;
+	RootStruct *root = GetRoot();
+	word btindex, ptindex;
 
-    for (btindex = 0; root->PortTable[btindex] != NULL; btindex++)
-    {
-        PTE *ptab = root->PortTable[btindex];
-        if (ptab == (PTE *)MinInt) continue;
-        for (ptindex = 0; ptindex < 64; ptindex++)
-        {
-            PTE *pte = ptab + ptindex;
-            Id *id, *prev;
-            if (pte->Type != T_Local) continue;
-		/* start by checking the transmitters	*/
-		for(id = pte->TxId,prev=NULL; id != NULL; id=id->next)
+	for( btindex = 0; root->PortTable[btindex] != NULL; btindex++ )
+	{
+		PTE *ptab = root->PortTable[btindex];
+		if( ptab == (PTE *)MinInt ) continue;
+		for( ptindex = 0; ptindex < 64; ptindex++ )
 		{
-			if( !inpool(id,pool) ) { prev = id; continue; }
-			/* kill this process */
-			id->rc = Err_Kill;
+			PTE *pte = ptab + ptindex;
+			Id *id, *prev;
+			if( pte->Type != T_Local ) continue;
+			/* start by checking the transmitters	*/
+			for( id = pte->TxId, prev = NULL; id != NULL; id = id->next )
+			{
+				if( !inpool(id, pool) )
+				{
+					prev = id;
+					continue;
+				}
+				/* kill this process */
+				id->rc = Err_Kill;
 #ifndef __TRAN
-			KnownThreadRm(id->state);
+				KnownThreadRm(id->state);
 #endif
-_Trace1(0xffff1111,id,id->state);
-			dq(&pte->TxId,prev,id);
-		}
+				_Trace1(0xffff1111, id, id->state);
+				dq(&pte->TxId, prev, id);
+			}
 
-		/* Detach receives on owned AND foreign ports. */
-		for(id = pte->RxId,prev=NULL; id != NULL; id=id->next)
-		{
-			if( !inpool(id,pool) ) { prev = id; continue; }
-			id->rc = id->rc == MultiWaiting ? MultiUnused : Err_Kill;
-			dq(&pte->RxId,prev,id);
+			/* Detach receives on owned AND foreign ports. */
+			for( id = pte->RxId, prev = NULL; id != NULL; id = id->next )
+			{
+				if( !inpool(id, pool) )
+				{
+					prev = id;
+					continue;
+				}
+				id->rc =
+					id->rc == MultiWaiting ? MultiUnused : Err_Kill;
+				dq(&pte->RxId, prev, id);
+			}
 		}
-
-        }
-    }
+	}
 }
 
 /* Clean and free any ports owned by task (inpool(pool)) in the port table */

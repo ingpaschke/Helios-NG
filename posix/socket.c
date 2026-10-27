@@ -632,13 +632,16 @@ extern int setsockopt(int fd, int level, int optname, char *optval, int optlen)
 	
 	s = f->pstream->stream;
 	
-    if(level==SOL_IOCTL && optname==FIONBIO) {
-        int flags;
-        if(optlen!=(int)sizeof(int)||optval==NULL){errno=EINVAL;return -1;}
-        flags=fcntl(fd,F_GETFL);
-        if(flags<0)return -1;
-        return fcntl(fd,F_SETFL,(*(int *)optval)?flags|O_NONBLOCK:flags & ~O_NONBLOCK);
-    }
+	if( level == SOL_IOCTL && optname == FIONBIO )
+	{
+		int flags;
+		if( optlen != (int)sizeof(int) || optval == NULL )
+		{ errno = EINVAL; return -1; }
+		flags = fcntl(fd,F_GETFL);
+		if( flags < 0 ) return -1;
+		return fcntl(fd,F_SETFL,(*(int *)optval) ?
+			     flags|O_NONBLOCK : flags & ~O_NONBLOCK);
+	}
 	e = (int)SetSocketInfo(s,level,optname,optval,optlen);
 
 	if( e < 0 ) 
@@ -652,32 +655,58 @@ extern int setsockopt(int fd, int level, int optname, char *optval, int optlen)
 
 extern int shutdown(int fd, int how)
 {
-    fdentry *f;
-    Stream *s;
-    MCB m;
-    Port reply;
-    word e, direction;
-    CHECKSIGS();
-    if((f=checkfd(fd))==NULL)return -1;
-    s=f->pstream->stream;
-    if((s->Type & ~Type_Flags)!=Type_Socket){errno=ENOTSOCK;return -1;}
-    if(how<0||how>2){errno=EINVAL;return -1;}
-    if(s->Server==NullPort){errno=ENOTCONN;return -1;}
-    reply=NewPort();
-    if(reply==NullPort){errno=ENOMEM;return -1;}
-    direction=how==0?O_ReadOnly:how==1?O_WriteOnly:O_ReadWrite;
-    Wait(&s->Mutex);
-    memset(&m,0,sizeof(m));
-    InitMCB(&m,MsgHdr_Flags_preserve,s->Server,reply,FC_GSP|FG_Close|s->FnMod|direction);
-    m.Timeout=10*OneSec;
-    e=PutMsg(&m);
-    if(e>=0){m.MsgHdr.Dest=reply;m.Timeout=10*OneSec;e=GetMsg(&m);}
-    s->Result2=e;
-    Signal(&s->Mutex);
-    FreePort(reply);
-    if(e<0){errno=posix_error(e);return -1;}
-    CHECKSIGS();
-    return 0;
+	fdentry *f;
+	Stream *s;
+	MCB m;
+	Port reply;
+	word e, direction;
+	CHECKSIGS();
+	if( (f = checkfd(fd)) == NULL ) return -1;
+	s = f->pstream->stream;
+	if( (s->Type & ~Type_Flags) != Type_Socket )
+	{
+		errno = ENOTSOCK;
+		return -1;
+	}
+	if( how < 0 || how > 2 )
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if( s->Server == NullPort )
+	{
+		errno = ENOTCONN;
+		return -1;
+	}
+	reply = NewPort();
+	if( reply == NullPort )
+	{
+		errno = ENOMEM;
+		return -1;
+	}
+	direction = how == 0 ? O_ReadOnly : how == 1 ? O_WriteOnly : O_ReadWrite;
+	Wait(&s->Mutex);
+	memset(&m, 0, sizeof(m));
+	InitMCB(&m, MsgHdr_Flags_preserve, s->Server, reply,
+		FC_GSP | FG_Close | s->FnMod | direction);
+	m.Timeout = 10 * OneSec;
+	e = PutMsg(&m);
+	if( e >= 0 )
+	{
+		m.MsgHdr.Dest = reply;
+		m.Timeout = 10 * OneSec;
+		e = GetMsg(&m);
+	}
+	s->Result2 = e;
+	Signal(&s->Mutex);
+	FreePort(reply);
+	if( e < 0 )
+	{
+		errno = posix_error(e);
+		return -1;
+	}
+	CHECKSIGS();
+	return 0;
 }
 
 extern unsigned long swap_long(unsigned long a)

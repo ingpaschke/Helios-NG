@@ -187,28 +187,28 @@ Fifo *NewFifo(DirNode *dir,string name, word flags, Matrix matrix)
  * alias together, so another condition cannot reuse an already freed port. */
 static void FifoForgetSelect(Fifo *f, Port port)
 {
-    if( f->SelectPort == port ) f->SelectPort = NullPort;
-    if( f->WriteSelectPort == port ) f->WriteSelectPort = NullPort;
-    if( f->ReadException == port ) f->ReadException = NullPort;
-    if( f->WriteException == port ) f->WriteException = NullPort;
+	if( f->SelectPort == port ) f->SelectPort = NullPort;
+	if( f->WriteSelectPort == port ) f->WriteSelectPort = NullPort;
+	if( f->ReadException == port ) f->ReadException = NullPort;
+	if( f->WriteException == port ) f->WriteException = NullPort;
 }
 
 static void FifoCancelSelect(Fifo *f, Port port)
 {
-    if( port == NullPort ) return;
-    FifoForgetSelect(f,port);
-    FreePort(port);
+	if( port == NullPort ) return;
+	FifoForgetSelect(f, port);
+	FreePort(port);
 }
 
 static void FifoNotifySelect(Fifo *f, Port port, word mode)
 {
-    if( port == NullPort ) return;
-    if( f->ReadException == port && f->Written && f->Writers == 0 )
-        mode |= f->ReadExceptionMode;
-    if( f->WriteException == port && f->Read && f->Readers == 0 )
-        mode |= f->WriteExceptionMode;
-    FifoForgetSelect(f,port);
-    SendException(port,mode);
+	if( port == NullPort ) return;
+	if( f->ReadException == port && f->Written && f->Writers == 0 )
+		mode |= f->ReadExceptionMode;
+	if( f->WriteException == port && f->Read && f->Readers == 0 )
+		mode |= f->WriteExceptionMode;
+	FifoForgetSelect(f, port);
+	SendException(port, mode);
 }
 
 static void do_open(ServInfo *servinfo)
@@ -371,19 +371,26 @@ static void do_open(ServInfo *servinfo)
 			if( reply ) ErrorMsg(m,reply);
 			else 
 			{
-				if(e & O_ReadOnly) {
+				if( e & O_ReadOnly )
+				{
 					FifoCancelSelect(f,f->SelectPort);
 					f->SelectPort = m->MsgHdr.Reply;
 				}
-				if(e & O_WriteOnly) {
+				if( e & O_WriteOnly )
+				{
 					FifoCancelSelect(f,f->WriteSelectPort);
 					f->WriteSelectPort = m->MsgHdr.Reply;
 				}
-				if(e & (O_Exception|HU_O_HANGUP)) {
-					Port *p=(mode&O_ReadOnly)?&f->ReadException:&f->WriteException;
-					FifoCancelSelect(f,*p);*p=m->MsgHdr.Reply;
-					if(mode&O_ReadOnly) f->ReadExceptionMode=e & (O_Exception|HU_O_HANGUP);
-					else f->WriteExceptionMode=e & (O_Exception|HU_O_HANGUP);
+				if( e & (O_Exception|HU_O_HANGUP) )
+				{
+					Port *p = (mode&O_ReadOnly) ?
+						&f->ReadException : &f->WriteException;
+					FifoCancelSelect(f,*p);
+					*p = m->MsgHdr.Reply;
+					if( mode&O_ReadOnly )
+						f->ReadExceptionMode = e & (O_Exception|HU_O_HANGUP);
+					else
+						f->WriteExceptionMode = e & (O_Exception|HU_O_HANGUP);
 				}
 			}
 			break;
@@ -718,13 +725,13 @@ void FifoWrite(MCB *m, Fifo *f, FifoBase *base)
 
 static void FifoGetSize(MCB *m, Fifo *f)
 {
-	InitMCB(m,0,m->MsgHdr.Reply,NullPort,Err_Null);
-	MarshalWord(m,data_available(f));
+	InitMCB(m, 0, m->MsgHdr.Reply, NullPort, Err_Null);
+	MarshalWord(m, data_available(f));
 	MarshalWord(m,
-		((data_available(f)>0 || (f->Written && f->Writers==0))?1:0) |
-		((data_available(f)<FifoCapacity)?2:0) |
-		((f->Read && f->Readers==0)?8:0) |
-		((f->Written && f->Writers==0)?16:0));
+		((data_available(f) > 0 || (f->Written && f->Writers == 0)) ? 1 : 0) |
+			((data_available(f) < FifoCapacity) ? 2 : 0) |
+			((f->Read && f->Readers == 0) ? 8 : 0) |
+			((f->Written && f->Writers == 0) ? 16 : 0));
 	PutMsg(m);
 }
 
@@ -737,8 +744,8 @@ static void FifoGetSize(MCB *m, Fifo *f)
 
 void FifoClose(Fifo *f, word mode)
 {
-	if( mode & O_ReadOnly )	f->Readers -= f->Readers==0?0:1;
-	if( mode & O_WriteOnly ) f->Writers -= f->Writers==0?0:1;
+	if( mode & O_ReadOnly ) f->Readers -= f->Readers == 0 ? 0 : 1;
+	if( mode & O_WriteOnly ) f->Writers -= f->Writers == 0 ? 0 : 1;
 
 	f->Users--;
 
@@ -748,14 +755,14 @@ void FifoClose(Fifo *f, word mode)
 	if( f->Users == 0 && (f->Read || data_available(f) == 0) )
 	{
 		f->ReadPos = f->WritePos = f->Upb + FifoMax;
-		AdjustBuffers(&f->Buffers,0,0,FifoMax);
+		AdjustBuffers(&f->Buffers, 0, 0, FifoMax);
 		Unlink(&f->ObjNode, FALSE);
 		FreePort(f->RDelayPort);
-		FreePort(f->WDelayPort);		
-		FifoCancelSelect(f,f->SelectPort);
-		FifoCancelSelect(f,f->WriteSelectPort);
-		FifoCancelSelect(f,f->ReadException);
-		FifoCancelSelect(f,f->WriteException);
+		FreePort(f->WDelayPort);
+		FifoCancelSelect(f, f->SelectPort);
+		FifoCancelSelect(f, f->WriteSelectPort);
+		FifoCancelSelect(f, f->ReadException);
+		FifoCancelSelect(f, f->WriteException);
 		Free(f);
 		return;
 	}
@@ -763,19 +770,27 @@ void FifoClose(Fifo *f, word mode)
 	/* abort the delay port so both Readers & Writers will have a   */
 	/* chance to respond to this event.				*/
 
-	AbortPort(f->RDelayPort,EC_Error|EG_Exception|0xaaaa);
-	AbortPort(f->WDelayPort,EC_Error|EG_Exception|0xaaaa);
-	if(f->Written && f->Writers==0 && f->SelectPort) {
-		FifoNotifySelect(f,f->SelectPort,O_ReadOnly);f->SelectPort=NullPort;
+	AbortPort(f->RDelayPort, EC_Error | EG_Exception | 0xaaaa);
+	AbortPort(f->WDelayPort, EC_Error | EG_Exception | 0xaaaa);
+	if( f->Written && f->Writers == 0 && f->SelectPort )
+	{
+		FifoNotifySelect(f, f->SelectPort, O_ReadOnly);
+		f->SelectPort = NullPort;
 	}
-	if(f->Read && f->Readers==0 && f->WriteSelectPort) {
-		FifoNotifySelect(f,f->WriteSelectPort,O_WriteOnly);f->WriteSelectPort=NullPort;
+	if( f->Read && f->Readers == 0 && f->WriteSelectPort )
+	{
+		FifoNotifySelect(f, f->WriteSelectPort, O_WriteOnly);
+		f->WriteSelectPort = NullPort;
 	}
-	if(f->Written && f->Writers==0 && f->ReadException) {
-		FifoNotifySelect(f,f->ReadException,f->ReadExceptionMode);f->ReadException=NullPort;
+	if( f->Written && f->Writers == 0 && f->ReadException )
+	{
+		FifoNotifySelect(f, f->ReadException, f->ReadExceptionMode);
+		f->ReadException = NullPort;
 	}
-	if(f->Read && f->Readers==0 && f->WriteException) {
-		FifoNotifySelect(f,f->WriteException,f->WriteExceptionMode);f->WriteException=NullPort;
+	if( f->Read && f->Readers == 0 && f->WriteException )
+	{
+		FifoNotifySelect(f, f->WriteException, f->WriteExceptionMode);
+		f->WriteException = NullPort;
 	}
 	Signal(&f->ObjNode.Lock);
 }

@@ -295,17 +295,17 @@ extern void _posix_exception_handler(void)
 			/* to prevent multiple calls to tcsetpgrp() upsetting	*/
 			/* things. Unfortunately there could still be race	*/
 			/* conditions.						*/
-        elif (index == 1 && mcb.MsgHdr.DataSize == 0 &&
-              e == (ErrBit | EG_Exception | EE_Signal | SIGWINCH))
-        {
-            SetPriority(StandardPri);
-            /* The terminal event port can belong to the waiting shell.
-             * Deliver resize notifications to its children in the same
-             * process group, as for terminal break events. */
-            inner_raise(SIGWINCH,TRUE,TRUE);
-            SetPriority(HighServerPri);
-            continue;
-        }
+		elif (index == 1 && mcb.MsgHdr.DataSize == 0 &&
+		      e == (ErrBit | EG_Exception | EE_Signal | SIGWINCH))
+		{
+			SetPriority(StandardPri);
+			/* The terminal event port can belong to the waiting shell.
+			 * Deliver resize notifications to its children in the same
+			 * process group, as for terminal break events. */
+			inner_raise(SIGWINCH,TRUE,TRUE);
+			SetPriority(HighServerPri);
+			continue;
+		}
 		elif (index == 1)
 		{
 #ifdef SYSDEB
@@ -978,15 +978,24 @@ int _posix_empty_select(word timeout)
 	MCB m;
 	word rc;
 	int interrupted;
-	if(timeout == 0) { raise_sync(); return 0; }
+	if( timeout == 0 )
+	{
+		raise_sync();
+		return 0;
+	}
 	w.port = NewPort();
-	if(w.port == NullPort) { errno = ENOMEM; return -1; }
-	InitMCB(&m,0,w.port,NullPort,0);
+	if( w.port == NullPort )
+	{
+		errno = ENOMEM;
+		return -1;
+	}
+	InitMCB(&m, 0, w.port, NullPort, 0);
 	m.Timeout = timeout;
 	Wait(&siglock);
 	w.next = empty_selects;
 	empty_selects = &w;
-	if(~mask.mask & mask.pending) {
+	if( ~mask.mask & mask.pending )
+	{
 		FreePort(w.port);
 		w.port = NullPort;
 	}
@@ -994,19 +1003,27 @@ int _posix_empty_select(word timeout)
 	/* The port sweeper runs once a second. Keep short timer waits precise;
 	 * signals still invalidate the registered port during this bounded
 	 * delay, so the caller sees EINTR (at most 100 ms later). */
-	if(timeout > 0 && timeout <= OneSec/10) {
+	if( timeout > 0 && timeout <= OneSec / 10 )
+	{
 		Delay(timeout);
 		rc = EK_Timeout;
-	} else rc = GetMsg(&m);
+	}
+	else
+		rc = GetMsg(&m);
 	Wait(&siglock);
-	for(p = &empty_selects; *p != &w; p = &(*p)->next);
+	for( p = &empty_selects; *p != &w; p = &(*p)->next )
+		;
 	*p = w.next;
 	interrupted = w.port == NullPort;
-	if(w.port != NullPort) FreePort(w.port);
+	if( w.port != NullPort ) FreePort(w.port);
 	Signal(&siglock);
 	raise_sync();
-	if(interrupted) { errno = EINTR; return -1; }
-	if(rc == EK_Timeout) return 0;
+	if( interrupted )
+	{
+		errno = EINTR;
+		return -1;
+	}
+	if( rc == EK_Timeout ) return 0;
 	errno = posix_error(rc);
 	return -1;
 }
