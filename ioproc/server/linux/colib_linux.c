@@ -25,7 +25,7 @@
  * returns falls into a trampoline loop that keeps reporting CoDeleted.
  */
 
-#include "../helios.h"
+#include "helios.h"
 #include <ucontext.h>
 
 #define CO_MIN_STACK (256 * 1024)

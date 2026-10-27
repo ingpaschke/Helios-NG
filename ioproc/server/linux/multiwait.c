@@ -1,7 +1,7 @@
 /* Linux uses one poll slot per descriptor, with independent coroutine
  * and select-result pointers for each direction. */
 #include <poll.h>
-#include "../helios.h"
+#include "helios.h"
 #include "hostio.h"
 #include "net_compat.h"
 

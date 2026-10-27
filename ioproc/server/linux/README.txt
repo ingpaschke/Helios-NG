@@ -4,32 +4,42 @@ Linux host port of the Helios I/O server
 Building
 --------
 
-From this directory:
+From this directory, using GNU make and the Linux development headers:
 
-    IOS_TARGET=native ./build.sh
+    make
 
-The compiler and Linux development headers are required. The default output
-is build/ioserver; copied sources and objects are kept under build/. The
-build does not modify the shared server sources.
+The executable is build/ioserver; objects and header dependencies are under
+build/obj. Sources are compiled directly from this tree. Incremental builds
+track header changes and changes to the compiler, flags or enabled providers.
+Libraries named directly as .a or .so files are also tracked. Use LIB_DEPS to
+list additional library files selected through -l or other linker options.
 
-IOS_TARGET=native selects the host ABI, including x86-64 and AArch64.
-IOS_TARGET=i386 selects the 32-bit x86 ABI and requires 32-bit libraries.
-When omitted, the target is native on AArch64 and i386 on other hosts.
-CC selects the compiler. IOS_BUILD_DIR and IOS_OUT select output paths;
-CFLAGS_EXTRA and LDFLAGS add native compiler and linker options.
+The compiler selects the target ABI and supplies the normal Linux startup
+and linker support. Standard CC, CPPFLAGS, CFLAGS, LDFLAGS and LDLIBS variables
+are supported. BUILD_DIR and OUT select the build directory and executable.
+For example, a cross-build without optional network libraries is:
 
-Optional network providers are enabled independently on native builds:
+    make CC=aarch64-linux-gnu-gcc BUILD_DIR=build-arm64
 
-    IOS_TARGET=native IOS_TLS=1 IOS_SSH=1 IOS_SSHD=1 ./build.sh
+Optional network providers are enabled independently:
+
+    make TLS=1 SSH=1 SSHD=1
 
     Option       Library       Header/link overrides
-    IOS_TLS      OpenSSL       TLS_CFLAGS, TLS_LIBS
-    IOS_SSH      libssh2       SSH_CFLAGS, SSH_LIBS
-    IOS_SSHD     libssh        SSHD_CFLAGS, SSHD_LIBS
+    TLS          OpenSSL       TLS_CFLAGS, TLS_LIBS
+    SSH          libssh2       SSH_CFLAGS, SSH_LIBS
+    SSHD         libssh        SSHD_CFLAGS, SSHD_LIBS
 
 The default linker options are -lssl -lcrypto, -lssh2 and -lssh respectively.
-Without a provider, its private controls return an unsupported-option error.
+An omitted provider's private controls return an unsupported-option error.
 An incoming SSH listener is also disabled unless ssh_port is configured.
+
+LINK_SOURCES selects external link-driver sources instead of linkext.c.
+Each source must have a distinct basename. Remove the current build's
+objects and executable with make clean.
+
+build.sh forwards existing IOS_BUILD_DIR, IOS_OUT, IOS_TLS, IOS_SSH, IOS_SSHD,
+IOS_LINK_SOURCES, IOS_OPT and CFLAGS_EXTRA settings to make.
 
 Source layout
 -------------

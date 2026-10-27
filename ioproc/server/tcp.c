@@ -46,7 +46,7 @@
 
 #if internet_supported
 
-#if (!SM90 && !RS6000 && !HP9000 && !SCOUNIX)
+#if (!LINUX && !SM90 && !RS6000 && !HP9000 && !SCOUNIX)
 #include <sys/filio.h>
 #include <sys/socket.h>
 #include <sys/sockio.h>

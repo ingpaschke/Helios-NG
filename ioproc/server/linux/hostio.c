@@ -1,5 +1,5 @@
 /* Linux host operations used by the shared Unix I/O adapter. */
-#include "../helios.h"
+#include "helios.h"
 #include "hostio.h"
 #include <poll.h>
 #include <sys/resource.h>

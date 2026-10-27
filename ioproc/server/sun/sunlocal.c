@@ -26,7 +26,7 @@
 
 #define Local_Module
 
-#if (ARMBSD)
+#if (LINUX || ARMBSD)
 #include "helios.h"
 #else
 #include "../helios.h"

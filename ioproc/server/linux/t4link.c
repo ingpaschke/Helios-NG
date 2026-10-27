@@ -39,7 +39,7 @@
  * to exit, the same way it treats a broken pipe to the Hydra link daemon.
  */
 
-#include "../helios.h"
+#include "helios.h"
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <netinet/in.h>

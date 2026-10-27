@@ -26,7 +26,7 @@
 #include "helios.h"
 
 #if !PC
-#if SOLARIS
+#if (SOLARIS || LINUX)
 #include <stdarg.h>
 #else
 #include <varargs.h>
