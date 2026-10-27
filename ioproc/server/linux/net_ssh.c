@@ -4,6 +4,7 @@
  * copy state under a mutex and never wait for network/authentication I/O. */
 #include "net_ssh.h"
 #include "net_tls.h"
+#include "net_wire.h"
 #include <stdint.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -18,43 +19,153 @@
 #include <pthread.h>
 #include <signal.h>
 
-enum StartOffset {
-    START_VERSION = 0,
-    START_TIMEOUT = 4,
-    START_PORT = 8,
-    START_COLUMNS = 12,
-    START_ROWS = 16,
-    START_PTY = 20,
-    START_RESERVED_1 = 24,
-    START_RESERVED_2 = 28,
-    START_HOST = 32,
-    START_USER = 288,
-    START_TERMINAL = 352,
-    START_COMMAND = 416
-};
+/* Native records. Only the codecs below know the HSH1 field order. */
+typedef struct {
+    uint32_t timeout_ms, port, columns, rows, pty;
+    char host[256], user[64], terminal[64], command[768];
+} SshStartRequest;
 
-enum AuthOffset {
-    AUTH_METHOD = 0,
-    AUTH_KEY_SIZE = 4,
-    AUTH_RESERVED_1 = 8,
-    AUTH_RESERVED_2 = 12,
-    AUTH_SECRET = 16,
-    AUTH_PRIVATE_KEY = 528
-};
+typedef struct {
+    uint32_t method, key_size;
+    char secret[512];
+    unsigned char private_key[8192];
+} SshAuthentication;
 
-enum StatusOffset {
-    STATUS_STATE = 4,
-    STATUS_ERROR = 8,
-    STATUS_EXIT = 12,
-    STATUS_EXIT_VALID = 16,
-    STATUS_METHODS = 20,
-    STATUS_ATTEMPT = 24,
-    STATUS_KEY_TYPE = 32,
-    STATUS_FINGERPRINT = 96,
-    STATUS_MESSAGE = 192
-};
+typedef struct {
+    uint32_t state, error, exit_status, exit_valid, methods, attempt;
+    char key_type[64], fingerprint[96], message[316];
+} SshStatus;
+
+typedef struct {
+    uint32_t columns, rows;
+} SshResizeRequest;
+
+typedef struct {
+    uint32_t operation, total_size, offset;
+    const unsigned char *data;
+    unsigned size;
+} SshControlFragment;
 
 enum AuthMethod { AUTH_PASSWORD = 1, AUTH_PUBLIC_KEY = 2 };
+
+static int decode_start_request(SshStartRequest *request, const void *data,
+                                unsigned size)
+{
+    WireReader reader = {data};
+    uint32_t version, reserved_1, reserved_2;
+
+    if (size != IOS_SSH_START_SIZE) {
+        return EINVAL;
+    }
+    version = wire_read_word(&reader);
+    request->timeout_ms = wire_read_word(&reader);
+    request->port = wire_read_word(&reader);
+    request->columns = wire_read_word(&reader);
+    request->rows = wire_read_word(&reader);
+    request->pty = wire_read_word(&reader);
+    reserved_1 = wire_read_word(&reader);
+    reserved_2 = wire_read_word(&reader);
+    wire_read_bytes(&reader, request->host, sizeof(request->host));
+    wire_read_bytes(&reader, request->user, sizeof(request->user));
+    wire_read_bytes(&reader, request->terminal, sizeof(request->terminal));
+    wire_read_bytes(&reader, request->command, sizeof(request->command));
+    if (version != 1 || request->timeout_ms < 100 || request->timeout_ms > 120000 ||
+        !request->port || request->port > 65535 || request->columns > 65535 ||
+        request->rows > 65535 || request->pty > 1 || reserved_1 || reserved_2 ||
+        !request->host[0] || !memchr(request->host, 0, sizeof(request->host)) ||
+        !request->user[0] || !memchr(request->user, 0, sizeof(request->user)) ||
+        !memchr(request->terminal, 0, sizeof(request->terminal)) ||
+        !memchr(request->command, 0, sizeof(request->command))) {
+        return EINVAL;
+    }
+    return 0;
+}
+
+static int decode_authentication(SshAuthentication *auth, const void *data,
+                                 unsigned size)
+{
+    WireReader reader = {data};
+    uint32_t reserved_1, reserved_2;
+
+    if (size != IOS_SSH_AUTH_SIZE) {
+        return EINVAL;
+    }
+    auth->method = wire_read_word(&reader);
+    auth->key_size = wire_read_word(&reader);
+    reserved_1 = wire_read_word(&reader);
+    reserved_2 = wire_read_word(&reader);
+    wire_read_bytes(&reader, auth->secret, sizeof(auth->secret));
+    wire_read_bytes(&reader, auth->private_key, sizeof(auth->private_key));
+    if ((auth->method != AUTH_PASSWORD && auth->method != AUTH_PUBLIC_KEY) ||
+        auth->key_size > sizeof(auth->private_key) ||
+        (auth->method == AUTH_PUBLIC_KEY && !auth->key_size) || reserved_1 ||
+        reserved_2 || !memchr(auth->secret, 0, sizeof(auth->secret))) {
+        return EINVAL;
+    }
+    return 0;
+}
+
+static int decode_resize_request(SshResizeRequest *request, const void *data,
+                                 unsigned size)
+{
+    WireReader reader = {data};
+
+    if (size != 8) {
+        return EINVAL;
+    }
+    request->columns = wire_read_word(&reader);
+    request->rows = wire_read_word(&reader);
+    if (!request->columns || request->columns > 65535 || !request->rows ||
+        request->rows > 65535) {
+        return EINVAL;
+    }
+    return 0;
+}
+
+static int decode_control_word(uint32_t *value, const void *data, unsigned size)
+{
+    WireReader reader = {data};
+
+    if (size != 4) {
+        return EINVAL;
+    }
+    *value = wire_read_word(&reader);
+    return 0;
+}
+
+/* The fragment borrows its payload until receive_control_fragment returns. */
+static int decode_control_fragment(SshControlFragment *fragment, const void *data,
+                                   unsigned size)
+{
+    WireReader reader = {data};
+
+    if (size < 13 || size > 492) {
+        return EINVAL;
+    }
+    fragment->operation = wire_read_word(&reader);
+    fragment->total_size = wire_read_word(&reader);
+    fragment->offset = wire_read_word(&reader);
+    fragment->data = reader.next;
+    fragment->size = size - 12;
+    return 0;
+}
+
+static void encode_status(void *data, const SshStatus *status)
+{
+    WireWriter writer = {data};
+
+    wire_write_bytes(&writer, "HSH1", 4);
+    wire_write_word(&writer, status->state);
+    wire_write_word(&writer, status->error);
+    wire_write_word(&writer, status->exit_status);
+    wire_write_word(&writer, status->exit_valid);
+    wire_write_word(&writer, status->methods);
+    wire_write_word(&writer, status->attempt);
+    wire_write_word(&writer, 0); /* reserved */
+    wire_write_bytes(&writer, status->key_type, sizeof(status->key_type));
+    wire_write_bytes(&writer, status->fingerprint, sizeof(status->fingerprint));
+    wire_write_bytes(&writer, status->message, sizeof(status->message));
+}
 
 typedef struct SshConnection SshConnection;
 
@@ -75,7 +186,7 @@ struct SshConnection {
     int exit_status, exit_valid;
     unsigned columns, rows, resize_serial, methods, attempt;
     char key_type[64], fingerprint[96], message[316];
-    unsigned char auth[IOS_SSH_AUTH_SIZE];
+    SshAuthentication auth;
 };
 
 static SshConnection *connections;
@@ -110,20 +221,6 @@ static int library_error;
 static void initialize_libssh2(void)
 {
     library_error = libssh2_init(0);
-}
-
-static unsigned read_le32(const unsigned char *bytes)
-{
-    return (unsigned)bytes[0] | (unsigned)bytes[1] << 8 | (unsigned)bytes[2] << 16 |
-           (unsigned)bytes[3] << 24;
-}
-
-static void write_le32(unsigned char *bytes, unsigned n)
-{
-    bytes[0] = n;
-    bytes[1] = n >> 8;
-    bytes[2] = n >> 16;
-    bytes[3] = n >> 24;
 }
 
 static long long monotonic_milliseconds(void)
@@ -309,7 +406,7 @@ static int approve_host_key(SshConnection *connection, LIBSSH2_SESSION *session)
 /* Credentials are copied once: libssh2 requires identical arguments on retry. */
 static int authenticate_session(SshConnection *connection, LIBSSH2_SESSION *session)
 {
-    unsigned char auth[IOS_SSH_AUTH_SIZE];
+    SshAuthentication auth;
     const char *methods;
     int rc, result = -1;
     long long deadline;
@@ -347,8 +444,8 @@ static int authenticate_session(SshConnection *connection, LIBSSH2_SESSION *sess
             goto done;
         }
         pthread_mutex_lock(&connection->lock);
-        memcpy(auth, connection->auth, sizeof(auth));
-        memset(connection->auth, 0, sizeof(connection->auth));
+        auth = connection->auth;
+        memset(&connection->auth, 0, sizeof(connection->auth));
         connection->auth_ready = 0;
         pthread_mutex_unlock(&connection->lock);
         deadline = monotonic_milliseconds() + connection->timeout_ms;
@@ -356,14 +453,12 @@ static int authenticate_session(SshConnection *connection, LIBSSH2_SESSION *sess
             if (connection_cancelled(connection)) {
                 goto done;
             }
-            if (read_le32(auth + AUTH_METHOD) == AUTH_PASSWORD) {
-                rc = libssh2_userauth_password(session, connection->user,
-                                               (char *)auth + AUTH_SECRET);
+            if (auth.method == AUTH_PASSWORD) {
+                rc = libssh2_userauth_password(session, connection->user, auth.secret);
             } else {
                 rc = libssh2_userauth_publickey_frommemory(
                     session, connection->user, strlen(connection->user), NULL, 0,
-                    (char *)auth + AUTH_PRIVATE_KEY, read_le32(auth + AUTH_KEY_SIZE),
-                    (char *)auth + AUTH_SECRET);
+                    (char *)auth.private_key, auth.key_size, auth.secret);
             }
             if (rc != LIBSSH2_ERROR_EAGAIN) {
                 break;
@@ -372,7 +467,7 @@ static int authenticate_session(SshConnection *connection, LIBSSH2_SESSION *sess
                 goto done;
             }
         }
-        memset(auth, 0, sizeof(auth));
+        memset(&auth, 0, sizeof(auth));
         if (rc) {
             pthread_mutex_lock(&connection->lock);
             connection->attempt++;
@@ -383,7 +478,7 @@ static int authenticate_session(SshConnection *connection, LIBSSH2_SESSION *sess
     }
     result = 0;
 done:
-    memset(auth, 0, sizeof(auth));
+    memset(&auth, 0, sizeof(auth));
     return result;
 }
 
@@ -703,26 +798,13 @@ done:
     return NULL;
 }
 
-static int start_connection(int fd, const unsigned char *wire, unsigned size)
+static int start_connection(int fd, const SshStartRequest *request)
 {
     SshConnection *connection;
     pthread_t thread;
     int pair[2], type, flags, error;
     struct sockaddr_storage peer;
     socklen_t n = sizeof(type);
-    if (size != IOS_SSH_START_SIZE || read_le32(wire) != 1 ||
-        read_le32(wire + START_TIMEOUT) < 100 ||
-        read_le32(wire + START_TIMEOUT) > 120000 || !read_le32(wire + START_PORT) ||
-        read_le32(wire + START_PORT) > 65535 ||
-        read_le32(wire + START_COLUMNS) > 65535 ||
-        read_le32(wire + START_ROWS) > 65535 || read_le32(wire + START_PTY) > 1 ||
-        read_le32(wire + START_RESERVED_1) || read_le32(wire + START_RESERVED_2) ||
-        !wire[32] || !memchr(wire + START_HOST, 0, 256) || !wire[288] ||
-        !memchr(wire + START_USER, 0, 64) || !memchr(wire + START_TERMINAL, 0, 64) ||
-        !memchr(wire + START_COMMAND, 0, 768)) {
-        errno = EINVAL;
-        return -1;
-    }
     if (find_connection(fd) || ios_tls_fd(fd, 0) != fd) {
         errno = EALREADY;
         return -1;
@@ -770,15 +852,15 @@ static int start_connection(int fd, const unsigned char *wire, unsigned size)
     connection->worker_fd = pair[1];
     connection->references = 2;
     connection->state = IOS_SSH_CONNECTING;
-    connection->timeout_ms = read_le32(wire + START_TIMEOUT);
-    connection->remote_port = read_le32(wire + START_PORT);
-    connection->columns = read_le32(wire + START_COLUMNS);
-    connection->rows = read_le32(wire + START_ROWS);
-    connection->pty = read_le32(wire + START_PTY);
-    memcpy(connection->host, wire + START_HOST, 256);
-    memcpy(connection->user, wire + START_USER, 64);
-    memcpy(connection->terminal, wire + START_TERMINAL, 64);
-    memcpy(connection->command, wire + START_COMMAND, 768);
+    connection->timeout_ms = request->timeout_ms;
+    connection->remote_port = request->port;
+    connection->columns = request->columns;
+    connection->rows = request->rows;
+    connection->pty = request->pty;
+    memcpy(connection->host, request->host, sizeof(connection->host));
+    memcpy(connection->user, request->user, sizeof(connection->user));
+    memcpy(connection->terminal, request->terminal, sizeof(connection->terminal));
+    memcpy(connection->command, request->command, sizeof(connection->command));
     pthread_mutex_init(&connection->lock, NULL);
     {
         sigset_t all, old;
@@ -804,58 +886,57 @@ static int start_connection(int fd, const unsigned char *wire, unsigned size)
 
 /* IOC control payloads are small. Assemble one ordered START/AUTH record,
  * apply it only when complete, then erase the temporary credentials. */
-static int receive_control_fragment(int fd, const unsigned char *wire, unsigned size)
+static int receive_control_fragment(int fd, const void *data, unsigned size)
 {
     int rc;
     SshUpload *upload;
-    unsigned operation, total, pos, count;
-    if (size < 13 || size > 492) {
+    SshControlFragment fragment;
+    if (decode_control_fragment(&fragment, data, size)) {
         errno = EINVAL;
         return -1;
     }
-    operation = read_le32(wire);
-    total = read_le32(wire + 4);
-    pos = read_le32(wire + 8);
-    count = size - 12;
-    if ((operation != IOS_SSH_START && operation != IOS_SSH_AUTHENTICATE) ||
-        total !=
-            (operation == IOS_SSH_START ? IOS_SSH_START_SIZE : IOS_SSH_AUTH_SIZE) ||
-        pos > total || count > total - pos) {
+    if ((fragment.operation != IOS_SSH_START &&
+         fragment.operation != IOS_SSH_AUTHENTICATE) ||
+        fragment.total_size != (fragment.operation == IOS_SSH_START
+                                    ? IOS_SSH_START_SIZE
+                                    : IOS_SSH_AUTH_SIZE) ||
+        fragment.offset > fragment.total_size ||
+        fragment.size > fragment.total_size - fragment.offset) {
         forget_upload(fd);
         errno = EINVAL;
         return -1;
     }
-    if (!pos) {
+    if (!fragment.offset) {
         forget_upload(fd);
         upload = calloc(1, sizeof(*upload));
         if (!upload) {
             return -1;
         }
-        upload->data = calloc(1, total);
+        upload->data = calloc(1, fragment.total_size);
         if (!upload->data) {
             free(upload);
             return -1;
         }
         upload->original_fd = fd;
-        upload->op = operation;
-        upload->size = total;
+        upload->op = fragment.operation;
+        upload->size = fragment.total_size;
         upload->next = uploads;
         uploads = upload;
     }
     for (upload = uploads; upload && upload->original_fd != fd; upload = upload->next) {
     }
-    if (!upload || upload->used != pos || upload->size != total ||
-        upload->op != operation) {
+    if (!upload || upload->used != fragment.offset ||
+        upload->size != fragment.total_size || upload->op != fragment.operation) {
         forget_upload(fd);
         errno = EINVAL;
         return -1;
     }
-    memcpy(upload->data + pos, wire + 12, count);
-    upload->used += count;
-    if (upload->used < total) {
+    memcpy(upload->data + fragment.offset, fragment.data, fragment.size);
+    upload->used += fragment.size;
+    if (upload->used < fragment.total_size) {
         return 0;
     }
-    rc = ios_ssh_set(fd, operation, upload->data, total);
+    rc = ios_ssh_set(fd, fragment.operation, upload->data, fragment.total_size);
     forget_upload(fd);
     return rc;
 }
@@ -863,13 +944,19 @@ static int receive_control_fragment(int fd, const unsigned char *wire, unsigned 
 int ios_ssh_set(int fd, unsigned op, const void *data, unsigned size)
 {
     SshConnection *connection;
-    const unsigned char *wire = data;
+    uint32_t value;
     int error = 0;
     if (op == IOS_SSH_UPLOAD) {
-        return receive_control_fragment(fd, wire, size);
+        return receive_control_fragment(fd, data, size);
     }
     if (op == IOS_SSH_START) {
-        return start_connection(fd, wire, size);
+        SshStartRequest request;
+        error = decode_start_request(&request, data, size);
+        if (error) {
+            errno = error;
+            return -1;
+        }
+        return start_connection(fd, &request);
     }
     connection = find_connection(fd);
     if (!connection) {
@@ -879,43 +966,43 @@ int ios_ssh_set(int fd, unsigned op, const void *data, unsigned size)
     pthread_mutex_lock(&connection->lock);
     switch (op) {
     case IOS_SSH_TRUST:
-        if (size != 4 || read_le32(wire) > 1 || connection->state != IOS_SSH_HOST_KEY ||
-            connection->trust) {
+        if (decode_control_word(&value, data, size) || value > 1 ||
+            connection->state != IOS_SSH_HOST_KEY || connection->trust) {
             error = EINVAL;
             break;
         }
-        connection->trust = read_le32(wire) ? 1 : -1;
+        connection->trust = value ? 1 : -1;
         break;
-    case IOS_SSH_AUTHENTICATE:
-        if (size != IOS_SSH_AUTH_SIZE ||
-            (read_le32(wire + AUTH_METHOD) != AUTH_PASSWORD &&
-             read_le32(wire + AUTH_METHOD) != AUTH_PUBLIC_KEY) ||
-            read_le32(wire + AUTH_KEY_SIZE) > 8192 ||
-            (read_le32(wire + AUTH_METHOD) == AUTH_PUBLIC_KEY &&
-             !read_le32(wire + AUTH_KEY_SIZE)) ||
-            read_le32(wire + AUTH_RESERVED_1) || read_le32(wire + AUTH_RESERVED_2) ||
-            !memchr(wire + AUTH_SECRET, 0, 512) ||
-            connection->state != IOS_SSH_AUTHENTICATING || connection->auth_ready) {
+    case IOS_SSH_AUTHENTICATE: {
+        SshAuthentication auth;
+        error = decode_authentication(&auth, data, size);
+        if (!error &&
+            (connection->state != IOS_SSH_AUTHENTICATING || connection->auth_ready)) {
             error = EINVAL;
-            break;
         }
-        memcpy(connection->auth, wire, size);
-        connection->auth_ready = 1;
-        connection->state = IOS_SSH_OPENING;
+        if (!error) {
+            connection->auth = auth;
+            connection->auth_ready = 1;
+            connection->state = IOS_SSH_OPENING;
+        }
+        memset(&auth, 0, sizeof(auth));
         break;
-    case IOS_SSH_RESIZE:
-        if (size != 8 || !read_le32(wire) || !read_le32(wire + 4) ||
-            read_le32(wire) > 65535 || read_le32(wire + 4) > 65535 ||
-            connection->state != IOS_SSH_READY || !connection->pty) {
+    }
+    case IOS_SSH_RESIZE: {
+        SshResizeRequest request;
+        error = decode_resize_request(&request, data, size);
+        if (error || connection->state != IOS_SSH_READY || !connection->pty) {
             error = EINVAL;
             break;
         }
-        connection->columns = read_le32(wire);
-        connection->rows = read_le32(wire + 4);
+        connection->columns = request.columns;
+        connection->rows = request.rows;
         connection->resize_serial++;
         break;
+    }
     case IOS_SSH_SEND_EOF:
-        if (size != 4 || read_le32(wire) || connection->state != IOS_SSH_READY) {
+        if (decode_control_word(&value, data, size) || value ||
+            connection->state != IOS_SSH_READY) {
             error = EINVAL;
             break;
         }
@@ -937,9 +1024,9 @@ int ios_ssh_set(int fd, unsigned op, const void *data, unsigned size)
 int ios_ssh_get(int fd, unsigned op, void *data, unsigned *size)
 {
     SshConnection *connection;
-    unsigned char *wire = data;
+    SshStatus status;
     if (op == IOS_SSH_CAPABILITIES && *size >= 4) {
-        memcpy(wire, "HSH1", 4);
+        memcpy(data, "HSH1", 4);
         *size = 4;
         return 0;
     }
@@ -956,19 +1043,18 @@ int ios_ssh_get(int fd, unsigned op, void *data, unsigned *size)
         errno = EINVAL;
         return -1;
     }
-    memset(wire, 0, IOS_SSH_STATUS_SIZE);
-    memcpy(wire, "HSH1", 4);
     pthread_mutex_lock(&connection->lock);
-    write_le32(wire + STATUS_STATE, connection->state);
-    write_le32(wire + STATUS_ERROR, connection->error);
-    write_le32(wire + STATUS_EXIT, connection->exit_status);
-    write_le32(wire + STATUS_EXIT_VALID, connection->exit_valid);
-    write_le32(wire + STATUS_METHODS, connection->methods);
-    write_le32(wire + STATUS_ATTEMPT, connection->attempt);
-    memcpy(wire + STATUS_KEY_TYPE, connection->key_type, 64);
-    memcpy(wire + STATUS_FINGERPRINT, connection->fingerprint, 96);
-    memcpy(wire + STATUS_MESSAGE, connection->message, 316);
+    status.state = connection->state;
+    status.error = connection->error;
+    status.exit_status = connection->exit_status;
+    status.exit_valid = connection->exit_valid;
+    status.methods = connection->methods;
+    status.attempt = connection->attempt;
+    memcpy(status.key_type, connection->key_type, sizeof(status.key_type));
+    memcpy(status.fingerprint, connection->fingerprint, sizeof(status.fingerprint));
+    memcpy(status.message, connection->message, sizeof(status.message));
     pthread_mutex_unlock(&connection->lock);
+    encode_status(data, &status);
     *size = IOS_SSH_STATUS_SIZE;
     return 0;
 }

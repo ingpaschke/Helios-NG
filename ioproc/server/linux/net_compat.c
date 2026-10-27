@@ -1,5 +1,6 @@
 /* Keep Linux constants separate from the historical protocol.h definitions. */
 #include "net_compat.h"
+#include "net_wire.h"
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <sys/time.h>
@@ -280,6 +281,29 @@ void ios_net_identity(char *name, unsigned size, void *address)
     memcpy(address, &addr, 4);
 }
 
+/* Helios socket timeouts contain signed 32-bit seconds and microseconds. */
+typedef struct {
+    int32_t seconds, microseconds;
+} HeliosSocketTimeout;
+
+static HeliosSocketTimeout decode_socket_timeout(const void *data)
+{
+    WireReader reader = {data};
+    HeliosSocketTimeout timeout;
+
+    timeout.seconds = (int32_t)wire_read_word(&reader);
+    timeout.microseconds = (int32_t)wire_read_word(&reader);
+    return timeout;
+}
+
+static void encode_socket_timeout(void *data, const HeliosSocketTimeout *timeout)
+{
+    WireWriter writer = {data};
+
+    wire_write_word(&writer, timeout->seconds);
+    wire_write_word(&writer, timeout->microseconds);
+}
+
 int ios_net_set(int fd, int level, uint32_t name, const void *data, unsigned size,
                 int *nonblocking)
 {
@@ -323,15 +347,15 @@ int ios_net_set(int fd, int level, uint32_t name, const void *data, unsigned siz
     }
     if (level == HELIOS_SOL_SOCKET &&
         (name == HELIOS_SO_SNDTIMEO || name == HELIOS_SO_RCVTIMEO)) {
-        int32_t wire[2];
+        HeliosSocketTimeout timeout;
         struct timeval tv;
         if (size != 8) {
             errno = EINVAL;
             return -1;
         }
-        memcpy(wire, data, 8);
-        tv.tv_sec = wire[0];
-        tv.tv_usec = wire[1];
+        timeout = decode_socket_timeout(data);
+        tv.tv_sec = timeout.seconds;
+        tv.tv_usec = timeout.microseconds;
         return setsockopt(fd, SOL_SOCKET, opt, &tv, sizeof(tv));
     }
     if (size != (name == HELIOS_SO_LINGER && level == HELIOS_SOL_SOCKET ? 8U : 4U)) {
@@ -455,7 +479,7 @@ int ios_net_get(int fd, int level, uint32_t name, void *data, unsigned *size)
     if (level == HELIOS_SOL_SOCKET &&
         (name == HELIOS_SO_SNDTIMEO || name == HELIOS_SO_RCVTIMEO)) {
         struct timeval tv;
-        int32_t wire[2];
+        HeliosSocketTimeout timeout;
         len = sizeof(tv);
         if (*size < 8) {
             errno = EINVAL;
@@ -463,9 +487,9 @@ int ios_net_get(int fd, int level, uint32_t name, void *data, unsigned *size)
         }
         rc = getsockopt(fd, SOL_SOCKET, opt, &tv, &len);
         if (rc == 0) {
-            wire[0] = tv.tv_sec;
-            wire[1] = tv.tv_usec;
-            memcpy(data, wire, 8);
+            timeout.seconds = tv.tv_sec;
+            timeout.microseconds = tv.tv_usec;
+            encode_socket_timeout(data, &timeout);
             *size = 8;
         }
         return rc;

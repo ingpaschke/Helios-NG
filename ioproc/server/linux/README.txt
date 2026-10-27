@@ -39,6 +39,7 @@ handlers. Linux-specific files supply host facilities:
 
     ../tcp.c         Helios /internet directory, streams and request handlers
     net_compat.c     Translate Helios socket options; route data and readiness
+    net_wire.h       Byte-order helpers for SSH, TLS and socket control codecs
     net_tls.c        TLS client negotiation and plaintext relay, using OpenSSL
     net_ssh.c        Outgoing SSH negotiation and terminal relay, using libssh2
     ssh_server.c     Incoming SSH listener and native-login relay, using libssh

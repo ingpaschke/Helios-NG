@@ -6,6 +6,7 @@
  * duplicate network fd; close/reboot removes the registry reference and
  * wakes the worker without joining it or risking descriptor reuse. */
 #include "net_tls.h"
+#include "net_wire.h"
 #include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -21,6 +22,49 @@
 #include <arpa/inet.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+
+/* Native records; HTL1 layout is confined to these codecs. */
+typedef struct {
+    uint32_t timeout_ms;
+    char host[256];
+} TlsClientRequest;
+
+typedef struct {
+    uint32_t state, error;
+    char protocol[16], cipher[64], message[128];
+} TlsStatus;
+
+static int decode_client_request(TlsClientRequest *request, const void *data,
+                                 unsigned size)
+{
+    WireReader reader = {data};
+    uint32_t version;
+
+    if (size != IOS_TLS_REQUEST_SIZE) {
+        return EINVAL;
+    }
+    version = wire_read_word(&reader);
+    request->timeout_ms = wire_read_word(&reader);
+    wire_read_bytes(&reader, request->host, sizeof(request->host));
+    if (version != 1 || request->timeout_ms < 100 || request->timeout_ms > 120000 ||
+        !request->host[0] || !memchr(request->host, 0, sizeof(request->host))) {
+        return EINVAL;
+    }
+    return 0;
+}
+
+static void encode_tls_status(void *data, const TlsStatus *status)
+{
+    WireWriter writer = {data};
+
+    wire_write_bytes(&writer, "HTL1", 4);
+    wire_write_word(&writer, status->state);
+    wire_write_word(&writer, status->error);
+    wire_write_word(&writer, 0); /* reserved */
+    wire_write_bytes(&writer, status->protocol, sizeof(status->protocol));
+    wire_write_bytes(&writer, status->cipher, sizeof(status->cipher));
+    wire_write_bytes(&writer, status->message, sizeof(status->message));
+}
 
 typedef struct TlsConnection TlsConnection;
 
@@ -45,20 +89,6 @@ struct TlsConnection {
 static TlsConnection *connections;
 static SSL_CTX *context;
 static pthread_once_t context_once = PTHREAD_ONCE_INIT;
-
-static uint32_t read_le32(const unsigned char *bytes)
-{
-    return (uint32_t)bytes[0] | (uint32_t)bytes[1] << 8 | (uint32_t)bytes[2] << 16 |
-           (uint32_t)bytes[3] << 24;
-}
-
-static void write_le32(unsigned char *bytes, uint32_t x)
-{
-    bytes[0] = x;
-    bytes[1] = x >> 8;
-    bytes[2] = x >> 16;
-    bytes[3] = x >> 24;
-}
 
 static long long monotonic_milliseconds(void)
 {
@@ -429,15 +459,13 @@ done:
 
 int ios_tls_start(int fd, const void *data, unsigned size)
 {
-    const unsigned char *wire = data;
+    TlsClientRequest request;
     TlsConnection *connection;
     pthread_t thread;
     int pair[2], type, error, flags;
     struct sockaddr_storage peer;
     socklen_t n = sizeof(type);
-    if (size != IOS_TLS_REQUEST_SIZE || read_le32(wire) != 1 ||
-        read_le32(wire + 4) < 100 || read_le32(wire + 4) > 120000 || !wire[8] ||
-        !memchr(wire + 8, 0, 256)) {
+    if (decode_client_request(&request, data, size)) {
         errno = EINVAL;
         return -1;
     }
@@ -487,9 +515,9 @@ int ios_tls_start(int fd, const void *data, unsigned size)
     connection->application_fd = pair[0];
     connection->worker_fd = pair[1];
     connection->references = 2;
-    connection->timeout_ms = read_le32(wire + 4);
+    connection->timeout_ms = request.timeout_ms;
     connection->state = IOS_TLS_NEGOTIATING;
-    memcpy(connection->host, wire + 8, 256);
+    memcpy(connection->host, request.host, sizeof(connection->host));
     pthread_mutex_init(&connection->lock, NULL);
     /* Workers start with every signal blocked: the server's handlers (SIGURG's
      * oobdata walks the socket list) must only run on the coroutine thread. */
@@ -518,7 +546,7 @@ int ios_tls_start(int fd, const void *data, unsigned size)
 int ios_tls_status(int fd, void *data, unsigned *size)
 {
     TlsConnection *connection = find_connection(fd);
-    unsigned char *w = data;
+    TlsStatus status;
     if (!connection) {
         errno = ENOTCONN;
         return -1;
@@ -527,15 +555,14 @@ int ios_tls_status(int fd, void *data, unsigned *size)
         errno = EINVAL;
         return -1;
     }
-    memset(w, 0, IOS_TLS_STATUS_SIZE);
-    memcpy(w, "HTL1", 4);
     pthread_mutex_lock(&connection->lock);
-    write_le32(w + 4, connection->state);
-    write_le32(w + 8, connection->error);
-    memcpy(w + 16, connection->protocol, 16);
-    memcpy(w + 32, connection->cipher, 64);
-    memcpy(w + 96, connection->message, 128);
+    status.state = connection->state;
+    status.error = connection->error;
+    memcpy(status.protocol, connection->protocol, sizeof(status.protocol));
+    memcpy(status.cipher, connection->cipher, sizeof(status.cipher));
+    memcpy(status.message, connection->message, sizeof(status.message));
     pthread_mutex_unlock(&connection->lock);
+    encode_tls_status(data, &status);
     *size = IOS_TLS_STATUS_SIZE;
     return 0;
 }
