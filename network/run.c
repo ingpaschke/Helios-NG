@@ -179,7 +179,8 @@ static int RunCommand(char **command_args, Object *window, bool wait_for_child)
   strv[0]->Flags &= ~O_WriteOnly;
   strv[1]->Flags &= ~O_ReadOnly;
   strv[3] = my_environ->Strv[3];
-  strv[4] = (Stream *) MinInt;
+  /* MinInt marks an unused descriptor, not the end of the vector. */
+  strv[4] = Null(Stream);
   
   sending.Strv = strv;
   sending.Objv = objv;
