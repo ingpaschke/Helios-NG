@@ -36,6 +36,11 @@ empty S acknowledges startup. D carries terminal data, W sets dimensions,
 E requests terminal EOF, Q closes, and X carries a 32-bit exit status.
 Helios authenticates users, creates their sessions and terminates them on
 disconnect. The host provides no Linux login, SFTP or port forwarding.
+One native backend is reused for up to three credential attempts. Failures
+are delayed; native backend creation is paced across connections. F with
+reason 1 permits another A frame, while reason 2 closes the backend.
+These private streams assume a trusted native login service.
+An empty terminal name in P denotes a session without an SSH PTY request.
 
 The built-in t4 LinkIO backend connects to the emulator. IOS_LINK_SOURCES
 accepts a space-separated list of C sources for an additional link driver.

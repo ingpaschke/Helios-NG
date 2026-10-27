@@ -23,6 +23,7 @@
 #define FRAME_MAX 4096
 #define QUEUE_MAX 65536
 #define CONNECTION_MAX 16
+#define AUTH_MAX 3
 typedef struct Login Login;
 struct Login { Login *next; int network,back,front; uint32_t id; };
 static pthread_mutex_t lock=PTHREAD_MUTEX_INITIALIZER;
@@ -34,9 +35,24 @@ static uint32_t serial;
 static char *key_path;
 static pthread_once_t library_once=PTHREAD_ONCE_INIT;
 static int library_error;
+static long long next_backend;
 static void initialize(void) { library_error=ssh_init(); }
 static long long milliseconds(void)
 { struct timespec t;clock_gettime(CLOCK_MONOTONIC,&t);return (long long)t.tv_sec*1000+t.tv_nsec/1000000; }
+/* Pace native task creation across connections, and failed credentials on
+ * each connection, without holding the registry lock or coroutine thread. */
+static int pause_until(Login *p,long long end)
+{
+    for(;;){
+        struct pollfd f;int running,left;
+        pthread_mutex_lock(&lock);running=active;pthread_mutex_unlock(&lock);
+        if(!running)return -1;
+        left=(int)(end-milliseconds());if(left<=0)return 0;if(left>100)left=100;
+        f.fd=p->network;f.events=0;f.revents=0;
+        if(poll(&f,1,left)<0 && errno!=EINTR)return -1;
+        if(f.revents&(POLLHUP|POLLERR|POLLNVAL))return -1;
+    }
+}
 static void nonblocking(int fd)
 { fcntl(fd,F_SETFL,fcntl(fd,F_GETFL)|O_NONBLOCK);fcntl(fd,F_SETFD,FD_CLOEXEC); }
 static int exchange(int fd,void *data,int size,int writing)
@@ -73,8 +89,13 @@ static void drop_backend(Login *p)
 }
 static int backend(Login *p)
 {
-    int pair[2],rc;unsigned char token[4];
-    drop_backend(p);
+    int pair[2],rc;unsigned char token[4];long long when;
+    if(p->back>=0)return 0;
+    pthread_mutex_lock(&lock);
+    when=milliseconds();if(next_backend>when)when=next_backend;
+    next_backend=when+250;
+    pthread_mutex_unlock(&lock);
+    if(pause_until(p,when)<0)return -1;
     if(socketpair(AF_UNIX,SOCK_STREAM,0,pair)<0)return -1;
     nonblocking(pair[0]);nonblocking(pair[1]);
     pthread_mutex_lock(&lock);
@@ -103,13 +124,16 @@ static int account(char *out,const char *in)
 }
 static int authenticate(Login *p,const char *user,const char *password)
 {
-    char data[64];int n=account(data,user),m;
-    if(n<=0)return -1;
-    m=account(data+n+1,password);if(m<0)return -1;
-    if(backend(p)<0)return -1;
-    n=frame(p->back,'A',data,n+m+2);memset(data,0,sizeof(data));
-    if(n<0 || reply(p->back,'A')<0){drop_backend(p);return -1;}
-    return 0;
+    char data[64];unsigned char head[3],reason;int n=account(data,user),m,rc=1;
+    if(n<=0)goto done;
+    m=account(data+n+1,password);if(m<0)goto done;
+    rc=-1;if(backend(p)<0)goto done;
+    if(frame(p->back,'A',data,n+m+2)<0 || exchange(p->back,head,3,0)<0)goto done;
+    if(head[0]=='A' && !head[1] && !head[2])rc=0;
+    else if(head[0]=='F' && !head[1] && head[2]==1 &&
+            exchange(p->back,&reason,1,0)==0 && reason==1)rc=1;
+done:
+    memset(data,0,sizeof(data));return rc;
 }
 static int dimension(int n,int fallback,int limit)
 { return n<=0?fallback:(n>limit?limit:n); }
@@ -129,6 +153,22 @@ static int append(unsigned char *buf,int *used,int kind,const void *data,int n)
     if(n>FRAME_MAX || *used+n+3>QUEUE_MAX)return -1;
     buf[*used]=kind;buf[*used+1]=n>>8;buf[*used+2]=n;
     if(n)memcpy(buf+*used+3,data,n);*used+=n+3;return 0;
+}
+static void finish_session(Login *p,ssh_session session)
+{
+    long long end=milliseconds()+5000;
+    /* Sending CHANNEL_CLOSE only closes our half. Keep processing the
+     * peer's window adjustments, close acknowledgement and disconnect.
+     * Closing TCP with those packets unread can reset the connection while
+     * the client is still consuming output or receiving the exit status. */
+    while(ssh_is_connected(session) && milliseconds()<end){
+        struct pollfd f;ssh_message msg=ssh_message_get(session);
+        if(msg){ssh_message_reply_default(msg);ssh_message_free(msg);continue;}
+        if(!ssh_is_connected(session))break;
+        f.fd=p->network;f.events=POLLIN;f.revents=0;
+        if(ssh_get_poll_flags(session)&SSH_WRITE_PENDING)f.events|=POLLOUT;
+        if(poll(&f,1,50)<0 && errno!=EINTR)break;
+    }
 }
 static void pump(Login *p,ssh_session session,ssh_channel channel)
 {
@@ -163,10 +203,16 @@ static void pump(Login *p,ssh_session session,ssh_channel channel)
         if(status>=0 && !out){
             if(!exit_sent){rc=ssh_channel_request_send_exit_status(channel,status);if(rc==SSH_OK)exit_sent=1;else if(rc!=SSH_AGAIN)break;}
             if(exit_sent && !end_sent){rc=ssh_channel_send_eof(channel);if(rc==SSH_OK)end_sent=1;else if(rc!=SSH_AGAIN)break;}
-            if(end_sent){rc=ssh_channel_close(channel);if(rc!=SSH_AGAIN)break;}
+            if(end_sent){
+                rc=ssh_channel_close(channel);
+                if(rc==SSH_OK)finish_session(p,session);
+                if(rc!=SSH_AGAIN)break;
+            }
         }
         if(status<0 && !eof && in+FRAME_MAX+3<=QUEUE_MAX){
             unsigned char data[FRAME_MAX];
+            /* On the SSH server this is client stdin. Both native stdout
+             * and stderr arrive below as backend D frames. */
             n=ssh_channel_read_nonblocking(channel,data,sizeof(data),0);
             if(n>0){append(input,&in,'D',data,n);progress=1;}
             else if(n<0 && n!=SSH_AGAIN && n!=SSH_EOF)break;
@@ -214,7 +260,7 @@ static void *worker(void *arg)
 {
     Login *p=arg,**slot;ssh_bind bind=NULL;ssh_session session=NULL;ssh_channel channel=NULL;
     ssh_message msg;ssh_key key=NULL;char term[65]="xterm",interactive_user[64]="";
-    int authenticated=0,columns=80,rows=24,started=0,attempts=0,rc,process_config=0,owned=0;
+    int authenticated=0,columns=80,rows=24,started=0,attempts=0,rc,process_config=0,owned=0,pty=0;
     long timeout=30;
     bind=ssh_bind_new();session=ssh_new();if(!bind || !session)goto done;
     ssh_options_set(session,SSH_OPTIONS_TIMEOUT,&timeout);
@@ -229,7 +275,7 @@ static void *worker(void *arg)
     if(ssh_handle_key_exchange(session)!=SSH_OK)goto done;
     while(!started && (msg=ssh_message_get(session))!=NULL){
         rc=-1;
-        if(ssh_message_type(msg)==SSH_REQUEST_AUTH && !authenticated && ++attempts<=10){
+        if(ssh_message_type(msg)==SSH_REQUEST_AUTH && !authenticated && attempts<AUTH_MAX){
             int method=ssh_message_subtype(msg);const char *password=NULL,*user=ssh_message_auth_user(msg);
             if(method==SSH_AUTH_METHOD_NONE)password="";
             else if(method==SSH_AUTH_METHOD_PASSWORD)password=ssh_message_auth_password(msg);
@@ -244,9 +290,14 @@ static void *worker(void *arg)
                     ssh_message_free(msg);continue;
                 }
             }
-            if(password && authenticate(p,user,password)==0){
-                authenticated=1;rc=ssh_message_auth_reply_success(msg,0);
-            }else ssh_message_auth_set_methods(msg,SSH_AUTH_METHOD_PASSWORD|SSH_AUTH_METHOD_INTERACTIVE);
+            if(password){
+                int result;attempts++;
+                result=authenticate(p,user,password);
+                if(result==0){authenticated=1;rc=ssh_message_auth_reply_success(msg,0);}
+                else if(result<0){ssh_message_free(msg);goto done;}
+                else if(pause_until(p,milliseconds()+500)<0){ssh_message_free(msg);goto done;}
+            }
+            if(!authenticated)ssh_message_auth_set_methods(msg,SSH_AUTH_METHOD_PASSWORD|SSH_AUTH_METHOD_INTERACTIVE);
         }else if(ssh_message_type(msg)==SSH_REQUEST_SERVICE){
             rc=ssh_message_service_reply_success(msg);
         }else if(ssh_message_type(msg)==SSH_REQUEST_CHANNEL_OPEN && authenticated && !channel &&
@@ -263,20 +314,21 @@ static void *worker(void *arg)
                         strcpy(term,value);
                         columns=dimension(ssh_message_channel_request_pty_width(msg),80,512);
                         rows=dimension(ssh_message_channel_request_pty_height(msg),24,256);
+                        pty=1;
                         rc=ssh_message_channel_request_reply_success(msg);
                     }
                 }
             }else if(request==SSH_CHANNEL_REQUEST_SHELL || request==SSH_CHANNEL_REQUEST_EXEC){
                 const char *command=request==SSH_CHANNEL_REQUEST_EXEC?ssh_message_channel_request_command(msg):NULL;
                 if((request==SSH_CHANNEL_REQUEST_SHELL || (command && *command && strlen(command)<=FRAME_MAX)) &&
-                   start(p,term,columns,rows,command)==0){
+                   start(p,pty?term:"",columns,rows,command)==0){
                     rc=ssh_message_channel_request_reply_success(msg);started=1;
                 }
             }
         }
         if(rc<0)ssh_message_reply_default(msg);
         ssh_message_free(msg);
-        if(attempts>10)break;
+        if(!authenticated && attempts>=AUTH_MAX)break;
     }
     if(started)pump(p,session,channel);
 done:
@@ -341,12 +393,17 @@ int ios_sshd_start(const char *address,int port,const char *path)
     pthread_once(&library_once,initialize);if(library_error){errno=EIO;return -1;}
     if(active){errno=EALREADY;return -1;}
     if(access(path,F_OK)<0){
-        char *temp=malloc(strlen(path)+32);
-        if(!temp)return -1;sprintf(temp,"%s.%ld",path,(long)getpid());
+        char *directory=malloc(strlen(path)+16),*temp=malloc(strlen(path)+32);
+        if(!directory || !temp){free(directory);free(temp);return -1;}
+        sprintf(directory,"%s.XXXXXX",path);
+        if(!mkdtemp(directory)){free(directory);free(temp);return -1;}
+        sprintf(temp,"%s/key",directory);
         rc=ssh_pki_generate(SSH_KEYTYPE_ED25519,0,&key);
         if(rc==SSH_OK)rc=ssh_pki_export_privkey_file(key,NULL,NULL,NULL,temp);
-        if(rc==SSH_OK){chmod(temp,0640);rc=link(temp,path);if(rc<0 && errno==EEXIST)rc=0;}
-        unlink(temp);free(temp);ssh_key_free(key);key=NULL;if(rc!=SSH_OK)return -1;
+        if(rc==SSH_OK && chmod(temp,0640)<0)rc=SSH_ERROR;
+        if(rc==SSH_OK){rc=link(temp,path);if(rc<0 && errno==EEXIST)rc=0;}
+        unlink(temp);rmdir(directory);free(directory);free(temp);
+        ssh_key_free(key);key=NULL;if(rc!=SSH_OK)return -1;
     }
     if(ssh_pki_import_privkey_file(path,NULL,NULL,NULL,&key)!=SSH_OK){errno=EIO;return -1;}ssh_key_free(key);
     key_path=strdup(path);if(!key_path)return -1;
@@ -355,7 +412,7 @@ int ios_sshd_start(const char *address,int port,const char *path)
     listener=socket(AF_INET,SOCK_STREAM,0);if(listener<0)goto fail;
     nonblocking(listener);setsockopt(listener,SOL_SOCKET,SO_REUSEADDR,&on,sizeof(on));
     if(bind(listener,(struct sockaddr *)&a,sizeof(a))<0 || listen(listener,16)<0 || socketpair(AF_UNIX,SOCK_STREAM,0,notice)<0)goto fail;
-    nonblocking(notice[0]);nonblocking(notice[1]);active=1;
+    nonblocking(notice[0]);nonblocking(notice[1]);next_backend=0;active=1;
     rc=pthread_create(&accept_thread,NULL,accept_connections,NULL);
     if(rc){active=0;errno=rc;goto fail;}
     return 0;
