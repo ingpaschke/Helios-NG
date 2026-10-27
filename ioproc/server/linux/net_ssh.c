@@ -1097,7 +1097,8 @@ int ios_ssh_poll(struct pollfd *fds, nfds_t count, int timeout)
 {
     struct pollfd *copy;
     nfds_t i;
-    int n;
+    int n, left = timeout, pending;
+    long long deadline = monotonic_milliseconds() + timeout;
     if (!connections) {
         return ios_tls_poll(fds, count, timeout);
     }
@@ -1105,17 +1106,31 @@ int ios_ssh_poll(struct pollfd *fds, nfds_t count, int timeout)
     if (!copy) {
         return -1;
     }
-    for (i = 0; i < count; i++) {
-        SshConnection *connection = find_connection(fds[i].fd);
-        copy[i] = fds[i];
-        if (connection) {
-            copy[i].fd = connection->application_fd;
-            if (connection_state(connection) < IOS_SSH_READY) {
-                copy[i].events &= ~POLLOUT;
+    do {
+        pending = 0;
+        for (i = 0; i < count; i++) {
+            SshConnection *connection = find_connection(fds[i].fd);
+            copy[i] = fds[i];
+            copy[i].revents = 0;
+            if (connection) {
+                copy[i].fd = connection->application_fd;
+                if ((copy[i].events & POLLOUT) &&
+                    connection_state(connection) < IOS_SSH_READY) {
+                    copy[i].events &= ~POLLOUT;
+                    pending = 1;
+                }
             }
         }
-    }
-    n = ios_tls_poll(copy, count, timeout);
+        /* Opening a channel need not produce plaintext. Recheck its state
+         * even when the peer is silent, keeping the caller's original deadline. */
+        n = ios_tls_poll(copy, count, pending && (left < 0 || left > 20) ? 20 : left);
+        if (n || !pending || !timeout) {
+            break;
+        }
+        if (timeout > 0) {
+            left = (int)(deadline - monotonic_milliseconds());
+        }
+    } while (timeout < 0 || left > 0);
     if (n >= 0) {
         for (i = 0; i < count; i++) {
             fds[i].revents = copy[i].revents;
