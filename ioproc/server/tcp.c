@@ -42,7 +42,6 @@
 #include "linux/net_compat.h"
 #include "linux/ssh_server.h"
 #include <poll.h>
-#else
 #endif /* LINUX */
 
 #if internet_supported
@@ -62,11 +61,8 @@
 
 #include <sys/uio.h>
 #if LINUX
-#if LINUX
 #define msg_accrights    msg_control
 #define msg_accrightslen msg_controllen
-#endif
-#else
 #endif /* LINUX */
 
 #if !SOLARIS
@@ -81,7 +77,6 @@ typedef struct SockEntry
 	Port		Server;		/* Stream for socket */
 #if LINUX
     int stream_open;
-#else
 #endif /* LINUX */
 	int		Protocol;	/* Socket protocol and type */
 	
@@ -169,13 +164,9 @@ int fn (InternetDoRecvMessage, (Conode *));
 extern "C"
 {
 #endif
-#if LINUX
 #if !LINUX
 int fn (gethostname, (char *, int));
 #endif
-#else
-int fn (gethostname, (char *, int));
-#endif /* LINUX */
 #ifdef __cplusplus
 }
 #endif
@@ -183,10 +174,9 @@ int fn (gethostname, (char *, int));
 void Internet_InitServer(myco)
 Conode *myco;
 { 
-#if LINUX
-#else
+#if !LINUX
   struct hostent *h;
-#endif /* LINUX */
+#endif
   myco->extra      = (ptr) &Internet_extra;
   InitList(&Internet_extra.list);
   Internet_extra.entries = 0L;
@@ -240,31 +230,37 @@ Conode *myco;
 static void Internet_OpenSocket(SockEntry *d)
 {
     if (d->stream_open) {
-        word size = FormOpenReply(Type_Socket,Flags_Closeable|Flags_Selectable,-1L,-1L);
+        word size =
+            FormOpenReply(Type_Socket, Flags_Closeable | Flags_Selectable, -1L, -1L);
         mcb->MsgHdr.Dest = d->Server;
-        Request_Return(ReplyOK,open_reply,size);
-    } else
-        NewStream(Type_Socket,Flags_Closeable|Flags_Selectable,(WORD)0,Internet_Handlers);
+        Request_Return(ReplyOK, open_reply, size);
+    } else {
+        NewStream(Type_Socket, Flags_Closeable | Flags_Selectable, (WORD)0,
+                  Internet_Handlers);
+    }
 }
 
-#else
 #endif /* LINUX */
 void Internet_Open(myco)
 Conode *myco;
 { 
   ObjNode *node;
 #if LINUX
-  /* Host SSH workers publish ordinary selectable streams. Only the
-   * coroutine thread adds socket objects to this directory. */
-  if(strncmp(IOname,"internet/",9)==0 &&
-     (node=(ObjNode *)Dir_find_node(myco))==NULL){
-    int fd=ios_sshd_open(IOname+9);
-    if(fd>=0){
-      SockEntry *d=NewSocket(myco,IOname+9,0);
-      if(!d){close(fd);Request_Return(EC_Error|SS_InterNet|EG_NoMemory|EO_Socket,0L,0L);return;}
-      d->fd=fd;
+/* Host SSH workers publish ordinary selectable streams. Only the
+ * coroutine thread adds socket objects to this directory. */
+if (strncmp(IOname, "internet/", 9) == 0 &&
+    (node = (ObjNode *)Dir_find_node(myco)) == NULL) {
+    int fd = ios_sshd_open(IOname + 9);
+    if (fd >= 0) {
+        SockEntry *d = NewSocket(myco, IOname + 9, 0);
+        if (!d) {
+            close(fd);
+            Request_Return(EC_Error | SS_InterNet | EG_NoMemory | EO_Socket, 0L, 0L);
+            return;
+        }
+        d->fd = fd;
     }
-  }
+}
 #endif
 
   /* ServerDebug ("Internet_Open (%s)", myco->name); */
@@ -320,7 +316,6 @@ Conode *myco;
         if (d->stream_open)
             return SS_InterNet|EC_Error|EG_InUse|EO_Socket;
         d->stream_open = 1;
-#else
 #endif /* LINUX */
 	    d -> Server = (Port) myco -> id;
 	    mcb->MsgHdr.Dest = d->Server;
@@ -419,18 +414,21 @@ Conode *myco;
 word Internet_TidyStream(Conode *myco)
 {
     SockEntry *d = Dir_find_socket(myco);
-    if (d != NULL && myco->type == CoTimeout) return TRUE;
+    if (d != NULL && myco->type == CoTimeout) {
+        return TRUE;
+    }
     if (d != NULL) {
         clearselect(myco, d);
         ios_net_close(d->fd);
         listRemove((Node *)d);
         iofree(d);
-        if (Internet_extra.entries) Internet_extra.entries--;
+        if (Internet_extra.entries) {
+            Internet_extra.entries--;
+        }
     }
     return FALSE;
 }
 
-#else
 #endif /* LINUX */
 void Internet_Close(myco)
 Conode *myco;
@@ -803,7 +801,6 @@ Conode *myco;
 
 #if LINUX
 	   iofree(l);
-#else
 #endif /* LINUX */
 	   return FALSE;
 	   }
@@ -1703,7 +1700,6 @@ dowrite:
                 saveact = savesize - size;
                 goto done;
             }
-#else
 #endif /* LINUX */
 			convert_errno();
 			Request_Return(SS_InterNet|EC_Error|EG_Errno|errno,
@@ -1760,7 +1756,6 @@ dowrite:
                     saveact = savesize - size;
                     goto done;
                 }
-#else
 #endif /* LINUX */
 				Request_Return(SS_InterNet|EC_Recover|EG_Timeout
 						|EO_Socket, 0L, 0L);
@@ -1948,8 +1943,8 @@ done:
  * partial TCP sends cooperatively, even if another request reuses the MCB. */
 static int InternetValidAddress(MCB *message, word offset)
 #else
-InternetDoSendMessage(myco)
-Conode *myco;
+    InternetDoSendMessage(myco) Conode *myco;
+
 #endif /* LINUX */
 {
 #if LINUX
@@ -2194,7 +2189,6 @@ Conode *myco;
 	word e;
 #if LINUX
 	word capacity = dg->DataSize;
-#else
 #endif /* LINUX */
 	byte *buf = NULL;
 	byte *data = mcb->Data;
@@ -2344,7 +2338,6 @@ retry:
 		   	 iofree(buf);
 #if LINUX
                          buf = NULL;
-#else
 #endif /* LINUX */
 			 mcb->MsgHdr.FnRc = FG_Close;
 			 Internet_Close(myco);
@@ -2626,7 +2619,6 @@ SockEntry *d;
 #if LINUX
     if(d->selfn & HU_O_HANGUP)
         ClearMultiwait(Multi_SocketHup, (hostword)(d->fd), (hostword)0);
-#else
 #endif /* LINUX */
 	result = d -> selval;
 	d -> selval = 0;
@@ -2900,7 +2892,6 @@ void convert_errno()		/* yuck - I hate it, I hate it !! */
 
 #if LINUX
         if (errno == EWOULDBLOCK) { errno = 37; return; }
-#else
 #endif /* LINUX */
 	for(i = 0 ; helios_errs[i] != -1 ; i++)
 		if(helios_errs[i] == errno)

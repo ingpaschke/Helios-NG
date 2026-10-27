@@ -1810,7 +1810,6 @@ try_again:
 #endif
 #if LINUX
           extra->curr_pos = -1; /* a failed write may have written a prefix */
-#else
 #endif /* LINUX */
           Request_Return(Server_errno , 0L, 0L);
           return;

@@ -38,7 +38,7 @@ INC=$OBJ/inc
 rm -rf "$SRC" "$OBJ"
 mkdir -p "$SRC/sun" "$SRC/linux" "$OBJ/sun" "$OBJ/linux" "$INC/gnu" "$INC/sys"
 
-# 1. pristine copies
+# Stage the shared sources and Linux platform layer together.
 for f in server.c files.c devices.c tload.c cofuns.c debug.c terminal.c \
          linkio.c tcp.c defines.h barthdr protocol.h structs.h fundefs.h \
          server.h debugopt.h sccs.h; do
@@ -59,9 +59,9 @@ echo '#include <termios.h>'   > "$INC/termio.h"
 echo '#include <sys/ioctl.h>' > "$INC/sys/filio.h"
 echo '#include <sys/ioctl.h>' > "$INC/sys/sockio.h"
 
-# 4. compile and link
+# Compile and link against the selected host ABI.
 # -Wall, without the warnings the original sources give by the dozen and
-# that were checked to be harmless (NOTES.md, "Warnings"): signedness of
+# produced by the shared historical platform code: signedness of
 # char pointers, unused variables/functions/results, indentation, a
 # char used as an index for a small count, precedence that is intended,
 # false "may be used uninitialized" (switches over isxdigit, ARM-only
@@ -109,7 +109,7 @@ fi
 OBJS=""
 for s in server files devices tload cofuns debug terminal linkio tcp \
          sun/sunlocal sun/linklib linux/t4link linux/colib_linux linux/termcap_lite \
-         linux/compat linux/net_compat linux/net_tls linux/net_ssh linux/ssh_server; do
+         linux/compat linux/hostio linux/multiwait linux/net_compat linux/net_tls linux/net_ssh linux/ssh_server; do
   (cd "$SRC/$(dirname $s)" && $CC $CFLAGS -c "$SRC/$s.c" -o "$OBJ/$s.o")
   OBJS="$OBJS $OBJ/$s.o"
 done

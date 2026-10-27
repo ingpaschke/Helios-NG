@@ -1384,7 +1384,6 @@ typedef struct Config {
 #undef SO_TYPE
 #undef SO_PEERNAME
 #endif
-#else
 #endif /* LINUX */
 #define SO_SNDBUF	0x1001		/* send buffer size */
 #define SO_RCVBUF	0x1002		/* receive buffer size */
