@@ -387,12 +387,13 @@ static MCB *DoPipeWrite( PipeInfo *p, MCB *mcb)
 	
 	if( timeout == 0 )
 	{
-#if 1
-		rw->Timeout = OneSec;
-#else
+		/* A full pipe must not block a polling writer. Retaining this
+		 * request until PipeServer's two-second timer expires stalls
+		 * event loops which use nonblocking I/O for backpressure. */
+		p->Write.req = NULL;
 		InitMCB(mcb,0,mcb->MsgHdr.Reply,NullPort,EC_Recover|SS_Pipe|EG_Timeout|EO_Pipe);
 		PutMsg(mcb);
-#endif
+		return mcb;
 	}
 	
 	return NULL;
