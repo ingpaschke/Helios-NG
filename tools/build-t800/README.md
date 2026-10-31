@@ -1,15 +1,15 @@
-# Building Helios-NG with llvm-t800
+# Building Helios-NG with LTA SDK
 
 `build.sh` builds this tree for the transputer on a Linux machine
-(x86-64 or AArch64) with the llvm-t800 toolchain: clang compiles the C
+(x86-64 or AArch64) with the LTA SDK toolchain: clang compiles the C
 sources through `hcc`, which takes the Helios C 2.08 command line, and the
 Helios assembler, linker and the other host tools are built from
 `tools/hosttools`.
 
 ## Requirements
 
-- llvm-t800 0.4.0 or later with its Helios add-on: the packages
-  `llvm-t800` and `llvm-t800-helios`, installed in `/opt/llvm-t800`
+- LTA SDK with its Helios add-on: the packages
+  `lta-sdk` and `lta-sdk-helios`, installed in `/opt/lta-sdk`
 - gcc and GNU make (for the host tools), python3, `cpp`
 
 ## Build
@@ -32,7 +32,7 @@ Environment:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `T800` | `/opt/llvm-t800` | the llvm-t800 installation |
+| `T800` | `/opt/lta-sdk` | the llvm-t800 installation |
 | `HCC_OPT` | `s` | clang optimisation level (`-Os`) |
 | `JOBS` | `1` | `make -j` inside a component |
 
@@ -64,3 +64,8 @@ built: it holds `modend.o` and `trace.o` for the ARM servers.
    then `X11/xhelios`.
    Programs are linked with the compiler-rt library of llvm-t800
    (`llvmrt-generic.lib`, soft floating point) through `asm-rt`.
+
+The SDK provides `/opt/llvm-t800` as a compatibility alias. The `T800` build
+variable and compiler target names are unchanged. The `lta-sdk` umbrella provides
+the pinned Helios build profile and release acceptance; Helios-NG retains its
+independent repository and OS build interface.
