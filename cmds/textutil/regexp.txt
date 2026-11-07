@@ -1,0 +1,37 @@
+Regular expressions
+===================
+
+Include <regexp.h> and link regexp.lib to use the Henry Spencer V8-style
+regular-expression engine used by the Helios text utilities. This is not
+the POSIX <regex.h> interface.
+
+regcomp(pattern) compiles an expression and returns NULL on error. Free the
+returned expression with free() when finished. regexec(expression, text, bol)
+returns nonzero for a match; bol is nonzero when text starts at the beginning
+of a line. Captured groups are recorded in the expression's startp/endp arrays.
+regsub(expression, replacement, output) expands a replacement using the most
+recent match; the caller must provide enough output space.
+
+The default regerror(message) reports errors to stderr. An application may
+provide its own callback. Compilation and matching use internal global state;
+serialize calls when using the library from multiple threads.
+
+Licence
+-------
+
+Copyright (c) 1986 by University of Toronto.
+Written by Henry Spencer. Not derived from licensed software.
+
+Permission is granted to anyone to use this software for any
+purpose on any computer system, and to redistribute it freely,
+subject to the following restrictions:
+
+1. The author is not responsible for the consequences of use of
+   this software, no matter how awful, even if they arise
+   from defects in it.
+
+2. The origin of this software must not be misrepresented, either
+   by explicit claim or by omission.
+
+3. Altered versions must be plainly marked as such, and must not
+   be misrepresented as being the original software.

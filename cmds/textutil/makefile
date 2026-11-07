@@ -71,15 +71,19 @@ vpath %.a $(HVPATH)
 # Note all final generic targets here
 TARGETS = comm join uniq fold colrm rev yes leave sort diff egrep grep \
 	  fgrep head tail more pr split strings xlatecr wc
+LIBRARIES = regexp.lib
 
-default: $(TARGETS) Xdefault
+default: $(TARGETS) $(LIBRARIES) Xdefault
 
-install	: $(TARGETS) Xinstall
+install	: $(TARGETS) $(LIBRARIES) Xinstall
 	$(CP) $(TARGETS) $(BIN)
+	$(CP) $(LIBRARIES) $(LIB)
+	$(CP) ../regexp.h $(HPROD)/include
+	$(CP) ../regexp.txt $(HPROD)/etc
 	$(TOUCH) install
 
 clean	: Xclean
-	-$(RM)	$(OBJECTS) $(TARGETS) $(XOBJECTS) $(XTARGETS) mkout \
+	-$(RM)	$(OBJECTS) $(TARGETS) $(LIBRARIES) $(XOBJECTS) $(XTARGETS) mkout \
 		core ../mkout install installdef Xinstall
 
 #-----------------------------------------------------------------------------
@@ -95,12 +99,12 @@ OBJECTS		= $(SOURCES.c:.c=.o)
 HEADERS.c	= linebuffer.h system.h regexp.h
 
 # Any other source files
-SOURCES.odd	= makefile
+SOURCES.odd	= makefile regexp.txt
 
 # Bog standard Regular commands
 SOURCES.c	 = colrm.c fold.c leave.c rev.c sort.c yes.c comm.c join.c \
 		   uniq.c error.c linebuffer.c xmalloc.c getopt.c getopt1.c \
-		   regexp.c regsub.c fgrep.c head.c diff.c egrep.c grep.c \
+		   regexp.c regsub.c regerror.c fgrep.c head.c diff.c egrep.c grep.c \
 	  	   tail.c more.c pr.c split.c strings.c \
 		   xlatecr.c wc.c
 
@@ -195,7 +199,23 @@ wc:  $(CSTART) wc.o
 	@ echo Linking $@ ...
 	@ $(LINK) $(LINKFLAGS) -o$@ -n$@ -s2000 -h4000 $^
 
-regsub.o regexp.o grep.o: regexp.h
+regsub.o regexp.o regerror.o grep.o egrep.o: regexp.h
+
+# Keep the default error callback in its own module so applications can
+# supply regerror() without linking a second definition.
+REGOBJECTS = regexp.o regsub.o regerror.o
+
+regexp.lib: $(REGOBJECTS)
+ifeq ($(HPROC),TRAN)
+	$(LINK) $(LINKFLAGS) -p -o $@ $(REGOBJECTS)
+else
+  ifeq ($(COMPILER_TYPE),ARMLtd)
+	$(LINK) $(patsubst %,-l%,$(REGOBJECTS)) -o fred
+	cat $(REGOBJECTS:.o=.o.ghof) > $@
+  else
+	cat $(REGOBJECTS) > $@
+  endif
+endif
 
 grep:  $(CSTART) grep.o regexp.o regsub.o 
 	@ echo Linking $@ ...

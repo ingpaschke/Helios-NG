@@ -28,6 +28,10 @@ The result is `build-t800/prod/TRAN`, a complete Helios tree (`bin`,
 drivers (`X11/xhelios`). `build-t800/logs` has one log per
 component. The build uses a working copy in `build-t800/src`.
 
+The SDK includes `lib/regexp.lib` and `include/regexp.h`, the V8-style
+regular-expression API used by the text utilities. Its usage and licence
+are installed as `etc/regexp.txt`.
+
 Environment:
 
 | Variable | Default | Meaning |
