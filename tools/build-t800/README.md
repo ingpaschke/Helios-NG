@@ -10,7 +10,7 @@ Helios assembler, linker and the other host tools are built from
 
 - LTA SDK with its Helios add-on: the packages
   `lta-sdk` and `lta-sdk-helios`, installed in `/opt/lta-sdk`
-- gcc and GNU make (for the host tools), python3, `cpp`
+- gcc and GNU make (for the host tools), Python 3, `cpp` and `flock` (util-linux)
 
 ## Build
 
@@ -19,9 +19,11 @@ tools/build-t800/build.sh            # into build-t800/ in this checkout
 tools/build-t800/build.sh /tmp/hb    # or into another directory
 ```
 
-The output directory must be empty, missing, or one that `build.sh` made
-before (it leaves a `.build-t800` file there): its `src`, `prod`, `tmp` and
-`logs` are deleted at the start of every build.
+Choose an empty or new output directory for the first build. On later
+runs, `build.sh` recognizes its `.build-t800` marker and replaces `src`,
+`prod`, `tmp` and `logs`. Concurrent builds need separate output directories.
+You can place them inside the checkout. Source copies skip marked build
+directories, Git metadata and the default `build-t800/` directory.
 
 The result is `build-t800/prod/TRAN`, a complete Helios tree (`bin`,
 `lib`, `include`, `etc`, ...), with the X server `bin/xhelios` and its
@@ -41,6 +43,9 @@ Environment:
 Keep `JOBS` at 1: some component makefiles do not declare every
 dependency inside a component, so a parallel make can link before a
 library of the same directory exists.
+
+Run `python3 tools/build-t800/test_build_tree.py` from the checkout to check
+output selection, concurrent use and source filtering.
 
 ## Errors
 

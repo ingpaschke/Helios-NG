@@ -4,7 +4,7 @@
     headco.py REPO OUTDIR [--manifest FILE] [--products FILE]
 
 Copies every working file except RCS/ directories, .git, tools/ and the
-build directory (OUTDIR, or build-t800/ inside the checkout).  Inside
+destination, build-t800/ and build directories marked by build.sh. Inside
 processor directories (TRAN, SUN4, C40, ...) a file is copied only when it
 looks like source or has an RCS file; everything else there is a 1994 build
 product of Perihelion's own build and is listed in --products instead.
@@ -24,6 +24,10 @@ MTIME = int(os.environ.get('SOURCE_DATE_EPOCH', '946684800'))
 SRC_RE = re.compile(r'(\.(c|h|a|m|inc|y|l|mak|cdl|con)$)|(^[Mm]akefile)')
 
 
+def report_walk_error(error):
+    raise error
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('repo')
@@ -31,41 +35,46 @@ def main():
     ap.add_argument('--manifest')
     ap.add_argument('--products')
     a = ap.parse_args()
-    repo = os.path.abspath(a.repo)
-    out = os.path.abspath(a.out)
+    repo = os.path.realpath(a.repo)
+    out = os.path.realpath(a.out)
+    if os.path.commonpath([repo, out]) == out:
+        ap.error("the output directory must not contain the source checkout")
+
     man, prods = [], []
-    for root, ds, fs in os.walk(repo):
-        rel = os.path.relpath(root, repo)
-        # not tools/, .git, nor a build directory inside the checkout
-        if rel.split(os.sep)[0] in ('tools', '.git', 'build-t800') or \
-           os.path.commonpath([os.path.abspath(root), out]) == out:
-            ds[:] = []
+    for root, dirs, files in os.walk(repo, onerror=report_walk_error):
+        if root == out or (root != repo and '.build-t800' in files):
+            dirs.clear()
             continue
-        rcs = set()
-        if 'RCS' in ds:
-            rcs = {f[:-2] for f in os.listdir(os.path.join(root, 'RCS'))
-                   if f.endswith(',v')}
-        rcs |= {f[:-2] for f in fs if f.endswith(',v')}
-        ds[:] = [d for d in ds if d != 'RCS']
+
+        rel = os.path.relpath(root, repo)
+        archives = set()
+        if 'RCS' in dirs:
+            archives.update(os.listdir(os.path.join(root, 'RCS')))
+        archives.update(f for f in files if f.endswith(',v'))
+        rcs = {name[:-2] for name in archives if name.endswith(',v')}
+
+        excluded = {'RCS', '.git'}
+        if root == repo:
+            excluded.update({'tools', 'build-t800'})
+        dirs[:] = [d for d in dirs if d not in excluded]
+        # os.walk lists links to directories in dirs. Copy the link itself.
+        files.extend(d for d in dirs if os.path.islink(os.path.join(root, d)))
         inproc = any(p in PROC_DIRS for p in rel.split(os.sep))
-        for f in fs:
-            if f.endswith(',v'):
+        for f in files:
+            if f == '.git' or f.endswith(',v'):
                 continue
             wpath = os.path.normpath(os.path.join(rel, f))
-            if inproc and not SRC_RE.search(f) and f not in rcs:
+            if inproc and (f.endswith('.o') or (not SRC_RE.search(f) and f not in rcs)):
                 prods.append(wpath)
                 continue
-            if inproc and f.endswith('.o') :
-                prods.append(wpath)
-                continue
-            dst = os.path.join(a.out, wpath)
+            dst = os.path.join(out, wpath)
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             if os.path.lexists(dst):
                 os.remove(dst)
             shutil.copy2(os.path.join(repo, wpath), dst, follow_symlinks=False)
             # one time stamp for every source file: a git checkout sets
             # them in checkout order, which would make rules such as
-            # tcpip/nfs "mount.h: mount.x" (rpcgen) or b422's squirtdata.c
+            # tcpip/nfs "mount.h: mount.x" (rpcgen)
             # look out of date at random
             os.utime(dst, (MTIME, MTIME), follow_symlinks=False)
             man.append(('worktree' if f not in rcs else 'worktree-rcs', wpath))

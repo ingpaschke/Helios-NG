@@ -19,7 +19,7 @@
 #           llvmrt-t4.lib (the X server) are linked in
 #   JOBS    make -j inside each component (default 1)
 #
-# Needs: gcc and GNU make for the host tools, python3, and llvm-t800 with
+# Needs: gcc and GNU make for the host tools, flock, python3, and LTA SDK with
 # its Helios add-on (the lta-sdk-helios package, for llvmrt-generic.lib).
 #
 # The steps: copy the tree to OUT/src (without tools/ and Perihelion's 1994
@@ -29,21 +29,9 @@
 # not modified.
 set -eu
 
-BUILDT800=$(cd "$(dirname "$0")" && pwd)
-REPO=$(cd "$BUILDT800/../.." && pwd)
+BUILDT800=$(cd "$(dirname "$0")" && pwd -P)
+REPO=$(cd "$BUILDT800/../.." && pwd -P)
 OUT=${1:-$REPO/build-t800}
-mkdir -p "$OUT"
-OUT=$(cd "$OUT" && pwd)
-# OUT/src, prod, tmp and logs are deleted below: never do that to a
-# directory that build.sh did not make
-if [ ! -f "$OUT/.build-t800" ]; then
-	if [ -n "$(ls -A "$OUT")" ] &&
-	   ! { [ -d "$OUT/src" ] && [ -d "$OUT/logs" ] && [ -d "$OUT/host" ]; }; then
-		echo "build.sh: $OUT is not empty and not a build directory" >&2
-		exit 1
-	fi
-	touch "$OUT/.build-t800"
-fi
 T800=${T800:-/opt/llvm-t800}
 JOBS=${JOBS:-1}
 
@@ -53,6 +41,27 @@ RTLIB=$T800/sysroots/helios/lib/llvmrt-generic.lib
 for f in "$RTLIB" "$T800/sysroots/helios/lib/llvmrt-t4.lib"; do
 	[ -f "$f" ] || { echo "build.sh: no $f (install lta-sdk-helios)" >&2; exit 1; }
 done
+
+mkdir -p -- "$OUT"
+OUT=$(cd -- "$OUT" && pwd -P)
+case "$REPO/" in
+	"${OUT%/}/"*) echo "build.sh: output directory contains the Helios checkout: $OUT" >&2; exit 1 ;;
+esac
+
+# Hold the directory lock until this build and its child processes finish.
+exec 9<"$OUT"
+if ! flock -n 9; then
+	echo "build.sh: cannot lock build directory $OUT" >&2
+	exit 1
+fi
+if [ ! -f "$OUT/.build-t800" ]; then
+	contents=$(find "$OUT" -mindepth 1 -maxdepth 1 -printf x -quit)
+	if [ -n "$contents" ]; then
+		echo "build.sh: $OUT is not empty and has no .build-t800 marker" >&2
+		exit 1
+	fi
+	touch "$OUT/.build-t800"
+fi
 
 export BUILDT800 BUILDOUT=$OUT
 export HPROC=TRAN HHOST=SUN4 HLICENSEE=PERIHELION
