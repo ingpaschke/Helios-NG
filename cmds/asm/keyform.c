@@ -49,8 +49,7 @@ void puttab(INT *tab, INT upb);
 int
 main()
 {
-  int i;
-
+  int i, write_failed;
 
   printf("KeyForm\n");
 
@@ -58,7 +57,7 @@ main()
 
   if ( ofd == NULL )
     {
-      printf("Cannot open keytab.c\n");
+      perror("keytab.c");
       exit(20);
     }
 
@@ -101,9 +100,13 @@ main()
 
   fprintf(ofd,"\n*/\n\n");
 
-  fclose(ofd);
-
-  exit(0);
+  write_failed = ferror(ofd);
+  if (fclose(ofd) != 0 || write_failed)
+    {
+      fprintf(stderr, "keyform: could not write keytab.c\n");
+      return 20;
+    }
+  return 0;
 }
 
 void keyform()

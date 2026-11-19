@@ -2,12 +2,17 @@
 
 These programs build Helios on current 32-bit and 64-bit little-endian Unix
 hosts. They are compiled from the sources in this repository. Transputer builds
-require the llvm-t800 toolchain.
+use the LTA SDK.
 
 From tools/hosttools, run:
 
     make
+    make check
     make install PREFIX=/opt/helios-hosttools
+
+The check target uses Python 3 to exercise keyword-table generation, firmware
+chunk boundaries and write failures. Native builds also check the fault header
+generator with the Helios database and invalid inputs.
 
 The default output directory is build. Set BUILDDIR to choose another directory,
 CC to select the host compiler, or CFLAGS and LDFLAGS to change compiler and

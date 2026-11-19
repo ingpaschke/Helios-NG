@@ -20,7 +20,7 @@
 #   JOBS    make -j inside each component (default 1)
 #
 # Needs: gcc and GNU make for the host tools, python3, and llvm-t800 with
-# its Helios add-on (the llvm-t800-helios package, for llvmrt-generic.lib).
+# its Helios add-on (the lta-sdk-helios package, for llvmrt-generic.lib).
 #
 # The steps: copy the tree to OUT/src (without tools/ and Perihelion's 1994
 # build products), add LINUXHOST.mak to makeinc/SUN4.mak there, build the
@@ -51,7 +51,7 @@ JOBS=${JOBS:-1}
 	{ echo "build.sh: no llvm-t800 in $T800 (set T800)" >&2; exit 1; }
 RTLIB=$T800/sysroots/helios/lib/llvmrt-generic.lib
 for f in "$RTLIB" "$T800/sysroots/helios/lib/llvmrt-t4.lib"; do
-	[ -f "$f" ] || { echo "build.sh: no $f (install llvm-t800-helios)" >&2; exit 1; }
+	[ -f "$f" ] || { echo "build.sh: no $f (install lta-sdk-helios)" >&2; exit 1; }
 done
 
 export BUILDT800 BUILDOUT=$OUT
@@ -81,6 +81,10 @@ make -C "$REPO/tools/hosttools" BUILDDIR="$OUT/host/build" > "$LOGS/hosttools.tx
 for t in asm objdump ampp sysbuild objed gencodes squash newmotd c; do
 	cp "$OUT/host/build/$t" "$HHOSTBIN/"
 done
+# B422's makefile runs ../gensquirt from TRAN. Replace the archived RS/6000
+# executable in the build copy and regenerate its C source from this firmware.
+install -m 755 "$OUT/host/build/gensquirt" "$HSRC/filesys/devs/b422/gensquirt"
+rm -f "$HSRC/filesys/devs/b422/TRAN/squirtdata.c"
 # Helios C itself is not used: a guard, so that nothing finds netcat
 printf '#!/bin/sh\necho "nc: Helios C is not part of this build (hcc is)" >&2\nexit 1\n' \
 	> "$HHOSTBIN/nc"

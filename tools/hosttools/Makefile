@@ -67,7 +67,10 @@ GEN_CFLAGS	= $(WARN_CFLAGS) $(BUILD_CFLAGS) $(REQ_CFLAGS)
 # build would otherwise put build-machine programs next to the tools.
 TARGET_MACHINE	:= $(shell $(CC) -dumpmachine 2>/dev/null)
 BUILD_MACHINE	:= $(shell $(BUILD_CC) -dumpmachine 2>/dev/null)
+CHECK_CLASSES = GeneratorTests
 ifeq ($(TARGET_MACHINE),$(BUILD_MACHINE))
+CHECK_CLASSES += FaultHeaderTests
+CHECK_HOST_TOOL = $(BUILDDIR)/gencodes
 INSTALL_PROGRAMS = $(PROGRAMS)
 else
 INSTALL_PROGRAMS = $(TOOLS)
@@ -107,7 +110,8 @@ AMPP_SRC	= $(P)/ampp.c $(P)/macro.c $(P)/lex.c $(P)/sym.c $(P)/builtin.c \
 		  $(S)/queue.c
 AMPP_HDR	= $(P)/ampp.h $(S)/ttypes.h $(S)/queue.h
 
-.PHONY: all clean install
+.DELETE_ON_ERROR:
+.PHONY: all check clean install
 all: $(addprefix $(BUILDDIR)/,$(PROGRAMS))
 
 $(BUILDDIR) $(BUILDDIR)/asm.d:
@@ -167,6 +171,9 @@ $(BUILDDIR)/c: $(COM)/c.c $(S)/queue.c $(S)/queue.h | $(BUILDDIR)
 
 $(BUILDDIR)/gensquirt: $(B422)/gensquirt.c | $(BUILDDIR)
 	$(BUILD_CC) $(GEN_CFLAGS) $(HOSTDEFS) -o $@ $< $(BUILD_LDFLAGS)
+
+check: $(CHECK_HOST_TOOL) $(addprefix $(BUILDDIR)/,$(GENERATORS))
+	python3 $(TOP)/tools/hosttools/test_generators.py "$(BUILDDIR)" $(CHECK_CLASSES)
 
 install: all
 	$(INSTALL) -d $(DESTDIR)$(BINDIR)

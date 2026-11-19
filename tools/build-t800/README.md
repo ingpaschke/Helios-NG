@@ -26,7 +26,9 @@ before (it leaves a `.build-t800` file there): its `src`, `prod`, `tmp` and
 The result is `build-t800/prod/TRAN`, a complete Helios tree (`bin`,
 `lib`, `include`, `etc`, ...), with the X server `bin/xhelios` and its
 drivers (`X11/xhelios`). `build-t800/logs` has one log per
-component. The build uses a working copy in `build-t800/src`.
+component. The build uses a working copy in `build-t800/src`. It rebuilds
+the B422 driver’s embedded firmware from `b422dvr.b2u` with the host’s
+`gensquirt` program.
 
 Environment:
 

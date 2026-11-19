@@ -116,6 +116,17 @@ FDB *fdb;
 	lseek(fdb->stream,0,0);
 }
 
+/* Flush stdout or finish a generated header before switching output. */
+static void finish_output(FILE *f)
+{
+	int failed = ferror(f);
+	int status = (f == stdout) ? fflush(f) : fclose(f);
+	if (failed || status != 0) {
+		fprintf(stderr, "gencodes: could not write fault definitions\n");
+		exit(1);
+	}
+}
+
 /*--------------------------------------------------------
 -- fdbscan						--
 --							--
@@ -143,14 +154,22 @@ char *name;
 	
 	if( fdb == NULL ) 
 	{
-		fprintf(stderr,"cannot open %s\n",name);
-		return;
+		perror(name);
+		exit(1);
 	}
 	
 	for(;;)
 	{
 		line = rdline(fdb);
-/*printf("%s",line);*/
+		if (line[0] == 0) {
+			finish_output(f);
+			fdbclose(fdb);
+			if (copying) {
+				fprintf(stderr, "gencodes: missing #} at end of %s\n", name);
+				exit(1);
+			}
+			return;
+		}
 		if( copying )
 		{
 			if( line[0] == '#' && line[1] == '}' )
@@ -160,9 +179,6 @@ char *name;
 		}
 		switch( line[0] )
 		{
-		case '\0':		/* EOF		*/
-			return;
-			
 		case '\n':		/* blank line 	*/
 			fprintf(f,"\n");
 			break;
@@ -177,11 +193,11 @@ char *name;
 				p = line+2;
 				while( *p != '\n' && *p != 0 ) p++;	/* Host port: stop at the NUL too */
 				*p = 0;
-				if( f != stdout ) fclose(f);
+				finish_output(f);
 				if( (f = fopen(line+2,"w")) == NULL )
 				{
-					fprintf(stderr,"Cannot open %s\n",line+2);
-					return;
+					perror(line+2);
+					exit(1);
 				}
 				break;
 			case '{':
@@ -440,7 +456,11 @@ FDB *fdb;
 	if( fdb->pos == fdb->upb )
 	{
 		int size = read(fdb->stream,fdb->buf,FDBBUFMAX);
-		if( size <= 0 ) 
+		if (size < 0) {
+			perror("gencodes: reading fault database");
+			exit(1);
+		}
+		if (size == 0)
 		{
 			fdb->upb = -1;
 			return -1;
@@ -448,7 +468,7 @@ FDB *fdb;
 		fdb->upb = size;
 		fdb->pos = 0;
 	}
-	return fdb->buf[fdb->pos++];
+	return (unsigned char)fdb->buf[fdb->pos++];
 }
 
 

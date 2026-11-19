@@ -141,8 +141,8 @@ b422_dvr.d : discdevs.p b422dev.p b422ha.p b422lh_dvr.p b422w10.p b422r10.p \
 
 b422lh_dvr.p : squirtdata.c b422lh_dvr.c
 
-squirtdata.c : b422dvr.b2u
-	../gensquirt $< $@
+squirtdata.c : b422dvr.b2u ../gensquirt
+	../gensquirt $< $@.tmp && mv $@.tmp $@
 
 b422.b2u :
 
