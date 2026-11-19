@@ -29,6 +29,22 @@ typedef char *va_list[1];       /* see <stdio.h> */
     * is passed as an argument it gets passed by reference.
     */
 
+#if defined(__clang__) && defined(__HELIOSTRAN)
+/* The compiler uses Helios's one-element array va_list. Its builtins
+ * account for whole argument words, including structures passed by value. */
+# if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L
+#  define va_start(...) __builtin_c23_va_start(__VA_ARGS__)
+# else
+#  define va_start(ap, parmN) __builtin_va_start(ap, parmN)
+# endif
+# define va_arg(ap, type) __builtin_va_arg(ap, type)
+# if (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L) || \
+     (defined(__cplusplus) && __cplusplus >= 201103L) || !defined(__STRICT_ANSI__)
+#  define va_copy(dst, src) __builtin_va_copy(dst, src)
+# endif
+# define va_end(ap) __builtin_va_end(ap)
+#else
+
 #if defined __ARM || defined __C40
 /* Note that ___type is a syntactic item a bit like the type qualifiers    */
 /* 'static', 'register', 'const' etc except that it has no effect! Its    */
@@ -130,6 +146,8 @@ typedef char *va_list[1];       /* see <stdio.h> */
     * Note: this macro is careful to avoid compiler warning messages and uses
     * a -ve address to ensure address trap.
     */
+
+#endif /* Clang for Helios Transputer */
 
 #endif
 
