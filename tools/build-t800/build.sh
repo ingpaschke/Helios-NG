@@ -68,6 +68,8 @@ export HPROC=TRAN HHOST=SUN4 HLICENSEE=PERIHELION
 export HSRC=$OUT/src HPROD=$OUT/prod/TRAN HHOSTBIN=$OUT/host/bin
 export HCC=$T800/bin/hcc HCC_CLANG=$T800/bin/clang HCC_RTLIB=$RTLIB
 export HCC_OPT=${HCC_OPT:-s}
+# Keep assertion locations in target binaries relative to the Helios tree.
+export HCC_CLANG_FLAGS="-ffile-prefix-map=$HSRC=.${HCC_CLANG_FLAGS:+ $HCC_CLANG_FLAGS}"
 export PATH=$HHOSTBIN:$PATH
 # the Helios `c` driver (cmds/com/c.c), used by some components
 export C_COMPILER=$HCC ASSEMBLER=$HHOSTBIN/asm LINKER=$HHOSTBIN/asm

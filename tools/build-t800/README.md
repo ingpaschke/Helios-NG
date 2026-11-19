@@ -23,7 +23,8 @@ Choose an empty or new output directory for the first build. On later
 runs, `build.sh` recognizes its `.build-t800` marker and replaces `src`,
 `prod`, `tmp` and `logs`. Concurrent builds need separate output directories.
 You can place them inside the checkout. Source copies skip marked build
-directories, Git metadata and the default `build-t800/` directory.
+directories, Git metadata and the default `build-t800/` directory. Compiler
+assertion messages in target programs use checkout-relative paths.
 
 The result is `build-t800/prod/TRAN`, a complete Helios tree (`bin`,
 `lib`, `include`, `etc`, ...), with the X server `bin/xhelios` and its
