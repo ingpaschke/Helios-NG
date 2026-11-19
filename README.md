@@ -7,7 +7,7 @@ server. A host I/O server connects Helios to the host's files, terminal and
 network services.
 
 This branch provides the Helios sources, tools for building them on Linux,
-and a Linux host I/O server. The Transputer build uses the llvm-t800 toolchain
+and a Linux host I/O server. The Transputer build uses the LTA SDK
 and includes the X11R4 server and ATW800/2 device drivers.
 
 ## What's new compared with master
@@ -42,14 +42,13 @@ Compared with upstream `master` at `1fe8f65e`, SP2 includes:
 Requirements:
 
 - Linux on x86-64 or AArch64.
-- llvm-t800 0.4.0 or later, including its Helios add-on, installed in
-  `/opt/llvm-t800` or selected with `T800`.
+- LTA SDK core (`lta-sdk`) and its matching `lta-sdk-helios` package.
 - GCC, GNU make, Python 3 and `cpp`.
 
 From the repository root:
 
 ```sh
-tools/build-t800/build.sh
+T800=/opt/lta-sdk tools/build-t800/build.sh
 ```
 
 The resulting Helios tree is under `build-t800/prod/TRAN`, with component

@@ -32,7 +32,7 @@ Environment:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `T800` | `/opt/lta-sdk` | the llvm-t800 installation |
+| `T800` | `/opt/llvm-t800` | SDK prefix. The LTA packages link this path to `/opt/lta-sdk`. |
 | `HCC_OPT` | `s` | clang optimisation level (`-Os`) |
 | `JOBS` | `1` | `make -j` inside a component |
 
@@ -65,7 +65,4 @@ built: it holds `modend.o` and `trace.o` for the ARM servers.
    Programs are linked with the compiler-rt library of llvm-t800
    (`llvmrt-generic.lib`, soft floating point) through `asm-rt`.
 
-The SDK provides `/opt/llvm-t800` as a compatibility alias. The `T800` build
-variable and compiler target names are unchanged. The `lta-sdk` umbrella provides
-the pinned Helios build profile and release acceptance; Helios-NG retains its
-independent repository and OS build interface.
+Use `T800=/path/to/sdk tools/build-t800/build.sh` for an SDK installed elsewhere.
