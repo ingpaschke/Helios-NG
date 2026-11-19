@@ -863,7 +863,7 @@ PRIVATE FILE *openout(OutFile *o, char *name, char *mode)
 	if( lstat(name,&st) == 0 && !S_ISREG(st.st_mode) )
 		return o->fd = fopen(name,mode);
 
-	unlink(name);
+	/* Keep the previous regular file until droptmp() publishes its replacement. */
 
 	/* Fix: the temporary file is the target's name plus ".XXXXXX";	*/
 	/* for a file name (the last component) of 249-255 characters	*/

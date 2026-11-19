@@ -70,7 +70,8 @@ BUILD_MACHINE	:= $(shell $(BUILD_CC) -dumpmachine 2>/dev/null)
 CHECK_CLASSES = GeneratorTests
 ifeq ($(TARGET_MACHINE),$(BUILD_MACHINE))
 CHECK_CLASSES += FaultHeaderTests
-CHECK_HOST_TOOL = $(BUILDDIR)/gencodes
+CHECK_HOST_TOOL = $(addprefix $(BUILDDIR)/,gencodes c asm)
+CHECK_DRIVER = python3 $(TOP)/tools/hosttools/test_c_driver.py "$(BUILDDIR)"
 INSTALL_PROGRAMS = $(PROGRAMS)
 else
 INSTALL_PROGRAMS = $(TOOLS)
@@ -174,6 +175,7 @@ $(BUILDDIR)/gensquirt: $(B422)/gensquirt.c | $(BUILDDIR)
 
 check: $(CHECK_HOST_TOOL) $(addprefix $(BUILDDIR)/,$(GENERATORS))
 	python3 $(TOP)/tools/hosttools/test_generators.py "$(BUILDDIR)" $(CHECK_CLASSES)
+	$(CHECK_DRIVER)
 
 install: all
 	$(INSTALL) -d $(DESTDIR)$(BINDIR)

@@ -2778,6 +2778,12 @@ Assemble( fnode )
   NameList	args;
   List *	plist  = (List *)&args;
   int		result = 0;
+  char *	output = NULL;
+  char *	generated_name = NULL;
+#ifdef UNIX
+  char *	stage_dir = NULL;
+  char *	stage_output = NULL;
+#endif
     
     
 #ifdef DEBUG
@@ -2802,11 +2808,7 @@ Assemble( fnode )
   
   if (REDIRECT && !LINK)
     {
-      if (ObjName != NULL)
-	{
-	  AddName( plist, "-o"    );
-	  AddName( plist, ObjName );
-	}
+      output = ObjName;
     }
   else
     {
@@ -2835,8 +2837,38 @@ Assemble( fnode )
 	    }
 	}
       
-      AddName(  plist, "-o"                );
-      AddNamef( plist, "%s.o", fnode->root );
+      generated_name = StrFormat( "%s.o", fnode->root );
+      output = generated_name;
+    }
+
+#ifdef UNIX
+  if (USE_PIPE && EXECUTE && output != NULL && !streq( output, "-" ))
+    {
+      struct stat st;
+
+      /* asm can accept an empty stream. Publish its object only after
+	 both the compiler and the assembler have reported success. */
+      if (lstat( output, &st ) == 0 ? S_ISREG( st.st_mode ) : errno == ENOENT)
+	{
+	  char * slash = strrchr( output, '/' );
+	  int dir_len = slash == NULL ? 0 : (int)(slash + 1 - output);
+
+	  stage_dir = StrFormat( "%.*s.c-XXXXXX", dir_len, output );
+	  if (mkdtemp( stage_dir ) == NULL)
+	    fail( "Cannot stage output %s: %s", output, strerror( errno ) );
+	  stage_output = StrFormat( "%s/%s", stage_dir, output + dir_len );
+	}
+    }
+#endif
+
+  if (output != NULL)
+    {
+      AddName( plist, "-o" );
+#ifdef UNIX
+      AddName( plist, stage_output != NULL ? stage_output : output );
+#else
+      AddName( plist, output );
+#endif
     }
   
   if (!USE_PIPE)
@@ -2845,6 +2877,26 @@ Assemble( fnode )
     }
   
   result = ExecuteList( plist );
+  if (result == 0 && USE_PIPE)
+    result = ExecuteCommandLine();
+
+#ifdef UNIX
+  if (stage_output != NULL)
+    {
+      if (result == 0 && rename( stage_output, output ) != 0)
+	{
+	  error( "Cannot publish output %s: %s", output, strerror( errno ) );
+	  result = -1;
+	}
+      unlink( stage_output );
+      rmdir( stage_dir );
+      free( stage_output );
+      free( stage_dir );
+    }
+#endif
+  free( generated_name );
+  if (result != 0)
+    return result;
   
   if (streq( fnode->oext, "s" ))
     {
@@ -2852,11 +2904,7 @@ Assemble( fnode )
       
       LastCompile = fnode;
     }
-  else if (USE_PIPE && (streq( fnode->oext, "c" ) || streq( fnode->oext, "a" )))
-    {
-      (void) ExecuteCommandLine();
-    }
-  else
+  else if (!USE_PIPE)
     {
       RemoveFile( fnode );
     }
@@ -2915,6 +2963,7 @@ DoCompiles(
 	  if (C_Compile( This ) != 0)
 	    {
 	      result = FALSE;
+	      break;
 	    }
 	  
 	  if (!_is_norcroft_compiler &&	/* these compiler produce object code output, not assembler */
@@ -2933,7 +2982,10 @@ DoCompiles(
 #endif
 	case 'a':
 	  if (MacroAssemble( This ) != 0)
-	    result = FALSE;
+	    {
+	      result = FALSE;
+	      break;
+	    }
 
 	  if (! _is_transputer_compiler)
 	    {
@@ -5751,7 +5803,7 @@ main( argc, argv )
       /* > 0 because if NSfiles > 0 we must assemble */
       
       if (!LINK || NCfiles + NFfiles + NSfiles + NAfiles + NMfiles > 0)
-	succeeded |= DoAssembles();
+	succeeded = DoAssembles();
       
       /* attempt to link only if not all Modula-2 .def files given */
       

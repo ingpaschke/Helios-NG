@@ -11,8 +11,9 @@ From tools/hosttools, run:
     make install PREFIX=/opt/helios-hosttools
 
 The check target uses Python 3 to exercise keyword-table generation, firmware
-chunk boundaries and write failures. Native builds also check the fault header
-generator with the Helios database and invalid inputs.
+chunk boundaries and write failures. Native builds also check fault header
+generation and verify that failures in the C compiler and assembler reach the
+caller without replacing previous outputs.
 
 The default output directory is build. Set BUILDDIR to choose another directory,
 CC to select the host compiler, or CFLAGS and LDFLAGS to change compiler and
